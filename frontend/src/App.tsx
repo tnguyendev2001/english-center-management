@@ -2,11 +2,16 @@ import { Layout, Menu, Typography } from 'antd'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { StudentDetailPage } from './features/students/pages/StudentDetailPage'
 import { StudentListPage } from './features/students/pages/StudentListPage'
+import { TuitionPackageListPage } from './features/tuitionPackages/pages/TuitionPackageListPage'
 
 function App() {
   const navigate = useNavigate()
   const location = useLocation()
-  const selectedKey = location.pathname.startsWith('/students') ? '/students' : '/'
+  const selectedKey = location.pathname.startsWith('/tuition-packages')
+    ? '/tuition-packages'
+    : location.pathname.startsWith('/students')
+      ? '/students'
+      : '/'
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -20,7 +25,10 @@ function App() {
         <Menu
           mode="inline"
           selectedKeys={[selectedKey]}
-          items={[{ key: '/students', label: 'Học viên' }]}
+          items={[
+            { key: '/students', label: 'Học viên' },
+            { key: '/tuition-packages', label: 'Gói học phí' },
+          ]}
           onClick={(event) => navigate(event.key)}
         />
       </Layout.Sider>
@@ -31,6 +39,7 @@ function App() {
             <Route path="/" element={<Navigate to="/students" replace />} />
             <Route path="/students" element={<StudentListPage />} />
             <Route path="/students/:id" element={<StudentDetailPage />} />
+            <Route path="/tuition-packages" element={<TuitionPackageListPage />} />
           </Routes>
         </Layout.Content>
       </Layout>

@@ -13,10 +13,11 @@ const statusConfigs: Record<string, StatusConfig> = {
 
 interface StatusTagProps {
   status: string
+  labels?: Partial<Record<string, string>>
 }
 
-export function StatusTag({ status }: StatusTagProps) {
+export function StatusTag({ status, labels }: StatusTagProps) {
   const config = statusConfigs[status] ?? { label: status, color: 'default' }
 
-  return <Tag color={config.color}>{config.label}</Tag>
+  return <Tag color={config.color}>{labels?.[status] ?? config.label}</Tag>
 }
