@@ -1,6 +1,7 @@
-import { Card, Descriptions, Empty, Space, Spin, Typography } from 'antd'
+import { Card, Descriptions, Empty, Space, Spin, Table, Typography } from 'antd'
 import { useParams } from 'react-router-dom'
 import { StatusTag } from '../../../components/common/StatusTag'
+import { useMakeupCredits } from '../../makeupCredits/makeupCreditQueries'
 import { useStudentDetail } from '../studentQueries'
 
 const { Title, Text } = Typography
@@ -9,6 +10,7 @@ export function StudentDetailPage() {
   const { id } = useParams()
   const studentId = Number(id)
   const studentQuery = useStudentDetail(studentId)
+  const makeupCreditsQuery = useMakeupCredits()
 
   if (!Number.isFinite(studentId)) {
     return <Empty description="Không tìm thấy học viên" />
@@ -23,6 +25,7 @@ export function StudentDetailPage() {
   }
 
   const student = studentQuery.data
+  const makeupCredits = (makeupCreditsQuery.data ?? []).filter((credit) => credit.studentId === studentId)
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -46,6 +49,32 @@ export function StudentDetailPage() {
           </Descriptions.Item>
           <Descriptions.Item label="Ghi chú">{student.note || '-'}</Descriptions.Item>
         </Descriptions>
+      </Card>
+
+      <Card title="Buổi bù">
+        <Table
+          rowKey="id"
+          dataSource={makeupCredits}
+          loading={makeupCreditsQuery.isLoading}
+          pagination={false}
+          columns={[
+            { title: 'Lớp học', dataIndex: 'classroomName', key: 'classroomName' },
+            {
+              title: 'Nguồn',
+              dataIndex: 'reason',
+              key: 'reason',
+              render: (reason: string) => (reason === 'EXCUSED_ABSENCE' ? 'Xin nghỉ' : reason),
+            },
+            { title: 'Số buổi bù', dataIndex: 'creditSessions', key: 'creditSessions' },
+            { title: 'Đã dùng', dataIndex: 'usedSessions', key: 'usedSessions' },
+            {
+              title: 'Trạng thái',
+              dataIndex: 'status',
+              key: 'status',
+              render: (status: string) => <StatusTag status={status} />,
+            },
+          ]}
+        />
       </Card>
     </Space>
   )

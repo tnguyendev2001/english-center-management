@@ -1,0 +1,20 @@
+CREATE TABLE class_sessions (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    classroom_id BIGINT NOT NULL,
+    session_no INT NOT NULL,
+    session_date DATE NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    cancel_reason VARCHAR(1000) NULL,
+    note VARCHAR(1000) NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT fk_class_sessions_classroom FOREIGN KEY (classroom_id) REFERENCES classrooms (id),
+    CONSTRAINT uk_class_sessions_classroom_session_no UNIQUE (classroom_id, session_no)
+);
+
+CREATE INDEX idx_class_sessions_classroom_id ON class_sessions (classroom_id);
+CREATE INDEX idx_class_sessions_session_date ON class_sessions (session_date);
+CREATE INDEX idx_class_sessions_status ON class_sessions (status);

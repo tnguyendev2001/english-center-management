@@ -1,18 +1,24 @@
 package com.englishcenter.classroom;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashSet;
+import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -46,8 +52,14 @@ public class Classroom {
     @Column(name = "expected_end_date")
     private LocalDate expectedEndDate;
 
-    @Column(name = "days_of_week", nullable = false)
-    private String daysOfWeek;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(
+            name = "classroom_days_of_week",
+            joinColumns = @JoinColumn(name = "classroom_id")
+    )
+    @Column(name = "day_of_week", nullable = false, length = 20)
+    @Enumerated(EnumType.STRING)
+    private Set<ClassDayOfWeek> daysOfWeek = new HashSet<>();
 
     @Column(name = "start_time", nullable = false)
     private LocalTime startTime;

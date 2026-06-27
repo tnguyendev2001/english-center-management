@@ -26,14 +26,28 @@ import {
   useDeactivateClassPackage,
 } from '../../classPackages/classPackageQueries'
 import type { ClassPackage } from '../../classPackages/classPackageTypes'
+import { AttendanceMarkPanel } from '../../attendance/components/AttendanceMarkPanel'
+import { CancelSessionModal } from '../../classSessions/components/CancelSessionModal'
+import { GenerateSessionsModal } from '../../classSessions/components/GenerateSessionsModal'
+import {
+  useCancelClassSession,
+  useClassSessions,
+  useGenerateClassSessions,
+} from '../../classSessions/classSessionQueries'
+import type {
+  CancelClassSessionPayload,
+  ClassSession,
+  GenerateClassSessionsPayload,
+} from '../../classSessions/classSessionTypes'
 import { EnrollStudentModal } from '../../enrollments/components/EnrollStudentModal'
-import { useEnrollStudent } from '../../enrollments/enrollmentQueries'
+import { useEnrollments, useEnrollStudent } from '../../enrollments/enrollmentQueries'
 import type { EnrollStudentPayload } from '../../enrollments/enrollmentTypes'
 import { useStudents } from '../../students/studentQueries'
 import type { StudentSearchParams } from '../../students/studentTypes'
 import { useTuitionPackages } from '../../tuitionPackages/tuitionPackageQueries'
 import type { TuitionPackageSearchParams } from '../../tuitionPackages/tuitionPackageTypes'
 import { useClassroomDetail } from '../classroomQueries'
+import { formatDaysOfWeek } from '../classroomTypes'
 
 const { Title, Text } = Typography
 
@@ -42,6 +56,8 @@ export function ClassroomDetailPage() {
   const classroomId = Number(id)
   const [addPackageModalOpen, setAddPackageModalOpen] = useState(false)
   const [enrollModalOpen, setEnrollModalOpen] = useState(false)
+  const [generateSessionsOpen, setGenerateSessionsOpen] = useState(false)
+  const [cancelingSession, setCancelingSession] = useState<ClassSession>()
   const tuitionPackageParams: TuitionPackageSearchParams = useMemo(
     () => ({
       page: 0,
@@ -60,9 +76,13 @@ export function ClassroomDetailPage() {
   const classPackagesQuery = useClassPackages(classroomId)
   const tuitionPackagesQuery = useTuitionPackages(tuitionPackageParams)
   const studentsQuery = useStudents(studentParams)
+  const sessionsQuery = useClassSessions({ classroomId, page: 0, size: 100 })
+  const enrollmentsQuery = useEnrollments({ page: 0, size: 100 })
   const addClassPackage = useAddClassPackage(classroomId)
   const deactivateClassPackage = useDeactivateClassPackage(classroomId)
   const enrollStudent = useEnrollStudent()
+  const generateSessions = useGenerateClassSessions()
+  const cancelClassSession = useCancelClassSession()
 
   if (!Number.isFinite(classroomId)) {
     return <Empty description="Không tìm thấy lớp học" />
@@ -78,6 +98,9 @@ export function ClassroomDetailPage() {
 
   const classroom = classroomQuery.data
   const classPackages = classPackagesQuery.data ?? []
+  const activeEnrollments = (enrollmentsQuery.data?.data ?? []).filter(
+    (enrollment) => enrollment.classroomId === classroomId && enrollment.status === 'ACTIVE',
+  )
 
   const packageColumns: ColumnsType<ClassPackage> = [
     {
@@ -141,7 +164,7 @@ export function ClassroomDetailPage() {
         {classroom.expectedEndDate ? dayjs(classroom.expectedEndDate).format('DD/MM/YYYY') : '-'}
       </Descriptions.Item>
       <Descriptions.Item label="Lịch học">
-        {classroom.daysOfWeek}, {formatTime(classroom.startTime)} - {formatTime(classroom.endTime)}
+        {formatDaysOfWeek(classroom.daysOfWeek)}, {formatTime(classroom.startTime)} - {formatTime(classroom.endTime)}
       </Descriptions.Item>
       <Descriptions.Item label="Trạng thái">
         <StatusTag status={classroom.status} />
@@ -169,6 +192,75 @@ export function ClassroomDetailPage() {
         pagination={false}
       />
     </Space>
+  )
+
+  const sessionColumns: ColumnsType<ClassSession> = [
+    {
+      title: 'Buổi',
+      dataIndex: 'sessionNo',
+      key: 'sessionNo',
+    },
+    {
+      title: 'Ngày học',
+      dataIndex: 'sessionDate',
+      key: 'sessionDate',
+      render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
+    },
+    {
+      title: 'Giờ học',
+      key: 'time',
+      render: (_, session) => `${formatTime(session.startTime)} - ${formatTime(session.endTime)}`,
+    },
+    {
+      title: 'Trạng thái',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: string) => <StatusTag status={status} />,
+    },
+    {
+      title: 'Thao tác',
+      key: 'actions',
+      render: (_, session) => (
+        <Space>
+          <Button
+            type="link"
+            danger
+            disabled={session.status === 'CANCELED'}
+            onClick={() => setCancelingSession(session)}
+          >
+            Hủy buổi
+          </Button>
+        </Space>
+      ),
+    },
+  ]
+
+  const sessionsTab = (
+    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+      <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
+        <Text type="secondary">Tạo lịch học từ lịch tuần của lớp và điểm danh từng buổi.</Text>
+        <Button type="primary" onClick={() => setGenerateSessionsOpen(true)}>
+          Tạo lịch học
+        </Button>
+      </Space>
+
+      <Table
+        rowKey="id"
+        columns={sessionColumns}
+        dataSource={sessionsQuery.data?.data ?? []}
+        loading={sessionsQuery.isLoading}
+        pagination={false}
+      />
+    </Space>
+  )
+
+  const attendanceTab = (
+    <AttendanceMarkPanel
+      sessions={sessionsQuery.data?.data ?? []}
+      enrollments={activeEnrollments}
+      loadingSessions={sessionsQuery.isLoading}
+      loadingEnrollments={enrollmentsQuery.isLoading}
+    />
   )
 
   function handleAddPackage(tuitionPackageId: number) {
@@ -224,6 +316,33 @@ export function ClassroomDetailPage() {
     })
   }
 
+  function handleGenerateSessions(payload: GenerateClassSessionsPayload) {
+    generateSessions.mutate(payload, {
+      onSuccess: () => {
+        message.success('Đã tạo lịch học')
+        setGenerateSessionsOpen(false)
+      },
+      onError: showErrorMessage,
+    })
+  }
+
+  function handleCancelSession(payload: CancelClassSessionPayload) {
+    if (!cancelingSession) {
+      return
+    }
+
+    cancelClassSession.mutate(
+      { id: cancelingSession.id, payload },
+      {
+        onSuccess: () => {
+          message.success('Đã hủy buổi học')
+          setCancelingSession(undefined)
+        },
+        onError: showErrorMessage,
+      },
+    )
+  }
+
   function showErrorMessage(error: unknown) {
     if (isAxiosError(error)) {
       message.error(error.response?.data?.message ?? 'Có lỗi xảy ra')
@@ -264,12 +383,34 @@ export function ClassroomDetailPage() {
             {
               key: 'students',
               label: 'Học viên',
-              children: <Empty description="Sẽ triển khai ở module Enrollment" />,
+              children: (
+                <Table
+                  rowKey="id"
+                  dataSource={activeEnrollments}
+                  loading={enrollmentsQuery.isLoading}
+                  pagination={false}
+                  columns={[
+                    { title: 'Học viên', dataIndex: 'studentName', key: 'studentName' },
+                    { title: 'Gói học phí', dataIndex: 'packageNameSnapshot', key: 'packageNameSnapshot' },
+                    {
+                      title: 'Ngày bắt đầu',
+                      dataIndex: 'startDate',
+                      key: 'startDate',
+                      render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
+                    },
+                  ]}
+                />
+              ),
             },
             {
               key: 'sessions',
-              label: 'Lịch học',
-              children: <Empty description="Sẽ triển khai ở module ClassSession" />,
+              label: 'Buổi học',
+              children: sessionsTab,
+            },
+            {
+              key: 'attendance',
+              label: 'Điểm danh',
+              children: attendanceTab,
             },
           ]}
         />
@@ -297,6 +438,23 @@ export function ClassroomDetailPage() {
         onCancel={() => setEnrollModalOpen(false)}
         onSubmit={handleEnrollStudent}
       />
+
+      <GenerateSessionsModal
+        open={generateSessionsOpen}
+        classroomId={classroom.id}
+        submitting={generateSessions.isPending}
+        onCancel={() => setGenerateSessionsOpen(false)}
+        onSubmit={handleGenerateSessions}
+      />
+
+      <CancelSessionModal
+        open={Boolean(cancelingSession)}
+        session={cancelingSession}
+        submitting={cancelClassSession.isPending}
+        onCancel={() => setCancelingSession(undefined)}
+        onSubmit={handleCancelSession}
+      />
+
     </Space>
   )
 }

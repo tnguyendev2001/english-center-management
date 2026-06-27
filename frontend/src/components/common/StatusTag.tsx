@@ -17,6 +17,12 @@ const statusConfigs: Record<string, StatusConfig> = {
   PARTIALLY_PAID: { label: 'Đóng một phần', color: 'gold' },
   PAID: { label: 'Đã đóng', color: 'green' },
   VALID: { label: 'Hợp lệ', color: 'green' },
+  SCHEDULED: { label: 'Đã lên lịch', color: 'blue' },
+  PRESENT: { label: 'Có mặt', color: 'green' },
+  ABSENT: { label: 'Vắng', color: 'red' },
+  EXCUSED: { label: 'Xin nghỉ', color: 'gold' },
+  AVAILABLE: { label: 'Còn buổi bù', color: 'green' },
+  USED: { label: 'Đã dùng', color: 'default' },
 }
 
 interface StatusTagProps {

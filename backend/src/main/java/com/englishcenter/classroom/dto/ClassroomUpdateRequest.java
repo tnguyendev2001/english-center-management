@@ -1,11 +1,14 @@
 package com.englishcenter.classroom.dto;
 
+import com.englishcenter.classroom.ClassDayOfWeek;
 import com.englishcenter.classroom.ClassroomStatus;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Set;
 
 public record ClassroomUpdateRequest(
         @NotBlank(message = "Class code is required")
@@ -32,9 +35,8 @@ public record ClassroomUpdateRequest(
 
         LocalDate expectedEndDate,
 
-        @NotBlank(message = "Days of week is required")
-        @Size(max = 255, message = "Days of week must not exceed 255 characters")
-        String daysOfWeek,
+        @NotEmpty(message = "Days of week is required")
+        Set<ClassDayOfWeek> daysOfWeek,
 
         @NotNull(message = "Start time is required")
         LocalTime startTime,

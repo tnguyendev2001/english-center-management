@@ -9,6 +9,7 @@ import { StatusTag } from '../../../components/common/StatusTag'
 import { ClassroomFormModal } from '../components/ClassroomFormModal'
 import { useClassrooms, useCreateClassroom, useUpdateClassroom } from '../classroomQueries'
 import type { Classroom, ClassroomPayload, ClassroomSearchParams } from '../classroomTypes'
+import { formatDaysOfWeek } from '../classroomTypes'
 
 const { Title, Text } = Typography
 
@@ -66,7 +67,7 @@ export function ClassroomListPage() {
       title: 'Lịch học',
       key: 'schedule',
       render: (_, classroom) =>
-        `${classroom.daysOfWeek}, ${formatTime(classroom.startTime)} - ${formatTime(classroom.endTime)}`,
+        `${formatDaysOfWeek(classroom.daysOfWeek)}, ${formatTime(classroom.startTime)} - ${formatTime(classroom.endTime)}`,
     },
     {
       title: 'Ngày bắt đầu',

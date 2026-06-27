@@ -2,7 +2,8 @@ import { DatePicker, Form, Input, Modal, Select, Space, TimePicker } from 'antd'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import { useEffect } from 'react'
-import type { Classroom, ClassroomPayload, ClassroomStatus } from '../classroomTypes'
+import type { Classroom, ClassroomPayload, ClassroomStatus, ClassDayOfWeek } from '../classroomTypes'
+import { CLASS_DAY_OF_WEEK_OPTIONS } from '../classroomTypes'
 
 interface ClassroomFormValues {
   classCode: string
@@ -12,7 +13,7 @@ interface ClassroomFormValues {
   room?: string
   startDate: Dayjs
   expectedEndDate?: Dayjs
-  daysOfWeek: string
+  daysOfWeek: ClassDayOfWeek[]
   startTime: Dayjs
   endTime: Dayjs
   status: ClassroomStatus
@@ -181,9 +182,13 @@ export function ClassroomFormModal({
         <Form.Item
           label="Ngày học trong tuần"
           name="daysOfWeek"
-          rules={[{ required: true, message: 'Vui lòng nhập ngày học trong tuần' }]}
+          rules={[{ required: true, message: 'Vui lòng chọn ít nhất một ngày học' }]}
         >
-          <Input placeholder="VD: Thứ 2, Thứ 4 hoặc MON,WED" />
+          <Select
+            mode="multiple"
+            placeholder="Chọn ngày học trong tuần"
+            options={CLASS_DAY_OF_WEEK_OPTIONS}
+          />
         </Form.Item>
 
         <Space size="middle" style={{ width: '100%' }} align="start">

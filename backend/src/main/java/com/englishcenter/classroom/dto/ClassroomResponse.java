@@ -1,9 +1,11 @@
 package com.englishcenter.classroom.dto;
 
+import com.englishcenter.classroom.ClassDayOfWeek;
 import com.englishcenter.classroom.ClassroomStatus;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 
 public record ClassroomResponse(
         Long id,
@@ -14,7 +16,7 @@ public record ClassroomResponse(
         String room,
         LocalDate startDate,
         LocalDate expectedEndDate,
-        String daysOfWeek,
+        List<ClassDayOfWeek> daysOfWeek,
         LocalTime startTime,
         LocalTime endTime,
         ClassroomStatus status,

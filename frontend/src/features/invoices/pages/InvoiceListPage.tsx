@@ -135,9 +135,9 @@ export function InvoiceListPage() {
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       <Space direction="vertical" size={4}>
         <Title level={2} style={{ margin: 0 }}>
-          Hóa đơn
+          Học phí
         </Title>
-        <Text type="secondary">Danh sách hóa đơn học phí được tạo khi ghi danh.</Text>
+        <Text type="secondary">Danh sách học phí được tạo khi ghi danh.</Text>
       </Space>
 
       <Card>

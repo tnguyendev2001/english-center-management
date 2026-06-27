@@ -15,6 +15,7 @@ import com.englishcenter.common.exception.BusinessException;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -59,6 +60,10 @@ class ClassroomServiceTest {
         assertThat(response.classCode()).isEqualTo("CLS001");
         assertThat(response.className()).isEqualTo("Starter A");
         assertThat(response.status()).isEqualTo(ClassroomStatus.PLANNED);
+        assertThat(response.daysOfWeek()).containsExactly(
+                ClassDayOfWeek.MONDAY,
+                ClassDayOfWeek.WEDNESDAY
+        );
         verify(classroomRepository).save(any(Classroom.class));
     }
 
@@ -95,6 +100,10 @@ class ClassroomServiceTest {
         assertThat(response.classCode()).isEqualTo("CLS002");
         assertThat(response.className()).isEqualTo("Starter B");
         assertThat(response.status()).isEqualTo(ClassroomStatus.ONGOING);
+        assertThat(response.daysOfWeek()).containsExactly(
+                ClassDayOfWeek.TUESDAY,
+                ClassDayOfWeek.THURSDAY
+        );
         verify(classroomRepository).save(classroom);
     }
 
@@ -109,7 +118,7 @@ class ClassroomServiceTest {
                 "Room 1",
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 9, 1),
-                "MON,WED",
+                Set.of(ClassDayOfWeek.MONDAY, ClassDayOfWeek.WEDNESDAY),
                 LocalTime.of(19, 30),
                 LocalTime.of(18, 0),
                 ClassroomStatus.PLANNED,
@@ -135,7 +144,7 @@ class ClassroomServiceTest {
                 "Room 1",
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 9, 1),
-                "MON,WED",
+                Set.of(ClassDayOfWeek.MONDAY, ClassDayOfWeek.WEDNESDAY),
                 LocalTime.of(18, 0),
                 LocalTime.of(19, 30),
                 ClassroomStatus.PLANNED,
@@ -152,7 +161,7 @@ class ClassroomServiceTest {
                 "Room 2",
                 LocalDate.of(2026, 7, 2),
                 LocalDate.of(2026, 9, 2),
-                "TUE,THU",
+                Set.of(ClassDayOfWeek.TUESDAY, ClassDayOfWeek.THURSDAY),
                 LocalTime.of(18, 30),
                 LocalTime.of(20, 0),
                 ClassroomStatus.ONGOING,
@@ -170,7 +179,7 @@ class ClassroomServiceTest {
         classroom.setRoom("Room 1");
         classroom.setStartDate(LocalDate.of(2026, 7, 1));
         classroom.setExpectedEndDate(LocalDate.of(2026, 9, 1));
-        classroom.setDaysOfWeek("MON,WED");
+        classroom.setDaysOfWeek(Set.of(ClassDayOfWeek.MONDAY, ClassDayOfWeek.WEDNESDAY));
         classroom.setStartTime(LocalTime.of(18, 0));
         classroom.setEndTime(LocalTime.of(19, 30));
         classroom.setStatus(ClassroomStatus.PLANNED);

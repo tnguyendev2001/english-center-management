@@ -1,9 +1,13 @@
 package com.englishcenter.classroom.mapper;
 
+import com.englishcenter.classroom.ClassDayOfWeek;
 import com.englishcenter.classroom.Classroom;
 import com.englishcenter.classroom.dto.ClassroomCreateRequest;
 import com.englishcenter.classroom.dto.ClassroomResponse;
 import com.englishcenter.classroom.dto.ClassroomUpdateRequest;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -22,7 +26,7 @@ public class ClassroomMapper {
         classroom.setRoom(trimToNull(request.room()));
         classroom.setStartDate(request.startDate());
         classroom.setExpectedEndDate(request.expectedEndDate());
-        classroom.setDaysOfWeek(request.daysOfWeek().trim());
+        classroom.setDaysOfWeek(new HashSet<>(request.daysOfWeek()));
         classroom.setStartTime(request.startTime());
         classroom.setEndTime(request.endTime());
         classroom.setStatus(request.status());
@@ -37,7 +41,7 @@ public class ClassroomMapper {
         classroom.setRoom(trimToNull(request.room()));
         classroom.setStartDate(request.startDate());
         classroom.setExpectedEndDate(request.expectedEndDate());
-        classroom.setDaysOfWeek(request.daysOfWeek().trim());
+        classroom.setDaysOfWeek(new HashSet<>(request.daysOfWeek()));
         classroom.setStartTime(request.startTime());
         classroom.setEndTime(request.endTime());
         classroom.setStatus(request.status());
@@ -54,7 +58,7 @@ public class ClassroomMapper {
                 classroom.getRoom(),
                 classroom.getStartDate(),
                 classroom.getExpectedEndDate(),
-                classroom.getDaysOfWeek(),
+                sortDaysOfWeek(classroom.getDaysOfWeek()),
                 classroom.getStartTime(),
                 classroom.getEndTime(),
                 classroom.getStatus(),
@@ -62,6 +66,12 @@ public class ClassroomMapper {
                 classroom.getCreatedAt(),
                 classroom.getUpdatedAt()
         );
+    }
+
+    private List<ClassDayOfWeek> sortDaysOfWeek(java.util.Set<ClassDayOfWeek> daysOfWeek) {
+        return daysOfWeek.stream()
+                .sorted(Comparator.comparing(Enum::ordinal))
+                .toList();
     }
 
     private String trimToNull(String value) {
