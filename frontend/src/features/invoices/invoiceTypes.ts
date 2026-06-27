@@ -25,6 +25,9 @@ export interface Invoice {
 }
 
 export interface InvoiceSearchParams {
+  status?: InvoiceStatus
+  studentId?: number
+  classroomId?: number
   page: number
   size: number
 }

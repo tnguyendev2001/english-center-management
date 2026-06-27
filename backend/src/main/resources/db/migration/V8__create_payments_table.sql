@@ -1,0 +1,28 @@
+CREATE TABLE payments (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    payment_code VARCHAR(50) NOT NULL,
+    invoice_id BIGINT NOT NULL,
+    student_id BIGINT NOT NULL,
+    classroom_id BIGINT NOT NULL,
+    amount DECIMAL(15,2) NOT NULL,
+    payment_date DATE NOT NULL,
+    method VARCHAR(30) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    note VARCHAR(1000) NULL,
+    cancel_reason VARCHAR(1000) NULL,
+    created_by VARCHAR(100) NULL,
+    created_at DATETIME NOT NULL,
+    canceled_by VARCHAR(100) NULL,
+    canceled_at DATETIME NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_payments_payment_code UNIQUE (payment_code),
+    CONSTRAINT fk_payments_invoice FOREIGN KEY (invoice_id) REFERENCES invoices (id),
+    CONSTRAINT fk_payments_student FOREIGN KEY (student_id) REFERENCES students (id),
+    CONSTRAINT fk_payments_classroom FOREIGN KEY (classroom_id) REFERENCES classrooms (id)
+);
+
+CREATE INDEX idx_payments_invoice_id ON payments (invoice_id);
+CREATE INDEX idx_payments_student_id ON payments (student_id);
+CREATE INDEX idx_payments_classroom_id ON payments (classroom_id);
+CREATE INDEX idx_payments_payment_date ON payments (payment_date);
+CREATE INDEX idx_payments_status ON payments (status);

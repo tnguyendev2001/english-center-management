@@ -22,10 +22,13 @@ public class InvoiceController {
 
     @GetMapping
     public ApiResponse<List<InvoiceResponse>> getInvoices(
+            @RequestParam(required = false) InvoiceStatus status,
+            @RequestParam(required = false) Long studentId,
+            @RequestParam(required = false) Long classroomId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        Page<InvoiceResponse> invoices = invoiceService.getInvoices(page, size);
+        Page<InvoiceResponse> invoices = invoiceService.getInvoices(status, studentId, classroomId, page, size);
         PageMeta meta = new PageMeta(
                 invoices.getNumber(),
                 invoices.getSize(),

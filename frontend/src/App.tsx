@@ -2,7 +2,9 @@ import { Layout, Menu, Typography } from 'antd'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { ClassroomDetailPage } from './features/classrooms/pages/ClassroomDetailPage'
 import { ClassroomListPage } from './features/classrooms/pages/ClassroomListPage'
+import { DebtPage } from './features/debts/pages/DebtPage'
 import { InvoiceListPage } from './features/invoices/pages/InvoiceListPage'
+import { PaymentListPage } from './features/payments/pages/PaymentListPage'
 import { StudentDetailPage } from './features/students/pages/StudentDetailPage'
 import { StudentListPage } from './features/students/pages/StudentListPage'
 import { TuitionPackageListPage } from './features/tuitionPackages/pages/TuitionPackageListPage'
@@ -12,6 +14,10 @@ function App() {
   const location = useLocation()
   const selectedKey = location.pathname.startsWith('/tuition-packages')
     ? '/tuition-packages'
+    : location.pathname.startsWith('/payments')
+      ? '/payments'
+    : location.pathname.startsWith('/debts')
+      ? '/debts'
     : location.pathname.startsWith('/invoices')
       ? '/invoices'
     : location.pathname.startsWith('/classrooms')
@@ -37,6 +43,8 @@ function App() {
             { key: '/classrooms', label: 'Lớp học' },
             { key: '/tuition-packages', label: 'Gói học phí' },
             { key: '/invoices', label: 'Hóa đơn' },
+            { key: '/payments', label: 'Thanh toán' },
+            { key: '/debts', label: 'Công nợ' },
           ]}
           onClick={(event) => navigate(event.key)}
         />
@@ -52,6 +60,8 @@ function App() {
             <Route path="/classrooms/:id" element={<ClassroomDetailPage />} />
             <Route path="/tuition-packages" element={<TuitionPackageListPage />} />
             <Route path="/invoices" element={<InvoiceListPage />} />
+            <Route path="/payments" element={<PaymentListPage />} />
+            <Route path="/debts" element={<DebtPage />} />
           </Routes>
         </Layout.Content>
       </Layout>

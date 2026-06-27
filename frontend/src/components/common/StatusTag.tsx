@@ -16,6 +16,7 @@ const statusConfigs: Record<string, StatusConfig> = {
   UNPAID: { label: 'Chưa đóng', color: 'red' },
   PARTIALLY_PAID: { label: 'Đóng một phần', color: 'gold' },
   PAID: { label: 'Đã đóng', color: 'green' },
+  VALID: { label: 'Hợp lệ', color: 'green' },
 }
 
 interface StatusTagProps {
