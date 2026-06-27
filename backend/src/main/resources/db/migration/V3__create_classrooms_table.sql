@@ -1,0 +1,23 @@
+CREATE TABLE classrooms (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    class_code VARCHAR(50) NOT NULL,
+    class_name VARCHAR(255) NOT NULL,
+    level VARCHAR(100) NOT NULL,
+    teacher_name VARCHAR(255) NOT NULL,
+    room VARCHAR(100) NULL,
+    start_date DATE NOT NULL,
+    expected_end_date DATE NULL,
+    days_of_week VARCHAR(255) NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    note VARCHAR(1000) NULL,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_classrooms_class_code UNIQUE (class_code)
+);
+
+CREATE INDEX idx_classrooms_class_name ON classrooms (class_name);
+CREATE INDEX idx_classrooms_teacher_name ON classrooms (teacher_name);
+CREATE INDEX idx_classrooms_status ON classrooms (status);
