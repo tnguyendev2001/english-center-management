@@ -1,0 +1,66 @@
+﻿# Testing Rules
+
+## General
+
+Money-related business logic must have tests.
+
+Do not generate payment, invoice, debt, revenue, or package-change code without tests.
+
+## Must test payment
+
+- Create partial payment.
+- Create full payment.
+- Reject zero payment.
+- Reject negative payment.
+- Reject overpayment.
+- Reject payment for canceled invoice.
+- Reject payment for paid invoice.
+- Cancel payment with reason.
+- Canceled payment is not counted.
+- Invoice recalculates after payment create.
+- Invoice recalculates after payment cancel.
+
+## Must test invoice/debt/revenue
+
+- Create invoice from enrollment.
+- Package snapshot is saved.
+- Updating original TuitionPackage does not change old invoice.
+- Unpaid invoice counted as debt.
+- Partially paid invoice counted as debt.
+- Paid invoice not counted as debt.
+- Canceled invoice not counted as debt.
+- Revenue counts valid payments only.
+- Revenue excludes canceled payments.
+
+## Must test attendance/makeup
+
+- PRESENT counts as used session.
+- ABSENT counts as used session.
+- EXCUSED does not count as used session.
+- EXCUSED creates makeup credit.
+- Canceled class session does not count.
+- Cannot mark attendance for canceled session.
+- One student has one attendance record per session.
+
+## Must test package change
+
+- Package change with credit.
+- Package change with debt.
+- Old package is closed.
+- New package is created.
+- New invoice includes adjustment.
+- Old invoice is not modified directly.
+- PackageChangeLog is created.
+- ActivityLog is created.
+
+## Cursor behavior
+
+If a task touches money:
+- add unit tests or service tests.
+- mention test cases in summary.
+
+If a task touches attendance/session counting:
+- add tests for count behavior.
+
+If a task touches package change:
+- add credit and debt tests.

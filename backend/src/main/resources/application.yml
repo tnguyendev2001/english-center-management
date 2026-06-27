@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: english-center-backend
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/english_center?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
+    username: english_center
+    password: english_center
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080

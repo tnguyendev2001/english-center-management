@@ -1,0 +1,125 @@
+﻿# Backend Rules
+
+## Architecture
+
+Use modular monolith.
+
+Do not add:
+- microservices
+- API Gateway
+- RabbitMQ
+- Kafka
+- event-driven architecture
+- complex role permission
+- unnecessary abstractions
+
+## Package structure
+
+Use package by feature/module:
+
+- common
+- student
+- classroom
+- tuitionpackage
+- enrollment
+- studentpackage
+- classsession
+- attendance
+- invoice
+- payment
+- debt
+- dashboard
+- statistics
+- report
+- auth
+
+Use:
+- Classroom instead of Class.
+- ClassSession for lesson sessions.
+- StudentPackage for selected student package/cycle.
+- Invoice for tuition fee to collect.
+- Payment for actual money received.
+
+## Module structure
+
+Each module should follow:
+
+- Entity
+- Enum if needed
+- Repository
+- Service
+- Controller
+- dto/
+- mapper/
+
+Example:
+
+student/
+- Student.java
+- StudentStatus.java
+- StudentRepository.java
+- StudentService.java
+- StudentController.java
+- dto/
+- mapper/
+
+## Controller rules
+
+- Keep controllers thin.
+- Controllers receive request DTO.
+- Controllers call service.
+- Controllers return ApiResponse.
+- Do not put business logic in controllers.
+- Do not expose JPA entities directly.
+
+## Service rules
+
+- Put business logic in services.
+- Use @Transactional for operations involving money or multiple writes.
+- Validate business rules in services.
+- Throw BusinessException for business rule violations.
+- Save ActivityLog for important operations.
+
+## Entity rules
+
+- Do not expose entities to frontend.
+- Avoid complex bidirectional relationships unless needed.
+- Avoid @Data on JPA entities.
+- Use BigDecimal for money.
+- Use LocalDate, LocalTime, LocalDateTime for date/time.
+
+## DTO rules
+
+- Use request/response DTOs.
+- Use Bean Validation on request DTO.
+- Keep response DTO friendly for frontend.
+- Do not return unnecessary nested objects.
+
+## Exception rules
+
+Use:
+- BusinessException
+- NotFoundException
+- GlobalExceptionHandler
+- Error response format
+
+Do not throw generic RuntimeException for business cases.
+
+## Transaction rules
+
+Use @Transactional for:
+- Enrollment creating student package and invoice.
+- Payment create.
+- Payment cancel.
+- Invoice cancel.
+- Attendance marking.
+- Session cancellation.
+- Package change.
+
+## Money rules
+
+- Use BigDecimal.
+- Do not use double/float.
+- Do not allow manual paidAmount editing.
+- Recalculate invoice after payment create/cancel.
+- Add tests.

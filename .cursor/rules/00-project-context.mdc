@@ -1,0 +1,54 @@
+﻿# Project Context
+
+This project is a small English center management system.
+
+Core goal:
+- Real daily operation.
+- Simple and easy to use.
+- Friendly for a teacher/admin.
+- One user role only.
+- Accuracy is more important than fancy architecture.
+
+Do not optimize for:
+- Portfolio complexity.
+- Enterprise architecture.
+- Microservices.
+- Event-driven architecture.
+- Multiple roles/permissions.
+
+Tech stack:
+Backend:
+- Java 21
+- Spring Boot
+- Spring Web MVC
+- Spring Data JPA
+- Spring Validation
+- Spring Security simple login
+- MySQL
+- Flyway
+
+Frontend:
+- React
+- TypeScript
+- Vite
+- Ant Design
+- React Router
+- TanStack Query
+- Axios
+- dayjs
+
+Architecture:
+- Modular monolith.
+- Backend and frontend in the same workspace.
+- No API Gateway.
+- No RabbitMQ/Kafka.
+- No complex role permission.
+
+Read these docs before implementing:
+- PROJECT_CONTEXT.md
+- docs/00-product-goal.md
+- docs/01-business-rules.md
+- docs/03-api-convention.md
+- docs/04-database-convention.md
+- docs/05-frontend-convention.md
+- docs/06-testing-strategy.md

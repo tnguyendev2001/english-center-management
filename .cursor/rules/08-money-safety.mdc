@@ -1,0 +1,22 @@
+﻿# Money Safety Rules
+
+Money-related code is high risk.
+
+For any task involving Invoice, Payment, Debt, Revenue, Package Change:
+
+Required:
+- Use BigDecimal.
+- Use @Transactional.
+- Do not use double/float.
+- Do not manually edit paidAmount from request.
+- Recalculate paidAmount from VALID payments.
+- Exclude CANCELED payments.
+- Reject overpayment in V1.
+- Add tests.
+- Save ActivityLog for create/cancel/change operations.
+
+Forbidden:
+- Hard delete payment.
+- Calculate revenue from invoice amount.
+- Change old invoice amount during package change.
+- Auto refund money.

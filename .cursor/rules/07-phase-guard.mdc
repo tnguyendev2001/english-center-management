@@ -1,0 +1,22 @@
+﻿# Phase Guard Rules
+
+Only implement the requested phase/module.
+
+Do not implement future phase modules unless explicitly requested.
+
+Current phase must be stated in the prompt.
+
+If the task is Phase 1:
+- Do not implement Payment.
+- Do not implement Attendance.
+- Do not implement Package Change.
+
+If the task is Phase 2:
+- Only implement Enrollment, StudentPackage, and initial Invoice.
+- Do not implement payment collection yet.
+
+If the task is Phase 3:
+- Implement Invoice, Payment, Debt, Revenue.
+- Add tests for all money flows.
+
+Never build the whole app in one task.

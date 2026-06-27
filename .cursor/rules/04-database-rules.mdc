@@ -1,0 +1,109 @@
+﻿# Database Rules
+
+## Database
+
+Use MySQL.
+
+Use Flyway for schema migration.
+
+Do not use Hibernate ddl-auto update.
+
+Use:
+- ddl-auto validate
+
+## Migration
+
+Migration folder:
+
+backend/src/main/resources/db/migration/
+
+File format:
+
+V1__create_students_table.sql
+V2__create_tuition_packages_table.sql
+
+Rules:
+- Do not modify old migration files after applied.
+- Create a new migration for schema changes.
+- Keep migration readable.
+
+## Naming
+
+Table names use snake_case.
+
+Recommended tables:
+- students
+- classrooms
+- tuition_packages
+- class_packages
+- enrollments
+- student_packages
+- class_sessions
+- attendance_records
+- invoices
+- payments
+- makeup_credits
+- package_change_logs
+- activity_logs
+
+Column names use snake_case.
+
+Foreign keys end with _id.
+
+Examples:
+- student_id
+- classroom_id
+- invoice_id
+- student_package_id
+
+## Money
+
+Use DECIMAL(15,2) for money columns.
+
+Java type must be BigDecimal.
+
+Do not use double/float.
+
+Money columns:
+- price
+- amount
+- discount_amount
+- adjustment_amount
+- final_amount
+- paid_amount
+- remaining_amount
+
+## Constraints
+
+Important unique constraints:
+- students.student_code unique
+- classrooms.class_code unique
+- invoices.invoice_code unique
+- payments.payment_code unique
+- attendance_records(session_id, student_id) unique
+- class_packages(classroom_id, tuition_package_id) unique
+
+## Indexes
+
+Add indexes for common filters:
+- invoice status
+- invoice student_id
+- invoice classroom_id
+- payment invoice_id
+- payment payment_date
+- session classroom_id
+- session session_date
+- attendance session_id
+- activity_log created_at
+
+## Financial correctness
+
+Backend must enforce:
+- no overpayment
+- no payment for canceled invoice
+- no payment for paid invoice
+- canceled payment excluded from paidAmount
+- canceled payment excluded from revenue
+- paidAmount recalculated after payment create/cancel
+- remainingAmount recalculated after payment create/cancel
+- invoice status recalculated after payment create/cancel

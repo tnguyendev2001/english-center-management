@@ -1,0 +1,91 @@
+﻿# Business Rules
+
+Always follow these rules.
+
+## General
+
+- The app must be simple, accurate, and easy to audit.
+- Do not add complex workflows unless explicitly requested.
+- Do not add many statuses/enums.
+- Do not add microservices.
+- Do not add API Gateway.
+- Do not add RabbitMQ/Kafka.
+- Do not add event-driven architecture.
+- Do not add complex role permissions.
+
+## Tuition package
+
+- One classroom can have many tuition packages.
+- A student chooses one package when enrolling.
+- Package name, total sessions, and price must be snapshotted when creating student package/invoice.
+- Later changes to original tuition package must not affect old invoices or enrollments.
+- TuitionPackage is a template only.
+
+## Enrollment
+
+- Student cannot have two ACTIVE enrollments in the same classroom.
+- Enrollment must validate that the selected package belongs to the classroom.
+- Enrollment creates StudentPackage and first Invoice automatically.
+- Enrollment does not create Payment automatically.
+
+## Invoice and payment
+
+- Payment is the source of truth for paid amount.
+- Do not allow manual editing of paidAmount.
+- paidAmount = sum(valid payments).
+- remainingAmount = finalAmount - paidAmount.
+- Canceled payments must not be counted.
+- Do not hard delete payments.
+- If a payment is wrong, cancel it with reason.
+- In V1, do not allow overpayment.
+- Do not allow payment for canceled invoice.
+- Do not allow payment for fully paid invoice.
+- Money operations must use BigDecimal.
+- Money operations must be transactional.
+- Money operations must have tests.
+
+## Debt
+
+- Debt is calculated from unpaid or partially paid invoices.
+- Canceled invoices are not counted as debt.
+- Fully paid invoices are not counted as debt.
+- Debt must not be manually entered.
+
+## Revenue
+
+- Revenue is calculated from valid payments only.
+- Canceled payments are not counted.
+- Invoice amount is not revenue until paid.
+
+## Attendance
+
+- PRESENT counts as one used session.
+- ABSENT counts as one used session.
+- EXCUSED does not count as used session and creates makeup credit.
+- CANCELED class session does not count for any student.
+- Do not mark attendance for canceled sessions.
+- One student has one attendance record per session.
+
+## Makeup
+
+- Approved/excused absence creates makeup credit.
+- Unexcused absence does not create makeup credit.
+- Canceled class session should allow creating makeup session for the class.
+- Do not automatically refund money for absence in V1.
+
+## Package change
+
+- Do not edit old package directly.
+- Do not edit old invoice directly.
+- Close old student package.
+- Calculate used sessions.
+- Calculate used amount = usedSessions * oldPackageUnitPrice.
+- Calculate paid amount from valid payments.
+- Calculate credit/debt.
+- If student has credit, subtract it from new invoice.
+- If student has debt, add it to new invoice.
+- Create new student package.
+- Create new invoice with adjustment.
+- Save package change log.
+- Save activity log.
+- Package change must be transactional and tested.

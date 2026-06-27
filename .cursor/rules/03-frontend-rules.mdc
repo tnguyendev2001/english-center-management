@@ -1,0 +1,130 @@
+﻿# Frontend Rules
+
+## Architecture
+
+Use:
+- React
+- TypeScript
+- Vite
+- Ant Design
+- React Router
+- TanStack Query
+- Axios
+- dayjs
+
+Do not add Redux in V1 unless explicitly requested.
+
+## Folder structure
+
+Use feature-based structure:
+
+features/{feature}/
+- {feature}Api.ts
+- {feature}Types.ts
+- {feature}Queries.ts
+- pages/
+- components/
+
+## API rules
+
+- Do not call Axios directly inside page components.
+- Configure Axios only in api/httpClient.ts.
+- Feature API files call httpClient.
+- TanStack Query hooks call feature API files.
+
+## TanStack Query rules
+
+- Use useQuery for list/detail.
+- Use useMutation for create/update/cancel actions.
+- Invalidate related queries after mutation.
+- Do not over-optimize cache in V1.
+
+After payment create/cancel, invalidate:
+- invoice list/detail
+- payment list
+- debt report
+- dashboard summary
+- recent payments
+
+## Ant Design rules
+
+Use Table for:
+- lists
+- reports
+- debt
+- payments
+- invoices
+- attendance
+
+Use Form + Modal for:
+- create/edit
+- enroll student
+- create payment
+- cancel payment
+- change package
+
+Use Card/Statistic for:
+- dashboard
+- statistics
+
+Use Tabs for:
+- detail pages
+- statistics
+- reports
+
+Use Tag for status.
+
+## Naming
+
+Pages:
+- StudentListPage.tsx
+- StudentDetailPage.tsx
+- DashboardPage.tsx
+
+Components:
+- StudentFormModal.tsx
+- InvoiceTable.tsx
+- PaymentFormModal.tsx
+- StatusTag.tsx
+
+API:
+- studentApi.ts
+- paymentApi.ts
+
+Types:
+- studentTypes.ts
+- paymentTypes.ts
+
+Queries:
+- studentQueries.ts
+- paymentQueries.ts
+
+## UI language
+
+Use Vietnamese labels in UI.
+
+Examples:
+- Äang há»c
+- ChÆ°a Ä‘Ã³ng
+- ÄÃ³ng má»™t pháº§n
+- ÄÃ£ Ä‘Ã³ng
+- ÄÃ£ há»§y
+- Thu tiá»n
+- Há»§y thanh toÃ¡n
+- Äiá»ƒm danh
+
+## Money display
+
+Use MoneyText component.
+Display with thousand separators.
+Do not perform critical money calculations in frontend.
+
+## Backend sync
+
+When backend DTO changes:
+- update frontend types
+- update feature API
+- update affected page/component
+- update query invalidation if needed
+
+Do not invent frontend statuses.

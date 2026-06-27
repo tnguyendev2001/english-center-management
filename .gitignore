@@ -1,0 +1,89 @@
+# =========================================================================
+# SPRING BOOT (Java / Maven / Gradle)
+# =========================================================================
+# Build target directories
+target/
+build/
+out/
+bin/
+
+# Testing and Reports
+/test-output/
+/test-reports/
+.gradle/
+/build/
+
+# Package Files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Spring Tools Suite & Help files
+.sts4-cache/
+.springBeans
+Help.html
+
+# =========================================================================
+# REACT (JavaScript / TypeScript / Vite / CRA)
+# =========================================================================
+# Dependencies
+node_modules/
+jspm_packages/
+web_modules/
+
+# Production build outputs
+dist/
+build/
+out/
+
+# Frontend logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Vite / Next.js local files
+.vite/
+.next/
+.turbo/
+
+# =========================================================================
+# ENVIRONMENT VARIABLES & SECRETS (Both Frontend & Backend)
+# =========================================================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.properties.local
+application-local.properties
+application-local.yml
+
+# =========================================================================
+# IDEs & SYSTEM FILES
+# =========================================================================
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Visual Studio Code
+.vscode/
+!.vscode/extensions.json
+
+# Eclipse
+.metadata/
+.classpath
+.project
+.settings/
+*.launch
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+desktop.ini

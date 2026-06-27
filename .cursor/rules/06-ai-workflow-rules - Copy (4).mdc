@@ -1,0 +1,58 @@
+﻿# AI Workflow Rules
+
+## Before implementing
+
+Always read:
+- PROJECT_CONTEXT.md
+- docs/01-business-rules.md
+- docs/03-api-convention.md
+- docs/04-database-convention.md
+- docs/05-frontend-convention.md
+- docs/06-testing-strategy.md
+
+## Implementation rules
+
+When implementing a module:
+1. Stay inside the requested phase/task.
+2. Do not rewrite unrelated modules.
+3. Do not add new architecture.
+4. Do not add new statuses/enums unless explicitly requested.
+5. Do not expose entities directly.
+6. Use DTOs.
+7. Keep controllers thin.
+8. Put business logic in services.
+9. Use @Transactional for money or multi-write flows.
+10. Add tests for important business logic.
+11. Update frontend type/API if backend contract changes.
+12. Update docs if business rule or API changes.
+
+## Never do
+
+Never:
+- Add microservices.
+- Add API Gateway.
+- Add Kafka/RabbitMQ.
+- Add event-driven architecture.
+- Add complex role permissions.
+- Add Redux unless requested.
+- Hard delete payments.
+- Allow manual editing of paidAmount.
+- Change old invoice amount during package change.
+- Calculate revenue from invoice amount.
+- Count canceled payment as revenue.
+- Count canceled session as used session.
+
+## Output after generation
+
+After implementing, summarize:
+- Files created/modified.
+- Business rules applied.
+- Tests added.
+- Assumptions made.
+- How to run/test.
+
+## Prompt discipline
+
+The user should request one module/phase at a time.
+
+If task is too broad, implement the smallest safe foundation first and explain what remains.
