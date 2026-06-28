@@ -1,4 +1,4 @@
-import { Alert, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Select } from 'antd'
+import { DatePicker, Descriptions, Form, Input, InputNumber, Modal, Select } from 'antd'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import { useEffect, useMemo } from 'react'
@@ -9,11 +9,8 @@ import type { ClassSession } from '../../classSessions/classSessionTypes'
 import type { Student } from '../../students/studentTypes'
 import {
   disableInvalidLearningDates,
-  findFirstValidLearningDate,
-  formatLearningDate,
   formatSessionOptionLabel,
   getEnrollableSessions,
-  isClassroomStartDateMismatch,
 } from '../enrollmentLearningDateUtils'
 import type { EnrollStudentPayload } from '../enrollmentTypes'
 
@@ -66,13 +63,9 @@ export function EnrollStudentModal({
     [classroomStartDate, sessions],
   )
   const hasEnrollableSessions = enrollableSessions.length > 0
-  const firstValidLearningDate = useMemo(
-    () => findFirstValidLearningDate(classroomStartDate, classroomDaysOfWeek),
-    [classroomDaysOfWeek, classroomStartDate],
-  )
-  const classroomStartMismatch = useMemo(
-    () => isClassroomStartDateMismatch(classroomStartDate, classroomDaysOfWeek),
-    [classroomDaysOfWeek, classroomStartDate],
+  const defaultLearningStartDate = useMemo(
+    () => dayjs(classroomStartDate),
+    [classroomStartDate],
   )
   const disableLearningDate = useMemo(
     () => disableInvalidLearningDates(classroomStartDate, classroomDaysOfWeek),
@@ -86,11 +79,11 @@ export function EnrollStudentModal({
         enrollmentDate: dayjs(),
         learningStartDate: hasEnrollableSessions
           ? enrollableSessions[0].sessionDate
-          : firstValidLearningDate,
+          : defaultLearningStartDate,
         discountAmount: 0,
       })
     }
-  }, [enrollableSessions, firstValidLearningDate, form, hasEnrollableSessions, open])
+  }, [defaultLearningStartDate, enrollableSessions, form, hasEnrollableSessions, open])
 
   const selectedPackage = useMemo(
     () => classPackages.find((classPackage) => classPackage.tuitionPackageId === selectedPackageId),
@@ -131,15 +124,6 @@ export function EnrollStudentModal({
         <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
           <Descriptions.Item label="Lớp học">{classroomName}</Descriptions.Item>
         </Descriptions>
-
-        {classroomStartMismatch ? (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 16 }}
-            message={`Ngày bắt đầu lớp không trùng lịch học. Buổi học đầu tiên sẽ là ${formatLearningDate(firstValidLearningDate)}.`}
-          />
-        ) : null}
 
         <Form.Item
           label="Học viên"

@@ -324,12 +324,7 @@ public class EnrollmentService {
             );
         }
 
-        if (!EnrollmentLearningDateHelper.isValidLearningDate(classroom, requestedLearningStartDate)) {
-            throw new BusinessException(
-                    "Learning start date must be on or after classroom start date and match a study day"
-            );
-        }
-
+        EnrollmentLearningDateHelper.validateLearningStartDate(classroom, requestedLearningStartDate);
         validateLearningStartDateAgainstExistingSessions(classroom.getId(), requestedLearningStartDate);
         return requestedLearningStartDate;
     }
@@ -344,7 +339,9 @@ public class EnrollmentService {
                 learningStartDate,
                 ClassSessionStatus.CANCELED
         )) {
-            throw new BusinessException("Learning start date must match an existing non-canceled class session");
+            throw new BusinessException(
+                    EnrollmentLearningDateHelper.LEARNING_START_MUST_MATCH_SESSION_MESSAGE
+            );
         }
     }
 

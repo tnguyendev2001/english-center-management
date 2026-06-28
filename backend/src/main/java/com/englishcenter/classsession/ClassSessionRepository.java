@@ -39,4 +39,6 @@ public interface ClassSessionRepository extends JpaRepository<ClassSession, Long
             LocalDate sessionDate,
             ClassSessionStatus status
     );
+
+    List<ClassSession> findByClassroomIdOrderBySessionDateAscStartTimeAsc(Long classroomId);
 }

@@ -31,6 +31,9 @@ class ClassroomServiceTest {
     @Mock
     private EnrollmentRepository enrollmentRepository;
 
+    @Mock
+    private ClassroomScheduleUpdateService classroomScheduleUpdateService;
+
     private final ClassroomMapper classroomMapper = new ClassroomMapper();
     private final EnrollmentSessionService enrollmentSessionService = new EnrollmentSessionService();
 
@@ -114,6 +117,33 @@ class ClassroomServiceTest {
     }
 
     @Test
+    void createRejectsStartDateNotMatchingDaysOfWeek() {
+        ClassroomService classroomService = newService();
+        ClassroomCreateRequest request = new ClassroomCreateRequest(
+                "CLS001",
+                "Starter A",
+                "Starter",
+                "Ms Hoa",
+                "Room 1",
+                LocalDate.of(2026, 6, 30),
+                LocalDate.of(2026, 9, 1),
+                Set.of(ClassDayOfWeek.MONDAY, ClassDayOfWeek.WEDNESDAY),
+                LocalTime.of(18, 0),
+                LocalTime.of(19, 30),
+                ClassroomStatus.PLANNED,
+                null
+        );
+
+        when(classroomRepository.existsByClassCode("CLS001")).thenReturn(false);
+
+        assertThatThrownBy(() -> classroomService.create(request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage(ClassroomScheduleValidator.START_DATE_MUST_MATCH_DAYS_MESSAGE);
+
+        verify(classroomRepository, never()).save(any(Classroom.class));
+    }
+
+    @Test
     void createRejectsEndTimeBeforeStartTime() {
         ClassroomService classroomService = newService();
         ClassroomCreateRequest request = new ClassroomCreateRequest(
@@ -135,7 +165,7 @@ class ClassroomServiceTest {
 
         assertThatThrownBy(() -> classroomService.create(request))
                 .isInstanceOf(BusinessException.class)
-                .hasMessage("End time must be after start time");
+                .hasMessage("Giờ kết thúc phải sau giờ bắt đầu.");
 
         verify(classroomRepository).existsByClassCode("CLS001");
         verify(classroomRepository, never()).save(any(Classroom.class));
@@ -163,7 +193,8 @@ class ClassroomServiceTest {
                 classroomRepository,
                 classroomMapper,
                 enrollmentRepository,
-                enrollmentSessionService
+                enrollmentSessionService,
+                classroomScheduleUpdateService
         );
     }
 

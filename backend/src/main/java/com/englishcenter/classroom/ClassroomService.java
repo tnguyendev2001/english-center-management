@@ -13,6 +13,7 @@ import com.englishcenter.enrollment.EnrollmentStatus;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -28,17 +29,20 @@ public class ClassroomService {
     private final ClassroomMapper classroomMapper;
     private final EnrollmentRepository enrollmentRepository;
     private final EnrollmentSessionService enrollmentSessionService;
+    private final ClassroomScheduleUpdateService classroomScheduleUpdateService;
 
     public ClassroomService(
             ClassroomRepository classroomRepository,
             ClassroomMapper classroomMapper,
             EnrollmentRepository enrollmentRepository,
-            EnrollmentSessionService enrollmentSessionService
+            EnrollmentSessionService enrollmentSessionService,
+            ClassroomScheduleUpdateService classroomScheduleUpdateService
     ) {
         this.classroomRepository = classroomRepository;
         this.classroomMapper = classroomMapper;
         this.enrollmentRepository = enrollmentRepository;
         this.enrollmentSessionService = enrollmentSessionService;
+        this.classroomScheduleUpdateService = classroomScheduleUpdateService;
     }
 
     @Transactional(readOnly = true)
@@ -68,7 +72,13 @@ public class ClassroomService {
             throw new BusinessException("Class code already exists");
         }
 
-        validateSchedule(request.startDate(), request.expectedEndDate(), request.startTime(), request.endTime());
+        validateSchedule(
+                request.startDate(),
+                request.expectedEndDate(),
+                request.daysOfWeek(),
+                request.startTime(),
+                request.endTime()
+        );
 
         Classroom classroom = classroomMapper.toEntity(request);
         return classroomMapper.toResponse(classroomRepository.save(classroom));
@@ -83,7 +93,30 @@ public class ClassroomService {
             throw new BusinessException("Class code already exists");
         }
 
-        validateSchedule(request.startDate(), request.expectedEndDate(), request.startTime(), request.endTime());
+        validateSchedule(
+                request.startDate(),
+                request.expectedEndDate(),
+                request.daysOfWeek(),
+                request.startTime(),
+                request.endTime()
+        );
+
+        LocalDate oldStartDate = classroom.getStartDate();
+        Set<ClassDayOfWeek> oldDaysOfWeek = Set.copyOf(classroom.getDaysOfWeek());
+        LocalTime oldStartTime = classroom.getStartTime();
+        LocalTime oldEndTime = classroom.getEndTime();
+
+        classroomScheduleUpdateService.applyScheduleChangeIfNeeded(
+                classroom.getId(),
+                oldStartDate,
+                oldDaysOfWeek,
+                oldStartTime,
+                oldEndTime,
+                request.startDate(),
+                Set.copyOf(request.daysOfWeek()),
+                request.startTime(),
+                request.endTime()
+        );
 
         classroomMapper.updateEntity(classroom, request);
         return classroomMapper.toResponse(classroomRepository.save(classroom));
@@ -123,16 +156,17 @@ public class ClassroomService {
     private void validateSchedule(
             LocalDate startDate,
             LocalDate expectedEndDate,
+            Set<ClassDayOfWeek> daysOfWeek,
             LocalTime startTime,
             LocalTime endTime
     ) {
-        if (expectedEndDate != null && startDate != null && expectedEndDate.isBefore(startDate)) {
-            throw new BusinessException("Expected end date must not be before start date");
-        }
-
-        if (startTime != null && endTime != null && !endTime.isAfter(startTime)) {
-            throw new BusinessException("End time must be after start time");
-        }
+        ClassroomScheduleValidator.validateSchedule(
+                startDate,
+                expectedEndDate,
+                daysOfWeek,
+                startTime,
+                endTime
+        );
     }
 
     private int normalizePageSize(int size) {

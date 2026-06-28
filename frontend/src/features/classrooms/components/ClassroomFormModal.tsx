@@ -1,9 +1,15 @@
-import { DatePicker, Form, Input, Modal, Select, Space, TimePicker } from 'antd'
+import { Alert, DatePicker, Form, Input, Modal, Select, Space, TimePicker } from 'antd'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { Classroom, ClassroomPayload, ClassroomStatus, ClassDayOfWeek } from '../classroomTypes'
 import { CLASS_DAY_OF_WEEK_OPTIONS } from '../classroomTypes'
+import {
+  CLASSROOM_DAYS_OF_WEEK_REQUIRED_MESSAGE,
+  CLASSROOM_START_DATE_MISMATCH_MESSAGE,
+  disableInvalidClassroomStartDates,
+  isDateMatchingDaysOfWeek,
+} from '../classroomScheduleUtils'
 
 interface ClassroomFormValues {
   classCode: string
@@ -44,6 +50,20 @@ export function ClassroomFormModal({
 }: ClassroomFormModalProps) {
   const [form] = Form.useForm<ClassroomFormValues>()
   const isEdit = Boolean(initialClassroom)
+  const daysOfWeek = Form.useWatch('daysOfWeek', form) ?? []
+  const startDate = Form.useWatch('startDate', form)
+
+  const disableStartDate = useMemo(
+    () => disableInvalidClassroomStartDates(daysOfWeek),
+    [daysOfWeek],
+  )
+  const startDateMismatch = useMemo(() => {
+    if (!startDate || daysOfWeek.length === 0) {
+      return false
+    }
+
+    return !isDateMatchingDaysOfWeek(startDate, daysOfWeek)
+  }, [daysOfWeek, startDate])
 
   useEffect(() => {
     if (!open) {
@@ -73,6 +93,16 @@ export function ClassroomFormModal({
     form.resetFields()
     form.setFieldValue('status', 'PLANNED')
   }, [form, initialClassroom, open])
+
+  useEffect(() => {
+    if (!open || !startDate || daysOfWeek.length === 0) {
+      return
+    }
+
+    if (!isDateMatchingDaysOfWeek(startDate, daysOfWeek)) {
+      form.setFieldValue('startDate', undefined)
+    }
+  }, [daysOfWeek, form, open, startDate])
 
   function handleFinish(values: ClassroomFormValues) {
     onSubmit({
@@ -164,25 +194,10 @@ export function ClassroomFormModal({
           </Form.Item>
         </Space>
 
-        <Space size="middle" style={{ width: '100%' }} align="start">
-          <Form.Item
-            label="Ngày bắt đầu"
-            name="startDate"
-            rules={[{ required: true, message: 'Vui lòng chọn ngày bắt đầu' }]}
-            style={{ width: 320 }}
-          >
-            <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} />
-          </Form.Item>
-
-          <Form.Item label="Ngày kết thúc dự kiến" name="expectedEndDate" style={{ width: 320 }}>
-            <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} />
-          </Form.Item>
-        </Space>
-
         <Form.Item
           label="Ngày học trong tuần"
           name="daysOfWeek"
-          rules={[{ required: true, message: 'Vui lòng chọn ít nhất một ngày học' }]}
+          rules={[{ required: true, message: CLASSROOM_DAYS_OF_WEEK_REQUIRED_MESSAGE }]}
         >
           <Select
             mode="multiple"
@@ -190,6 +205,67 @@ export function ClassroomFormModal({
             options={CLASS_DAY_OF_WEEK_OPTIONS}
           />
         </Form.Item>
+
+        {startDateMismatch ? (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={CLASSROOM_START_DATE_MISMATCH_MESSAGE}
+          />
+        ) : null}
+
+        <Space size="middle" style={{ width: '100%' }} align="start">
+          <Form.Item
+            label="Ngày bắt đầu"
+            name="startDate"
+            rules={[
+              { required: true, message: 'Vui lòng chọn ngày bắt đầu' },
+              {
+                validator: async (_, value?: Dayjs) => {
+                  if (!value) {
+                    return
+                  }
+
+                  if (daysOfWeek.length === 0) {
+                    throw new Error(CLASSROOM_DAYS_OF_WEEK_REQUIRED_MESSAGE)
+                  }
+
+                  if (!isDateMatchingDaysOfWeek(value, daysOfWeek)) {
+                    throw new Error(CLASSROOM_START_DATE_MISMATCH_MESSAGE)
+                  }
+                },
+              },
+            ]}
+            extra="Ngày bắt đầu phải là buổi học đầu tiên và trùng lịch học đã chọn"
+            style={{ width: 320 }}
+          >
+            <DatePicker
+              format="DD/MM/YYYY"
+              style={{ width: '100%' }}
+              disabled={daysOfWeek.length === 0}
+              disabledDate={disableStartDate}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Ngày kết thúc dự kiến"
+            name="expectedEndDate"
+            rules={[
+              {
+                validator: async (_, value?: Dayjs) => {
+                  const selectedStartDate = form.getFieldValue('startDate') as Dayjs | undefined
+                  if (value && selectedStartDate && value.isBefore(selectedStartDate, 'day')) {
+                    throw new Error('Ngày kết thúc dự kiến không được trước ngày bắt đầu.')
+                  }
+                },
+              },
+            ]}
+            style={{ width: 320 }}
+          >
+            <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} />
+          </Form.Item>
+        </Space>
 
         <Space size="middle" style={{ width: '100%' }} align="start">
           <Form.Item
@@ -204,7 +280,17 @@ export function ClassroomFormModal({
           <Form.Item
             label="Giờ kết thúc"
             name="endTime"
-            rules={[{ required: true, message: 'Vui lòng chọn giờ kết thúc' }]}
+            rules={[
+              { required: true, message: 'Vui lòng chọn giờ kết thúc' },
+              {
+                validator: async (_, value?: Dayjs) => {
+                  const selectedStartTime = form.getFieldValue('startTime') as Dayjs | undefined
+                  if (value && selectedStartTime && !value.isAfter(selectedStartTime)) {
+                    throw new Error('Giờ kết thúc phải sau giờ bắt đầu.')
+                  }
+                },
+              },
+            ]}
             style={{ width: 320 }}
           >
             <TimePicker format="HH:mm" style={{ width: '100%' }} />

@@ -1,6 +1,7 @@
 package com.englishcenter.classroom;
 
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -26,5 +27,16 @@ public enum ClassDayOfWeek {
         return days.stream()
                 .map(ClassDayOfWeek::toJavaDayOfWeek)
                 .collect(Collectors.toCollection(HashSet::new));
+    }
+
+    public static boolean isDateMatchingDaysOfWeek(LocalDate date, Set<ClassDayOfWeek> daysOfWeek) {
+        if (date == null || daysOfWeek == null || daysOfWeek.isEmpty()) {
+            return false;
+        }
+
+        DayOfWeek dayOfWeek = date.getDayOfWeek();
+        return daysOfWeek.stream()
+                .map(ClassDayOfWeek::toJavaDayOfWeek)
+                .anyMatch(dayOfWeek::equals);
     }
 }

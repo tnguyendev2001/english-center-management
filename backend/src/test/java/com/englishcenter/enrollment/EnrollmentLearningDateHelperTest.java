@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.englishcenter.classroom.ClassDayOfWeek;
 import com.englishcenter.classroom.Classroom;
+import com.englishcenter.classroom.ClassroomScheduleValidator;
 import com.englishcenter.common.exception.BusinessException;
 import java.time.LocalDate;
 import java.util.Set;
@@ -76,7 +77,7 @@ class EnrollmentLearningDateHelperTest {
                 LocalDate.of(2026, 6, 30)
         ))
                 .isInstanceOf(BusinessException.class)
-                .hasMessage("Classroom days of week is not configured");
+                .hasMessage(ClassroomScheduleValidator.DAYS_OF_WEEK_REQUIRED_MESSAGE);
     }
 
     private Classroom classroom(LocalDate startDate, Set<ClassDayOfWeek> daysOfWeek) {

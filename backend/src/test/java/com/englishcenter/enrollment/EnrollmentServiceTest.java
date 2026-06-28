@@ -200,7 +200,7 @@ class EnrollmentServiceTest {
                 1L,
                 2L,
                 3L,
-                LocalDate.of(2026, 6, 30),
+                LocalDate.of(2026, 6, 29),
                 LocalDate.of(2026, 6, 29),
                 new BigDecimal("50000"),
                 "First enrollment"
@@ -208,9 +208,29 @@ class EnrollmentServiceTest {
 
         assertThatThrownBy(() -> service.enrollStudent(request))
                 .isInstanceOf(BusinessException.class)
-                .hasMessage(
-                        "Learning start date must be on or after classroom start date and match a study day"
-                );
+                .hasMessage(EnrollmentLearningDateHelper.LEARNING_START_BEFORE_CLASSROOM_MESSAGE);
+
+        verify(enrollmentRepository, never()).save(any(Enrollment.class));
+    }
+
+    @Test
+    void enrollStudentRejectsLearningStartDateNotMatchingStudyDays() {
+        EnrollmentService service = newService();
+        mockValidLookups(false, true);
+
+        EnrollStudentRequest request = new EnrollStudentRequest(
+                1L,
+                2L,
+                3L,
+                LocalDate.of(2026, 7, 7),
+                LocalDate.of(2026, 6, 29),
+                new BigDecimal("50000"),
+                "First enrollment"
+        );
+
+        assertThatThrownBy(() -> service.enrollStudent(request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage(EnrollmentLearningDateHelper.LEARNING_START_MUST_MATCH_DAYS_MESSAGE);
 
         verify(enrollmentRepository, never()).save(any(Enrollment.class));
     }
@@ -321,7 +341,7 @@ class EnrollmentServiceTest {
         classroom.setClassCode("CLS001");
         classroom.setClassName("Starter A");
         classroom.setStatus(ClassroomStatus.PLANNED);
-        classroom.setStartDate(LocalDate.of(2026, 6, 30));
+        classroom.setStartDate(LocalDate.of(2026, 7, 1));
         classroom.setDaysOfWeek(Set.of(ClassDayOfWeek.MONDAY, ClassDayOfWeek.WEDNESDAY));
         return classroom;
     }
