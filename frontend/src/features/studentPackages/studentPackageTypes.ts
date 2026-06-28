@@ -1,10 +1,10 @@
 import type { Invoice } from '../invoices/invoiceTypes'
 
-export type StudentPackageStatus = 'ACTIVE' | 'CLOSED' | 'CANCELED'
-export type LearningProgressWarningType = 'OVERUSED' | 'DEPLETED' | 'LOW' | 'NONE'
+export type LearningProgressWarningType = 'OVERUSED' | 'DEPLETED' | 'LOW' | 'OK' | 'NONE'
 export type PackageChangeAdjustmentType = 'CREDIT' | 'DEBT' | 'NONE'
 export type PackageChangeMode = 'REPLACEMENT_CHANGE' | 'NEW_CYCLE_CHANGE'
 
+/** Student package history row returned on enrollment create/detail. */
 export interface StudentPackage {
   id: number
   studentId: number
@@ -21,21 +21,35 @@ export interface StudentPackage {
   finalAmount: number
   startDate: string
   endDate?: string | null
-  status: StudentPackageStatus
+  status: string
   cycleNo: number
   createdAt: string
   updatedAt: string
 }
 
-export interface StudentPackageProgress extends StudentPackage {
+/** Enrollment learning progress returned by /student-packages endpoints. */
+export interface EnrollmentLearningProgress {
+  enrollmentId: number
+  studentId: number
+  studentName: string
+  classroomId: number
+  classroomName: string
+  totalSessions: number
   usedSessions: number
   remainingSessions: number
   overusedSessions: number
+  latestStudentPackageId?: number | null
+  latestPackageName?: string | null
+  latestPackagePrice?: number | null
+  latestPackageTotalSessions?: number | null
+  latestTuitionPackageId: number
   makeupAvailableSessions: number
-  totalAvailableSessions: number
   warningType: LearningProgressWarningType
   warningMessage?: string | null
 }
+
+/** @deprecated Use EnrollmentLearningProgress */
+export type StudentPackageProgress = EnrollmentLearningProgress
 
 export interface ChangePackagePreviewPayload {
   newTuitionPackageId: number
@@ -82,6 +96,6 @@ export interface ChangePackagePreview {
 export interface ChangePackageResult {
   packageChangeLogId: number
   calculation: ChangePackagePreview
-  newStudentPackage: StudentPackageProgress
+  newStudentPackage: EnrollmentLearningProgress
   newInvoice?: Invoice | null
 }

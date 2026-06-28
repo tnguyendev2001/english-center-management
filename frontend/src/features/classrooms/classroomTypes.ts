@@ -90,3 +90,68 @@ export interface ClassroomPayload {
   status: ClassroomStatus
   note?: string | null
 }
+
+export interface ClassroomRenewalCandidate {
+  studentId: number
+  enrollmentId: number
+  studentPackageId?: number | null
+  studentName: string
+  currentPackageName: string
+  currentPackageTotalSessions: number
+  usedSessions: number
+  remainingSessions: number
+  hasPendingPackage: boolean
+  pendingPackageName?: string | null
+  suggestedRenewalPackageId?: number | null
+  eligibleForRenewal: boolean
+  reason?: string | null
+}
+
+export interface ClassroomRenewalItemPayload {
+  enrollmentId: number
+  tuitionPackageId: number
+}
+
+export interface ClassroomRenewalPayload {
+  items: ClassroomRenewalItemPayload[]
+}
+
+export interface ClassroomRenewalPreviewItem {
+  studentId: number
+  enrollmentId: number
+  currentStudentPackageId: number
+  studentName: string
+  currentPackageName: string
+  usedSessions: number
+  remainingSessions: number
+  newTuitionPackageId: number
+  newPackageName: string
+  newPackageTotalSessions: number
+  newInvoiceAmount: number
+  newStudentPackageStatus: 'ACTIVE' | 'PENDING'
+  eligible: boolean
+  warning?: string | null
+}
+
+export interface ClassroomRenewalPreview {
+  totalSelectedStudents: number
+  totalInvoiceAmount: number
+  items: ClassroomRenewalPreviewItem[]
+}
+
+export interface ClassroomRenewalConfirmItem {
+  studentId: number
+  enrollmentId: number
+  studentName: string
+  newStudentPackageId: number
+  newInvoiceId: number
+  newPackageName: string
+  newInvoiceAmount: number
+  newStudentPackageStatus: 'ACTIVE' | 'PENDING'
+}
+
+export interface ClassroomRenewalConfirmResult {
+  renewedStudents: number
+  totalInvoiceAmount: number
+  items: ClassroomRenewalConfirmItem[]
+}

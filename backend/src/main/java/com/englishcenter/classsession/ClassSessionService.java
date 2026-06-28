@@ -2,6 +2,7 @@ package com.englishcenter.classsession;
 
 import com.englishcenter.attendance.Attendance;
 import com.englishcenter.attendance.AttendanceRepository;
+import com.englishcenter.attendance.AttendanceStatus;
 import com.englishcenter.classroom.ClassDayOfWeek;
 import com.englishcenter.classroom.Classroom;
 import com.englishcenter.classroom.ClassroomRepository;
@@ -12,6 +13,10 @@ import com.englishcenter.classsession.dto.GenerateClassSessionsResponse;
 import com.englishcenter.classsession.mapper.ClassSessionMapper;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
+import com.englishcenter.enrollment.Enrollment;
+import com.englishcenter.enrollment.EnrollmentRepository;
+import com.englishcenter.enrollment.EnrollmentSessionService;
+import com.englishcenter.enrollment.EnrollmentStatus;
 import com.englishcenter.makeupcredit.MakeupCredit;
 import com.englishcenter.makeupcredit.MakeupCreditRepository;
 import com.englishcenter.makeupcredit.MakeupCreditStatus;
@@ -35,6 +40,8 @@ public class ClassSessionService {
     private final ClassroomRepository classroomRepository;
     private final AttendanceRepository attendanceRepository;
     private final MakeupCreditRepository makeupCreditRepository;
+    private final EnrollmentRepository enrollmentRepository;
+    private final EnrollmentSessionService enrollmentSessionService;
     private final ClassSessionMapper classSessionMapper;
 
     public ClassSessionService(
@@ -42,12 +49,16 @@ public class ClassSessionService {
             ClassroomRepository classroomRepository,
             AttendanceRepository attendanceRepository,
             MakeupCreditRepository makeupCreditRepository,
+            EnrollmentRepository enrollmentRepository,
+            EnrollmentSessionService enrollmentSessionService,
             ClassSessionMapper classSessionMapper
     ) {
         this.classSessionRepository = classSessionRepository;
         this.classroomRepository = classroomRepository;
         this.attendanceRepository = attendanceRepository;
         this.makeupCreditRepository = makeupCreditRepository;
+        this.enrollmentRepository = enrollmentRepository;
+        this.enrollmentSessionService = enrollmentSessionService;
         this.classSessionMapper = classSessionMapper;
     }
 
@@ -173,6 +184,21 @@ public class ClassSessionService {
         String voidReason = request.reason().trim();
         LocalDateTime voidedAt = LocalDateTime.now();
         for (Attendance attendance : attendanceRepository.findBySessionId(id)) {
+            if (Boolean.TRUE.equals(attendance.getValid())
+                    && (attendance.getStatus() == AttendanceStatus.PRESENT
+                    || attendance.getStatus() == AttendanceStatus.ABSENT)) {
+                Enrollment enrollment = enrollmentRepository
+                        .findByClassroomIdAndStatus(session.getClassroom().getId(), EnrollmentStatus.ACTIVE)
+                        .stream()
+                        .filter(item -> item.getStudent().getId().equals(attendance.getStudent().getId()))
+                        .findFirst()
+                        .orElse(null);
+                if (enrollment != null) {
+                    enrollmentSessionService.reverseConsumedSession(enrollment);
+                    enrollmentRepository.save(enrollment);
+                }
+            }
+
             attendance.setValid(false);
             attendance.setVoidReason(voidReason);
             attendance.setVoidedAt(voidedAt);

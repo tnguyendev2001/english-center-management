@@ -7,7 +7,7 @@ import type {
   ChangePackagePreview,
   ChangePackagePreviewPayload,
   PackageChangeMode,
-  StudentPackageProgress,
+  EnrollmentLearningProgress,
 } from '../studentPackageTypes'
 
 const { Text } = Typography
@@ -22,7 +22,7 @@ interface ChangePackageFormValues {
 
 interface ChangePackageModalProps {
   open: boolean
-  currentPackage?: StudentPackageProgress
+  currentPackage?: EnrollmentLearningProgress
   classPackages: ClassPackage[]
   preview?: ChangePackagePreview
   loadingPackages: boolean
@@ -101,9 +101,9 @@ export function ChangePackageModal({
         (classPackage) =>
           classPackage.active &&
           classPackage.tuitionPackageStatus === 'ACTIVE' &&
-          classPackage.tuitionPackageId !== currentPackage?.tuitionPackageId,
+          classPackage.tuitionPackageId !== currentPackage?.latestTuitionPackageId,
       ),
-    [classPackages, currentPackage?.tuitionPackageId],
+    [classPackages, currentPackage?.latestTuitionPackageId],
   )
 
   const packageOptions = useMemo(
@@ -142,7 +142,10 @@ export function ChangePackageModal({
     preview.changeMode === selectedChangeMode
 
   const canRequestPreview =
-    open && currentPackage != null && selectedPackageId != null && selectedChangeMode != null
+    open
+    && currentPackage?.latestStudentPackageId != null
+    && selectedPackageId != null
+    && selectedChangeMode != null
 
   useEffect(() => {
     if (!canRequestPreview) {
@@ -152,7 +155,7 @@ export function ChangePackageModal({
       return
     }
 
-    const previewKey = `${currentPackage.id}:${selectedPackageId}:${selectedChangeMode}`
+    const previewKey = `${currentPackage.latestStudentPackageId}:${selectedPackageId}:${selectedChangeMode}`
     if (lastPreviewKeyRef.current === previewKey) {
       return
     }
@@ -215,15 +218,19 @@ export function ChangePackageModal({
           <Descriptions title="Gói cũ" column={1} bordered size="small" style={{ marginBottom: 16 }}>
             <Descriptions.Item label="Học viên">{currentPackage.studentName}</Descriptions.Item>
             <Descriptions.Item label="Lớp học">{currentPackage.classroomName}</Descriptions.Item>
-            <Descriptions.Item label="Gói cũ">{currentPackage.packageName}</Descriptions.Item>
+            <Descriptions.Item label="Gói gần nhất">{currentPackage.latestPackageName}</Descriptions.Item>
             <Descriptions.Item label="Tổng buổi">{currentPackage.totalSessions}</Descriptions.Item>
             <Descriptions.Item label="Đã dùng">{currentPackage.usedSessions}</Descriptions.Item>
             <Descriptions.Item label="Còn lại">{currentPackage.remainingSessions}</Descriptions.Item>
             <Descriptions.Item label="Buổi bù khả dụng">
               {currentPackage.makeupAvailableSessions}
             </Descriptions.Item>
-            <Descriptions.Item label="Học phí gói cũ">
-              <MoneyText value={currentPackage.price} />
+            <Descriptions.Item label="Học phí gói gần nhất">
+              {currentPackage.latestPackagePrice != null ? (
+                <MoneyText value={currentPackage.latestPackagePrice} />
+              ) : (
+                '-'
+              )}
             </Descriptions.Item>
           </Descriptions>
         ) : null}

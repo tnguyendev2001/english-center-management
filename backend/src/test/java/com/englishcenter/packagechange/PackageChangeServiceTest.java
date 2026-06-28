@@ -8,12 +8,14 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.englishcenter.attendance.AttendanceRepository;
 import com.englishcenter.classpackage.ClassPackageRepository;
 import com.englishcenter.classroom.Classroom;
-import com.englishcenter.classsession.ClassSessionStatus;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.enrollment.Enrollment;
+import com.englishcenter.enrollment.EnrollmentProgressService;
+import com.englishcenter.enrollment.EnrollmentRepository;
+import com.englishcenter.enrollment.EnrollmentStatus;
+import com.englishcenter.enrollment.dto.EnrollmentLearningProgressResponse;
 import com.englishcenter.invoice.Invoice;
 import com.englishcenter.invoice.InvoiceRepository;
 import com.englishcenter.invoice.InvoiceStatus;
@@ -25,10 +27,10 @@ import com.englishcenter.packagechange.dto.ChangePackageResponse;
 import com.englishcenter.packagechange.dto.ChangePackagePreviewResponse;
 import com.englishcenter.payment.PaymentRepository;
 import com.englishcenter.student.Student;
+import com.englishcenter.studentpackage.LearningProgressWarningType;
 import com.englishcenter.studentpackage.StudentPackage;
 import com.englishcenter.studentpackage.StudentPackageRepository;
 import com.englishcenter.studentpackage.StudentPackageStatus;
-import com.englishcenter.studentpackage.mapper.StudentPackageMapper;
 import com.englishcenter.tuitionpackage.TuitionPackage;
 import com.englishcenter.tuitionpackage.TuitionPackageRepository;
 import com.englishcenter.tuitionpackage.TuitionPackageStatus;
@@ -53,9 +55,6 @@ class PackageChangeServiceTest {
     private ClassPackageRepository classPackageRepository;
 
     @Mock
-    private AttendanceRepository attendanceRepository;
-
-    @Mock
     private MakeupCreditRepository makeupCreditRepository;
 
     @Mock
@@ -67,7 +66,12 @@ class PackageChangeServiceTest {
     @Mock
     private PackageChangeLogRepository packageChangeLogRepository;
 
-    private final StudentPackageMapper studentPackageMapper = new StudentPackageMapper();
+    @Mock
+    private EnrollmentRepository enrollmentRepository;
+
+    @Mock
+    private EnrollmentProgressService enrollmentProgressService;
+
     private final InvoiceMapper invoiceMapper = new InvoiceMapper();
 
     @Test
@@ -76,20 +80,7 @@ class PackageChangeServiceTest {
         StudentPackage oldPackage = oldStudentPackage();
         TuitionPackage newPackage = tuitionPackage(4L, "16 sessions", 16, "900000");
 
-        when(studentPackageRepository.findWithRelationsById(20L)).thenReturn(Optional.of(oldPackage));
-        when(tuitionPackageRepository.findById(4L)).thenReturn(Optional.of(newPackage));
-        when(classPackageRepository.existsByClassroomIdAndTuitionPackageIdAndActiveTrue(2L, 4L))
-                .thenReturn(true);
-        when(attendanceRepository.countUsedSessions(
-                1L,
-                2L,
-                oldPackage.getStartDate(),
-                oldPackage.getEndDate(),
-                ClassSessionStatus.CANCELED
-        )).thenReturn(3L);
-        when(makeupCreditRepository.sumAvailableMakeupSessions(1L, 2L, MakeupCreditStatus.AVAILABLE))
-                .thenReturn(1);
-        when(paymentRepository.sumValidAmountByStudentPackageId(20L)).thenReturn(new BigDecimal("500000"));
+        mockValidPreview(oldPackage, newPackage, 3L, new BigDecimal("500000"));
 
         ChangePackagePreviewResponse response = service.preview(20L, 4L, PackageChangeMode.NEW_CYCLE_CHANGE);
 
@@ -120,7 +111,7 @@ class PackageChangeServiceTest {
         assertThat(response.calculation().newInvoiceAdjustmentAmount()).isEqualByComparingTo("-312500.00");
         assertThat(response.calculation().newInvoiceFinalAmount()).isEqualByComparingTo("587500.00");
         assertThat(oldPackage.getStatus()).isEqualTo(StudentPackageStatus.CLOSED);
-        assertThat(response.newStudentPackage().status()).isEqualTo(StudentPackageStatus.ACTIVE);
+        assertThat(response.newStudentPackage().usedSessions()).isEqualTo(3);
         assertThat(response.newInvoice().adjustmentAmount()).isEqualByComparingTo("-312500.00");
         assertThat(response.newInvoice().finalAmount()).isEqualByComparingTo("587500.00");
         assertOldInvoiceUnchanged(oldInvoice);
@@ -168,7 +159,7 @@ class PackageChangeServiceTest {
         assertThat(response.calculation().remainingSessionsAfterChange()).isEqualTo(36);
         assertThat(response.newInvoice().finalAmount()).isEqualByComparingTo("1300000.00");
         assertThat(response.newStudentPackage().totalSessions()).isEqualTo(36);
-        assertThat(response.newStudentPackage().price()).isEqualByComparingTo("2000000");
+        assertThat(response.newStudentPackage().latestPackagePrice()).isEqualByComparingTo("2000000");
     }
 
     @Test
@@ -206,7 +197,7 @@ class PackageChangeServiceTest {
         assertThat(response.calculation().usedAmount()).isEqualByComparingTo("525000.00");
         assertThat(response.calculation().unusedCredit()).isEqualByComparingTo("175000.00");
         assertThat(response.calculation().amountToPay()).isEqualByComparingTo("1825000.00");
-        assertThat(response.calculation().remainingSessionsAfterChange()).isEqualTo(36);
+        assertThat(response.calculation().remainingSessionsAfterChange()).isEqualTo(39);
         assertThat(response.newInvoice().finalAmount()).isEqualByComparingTo("1825000.00");
     }
 
@@ -234,17 +225,16 @@ class PackageChangeServiceTest {
         PackageChangeService service = newService();
         StudentPackage oldPackage = oldStudentPackage(tuitionPackage(3L, "12 sessions", 12, "700000"));
         TuitionPackage newPackage = tuitionPackage(4L, "8 sessions", 8, "500000");
+        Enrollment enrollment = oldPackage.getEnrollment();
+        enrollment.setStatus(EnrollmentStatus.ACTIVE);
+        enrollment.setTotalSessions(12);
+        enrollment.setUsedSessions(9);
         when(studentPackageRepository.findWithRelationsForUpdateById(20L)).thenReturn(Optional.of(oldPackage));
+        when(studentPackageRepository.findTopByEnrollmentIdOrderByCycleNoDescIdDesc(10L))
+                .thenReturn(Optional.of(oldPackage));
         when(tuitionPackageRepository.findById(4L)).thenReturn(Optional.of(newPackage));
         when(classPackageRepository.existsByClassroomIdAndTuitionPackageIdAndActiveTrue(2L, 4L))
                 .thenReturn(true);
-        when(attendanceRepository.countUsedSessions(
-                1L,
-                2L,
-                oldPackage.getStartDate(),
-                oldPackage.getEndDate(),
-                ClassSessionStatus.CANCELED
-        )).thenReturn(9L);
 
         assertThatThrownBy(() -> service.changePackage(
                 20L,
@@ -288,9 +278,8 @@ class PackageChangeServiceTest {
         );
 
         assertThat(oldPackage.getStatus()).isEqualTo(StudentPackageStatus.CLOSED);
-        assertThat(response.newStudentPackage().status()).isEqualTo(StudentPackageStatus.ACTIVE);
-        assertThat(response.newStudentPackage().totalSessions()).isEqualTo(12);
-        assertThat(response.newStudentPackage().packageName()).isEqualTo("12 sessions");
+        assertThat(response.newStudentPackage().totalSessions()).isEqualTo(48);
+        assertThat(response.newStudentPackage().latestPackageName()).isEqualTo("12 sessions");
         assertThat(response.newInvoice().packageNameSnapshot()).isEqualTo("12 sessions");
         assertThat(response.newInvoice().amount()).isEqualByComparingTo("700000");
     }
@@ -319,6 +308,8 @@ class PackageChangeServiceTest {
         TuitionPackage newPackage = tuitionPackage(4L, "12 sessions", 12, "700000");
 
         when(studentPackageRepository.findWithRelationsForUpdateById(20L)).thenReturn(Optional.of(oldPackage));
+        when(studentPackageRepository.findTopByEnrollmentIdOrderByCycleNoDescIdDesc(10L))
+                .thenReturn(Optional.of(oldPackage));
         when(tuitionPackageRepository.findById(4L)).thenReturn(Optional.of(newPackage));
         when(classPackageRepository.existsByClassroomIdAndTuitionPackageIdAndActiveTrue(2L, 4L))
                 .thenReturn(true);
@@ -425,7 +416,11 @@ class PackageChangeServiceTest {
         StudentPackage oldPackage = oldStudentPackage();
         TuitionPackage newPackage = tuitionPackage(4L, "12 sessions", 12, "700000");
 
+        Enrollment enrollment = oldPackage.getEnrollment();
+        enrollment.setStatus(EnrollmentStatus.ACTIVE);
         when(studentPackageRepository.findWithRelationsForUpdateById(20L)).thenReturn(Optional.of(oldPackage));
+        when(studentPackageRepository.findTopByEnrollmentIdOrderByCycleNoDescIdDesc(10L))
+                .thenReturn(Optional.of(oldPackage));
         when(tuitionPackageRepository.findById(4L)).thenReturn(Optional.of(newPackage));
         when(classPackageRepository.existsByClassroomIdAndTuitionPackageIdAndActiveTrue(2L, 4L))
                 .thenReturn(false);
@@ -447,12 +442,12 @@ class PackageChangeServiceTest {
                 studentPackageRepository,
                 tuitionPackageRepository,
                 classPackageRepository,
-                attendanceRepository,
                 makeupCreditRepository,
                 paymentRepository,
                 invoiceRepository,
                 packageChangeLogRepository,
-                studentPackageMapper,
+                enrollmentRepository,
+                enrollmentProgressService,
                 invoiceMapper
         );
     }
@@ -463,21 +458,23 @@ class PackageChangeServiceTest {
             long usedSessions,
             BigDecimal paidAmount
     ) {
+        Enrollment enrollment = oldPackage.getEnrollment();
+        enrollment.setStatus(EnrollmentStatus.ACTIVE);
+        enrollment.setTotalSessions(oldPackage.getTotalSessions());
+        enrollment.setUsedSessions(Math.toIntExact(usedSessions));
+
         when(studentPackageRepository.findWithRelationsForUpdateById(20L)).thenReturn(Optional.of(oldPackage));
+        when(studentPackageRepository.findTopByEnrollmentIdOrderByCycleNoDescIdDesc(10L))
+                .thenReturn(Optional.of(oldPackage));
         when(tuitionPackageRepository.findById(newPackage.getId())).thenReturn(Optional.of(newPackage));
         when(classPackageRepository.existsByClassroomIdAndTuitionPackageIdAndActiveTrue(2L, newPackage.getId()))
                 .thenReturn(true);
-        when(attendanceRepository.countUsedSessions(
-                1L,
-                2L,
-                oldPackage.getStartDate(),
-                oldPackage.getEndDate(),
-                ClassSessionStatus.CANCELED
-        )).thenReturn(usedSessions);
         when(makeupCreditRepository.sumAvailableMakeupSessions(1L, 2L, MakeupCreditStatus.AVAILABLE))
                 .thenReturn(1);
         when(paymentRepository.sumValidAmountByStudentPackageId(20L)).thenReturn(paidAmount);
         when(studentPackageRepository.findMaxCycleNoByEnrollmentId(10L)).thenReturn(1);
+        when(enrollmentRepository.save(any(Enrollment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(enrollmentProgressService.getByEnrollmentId(10L)).thenAnswer(invocation -> progressFor(enrollment, newPackage));
     }
 
     private void mockValidPreview(
@@ -486,20 +483,47 @@ class PackageChangeServiceTest {
             long usedSessions,
             BigDecimal paidAmount
     ) {
+        Enrollment enrollment = oldPackage.getEnrollment();
+        enrollment.setStatus(EnrollmentStatus.ACTIVE);
+        enrollment.setTotalSessions(oldPackage.getTotalSessions());
+        enrollment.setUsedSessions(Math.toIntExact(usedSessions));
+
         when(studentPackageRepository.findWithRelationsById(20L)).thenReturn(Optional.of(oldPackage));
+        when(studentPackageRepository.findTopByEnrollmentIdOrderByCycleNoDescIdDesc(10L))
+                .thenReturn(Optional.of(oldPackage));
         when(tuitionPackageRepository.findById(newPackage.getId())).thenReturn(Optional.of(newPackage));
         when(classPackageRepository.existsByClassroomIdAndTuitionPackageIdAndActiveTrue(2L, newPackage.getId()))
                 .thenReturn(true);
-        when(attendanceRepository.countUsedSessions(
-                1L,
-                2L,
-                oldPackage.getStartDate(),
-                oldPackage.getEndDate(),
-                ClassSessionStatus.CANCELED
-        )).thenReturn(usedSessions);
         when(makeupCreditRepository.sumAvailableMakeupSessions(1L, 2L, MakeupCreditStatus.AVAILABLE))
                 .thenReturn(1);
         when(paymentRepository.sumValidAmountByStudentPackageId(20L)).thenReturn(paidAmount);
+    }
+
+    private EnrollmentLearningProgressResponse progressFor(Enrollment enrollment) {
+        return progressFor(enrollment, null);
+    }
+
+    private EnrollmentLearningProgressResponse progressFor(Enrollment enrollment, TuitionPackage latestPackage) {
+        int remainingSessions = Math.max(enrollment.getTotalSessions() - enrollment.getUsedSessions(), 0);
+        return new EnrollmentLearningProgressResponse(
+                enrollment.getId(),
+                enrollment.getStudent().getId(),
+                enrollment.getStudent().getFullName(),
+                enrollment.getClassroom().getId(),
+                enrollment.getClassroom().getClassName(),
+                enrollment.getTotalSessions(),
+                enrollment.getUsedSessions(),
+                remainingSessions,
+                Math.max(enrollment.getUsedSessions() - enrollment.getTotalSessions(), 0),
+                21L,
+                latestPackage == null ? enrollment.getPackageNameSnapshot() : latestPackage.getName(),
+                latestPackage == null ? enrollment.getPackagePriceSnapshot() : latestPackage.getPrice(),
+                latestPackage == null ? enrollment.getTotalSessionsSnapshot() : latestPackage.getTotalSessions(),
+                latestPackage == null ? 4L : latestPackage.getId(),
+                1,
+                LearningProgressWarningType.OK,
+                null
+        );
     }
 
     private void mockPackageChangeSaves() {
@@ -547,7 +571,12 @@ class PackageChangeServiceTest {
         enrollment.setId(10L);
         enrollment.setStudent(student);
         enrollment.setClassroom(classroom);
-        enrollment.setStartDate(LocalDate.of(2026, 7, 1));
+        enrollment.setStatus(EnrollmentStatus.ACTIVE);
+        enrollment.setTotalSessions(tuitionPackage.getTotalSessions());
+        enrollment.setUsedSessions(0);
+        enrollment.setPackageNameSnapshot(tuitionPackage.getName());
+        enrollment.setPackagePriceSnapshot(tuitionPackage.getPrice());
+        enrollment.setTotalSessionsSnapshot(tuitionPackage.getTotalSessions());
 
         StudentPackage studentPackage = new StudentPackage();
         studentPackage.setId(20L);

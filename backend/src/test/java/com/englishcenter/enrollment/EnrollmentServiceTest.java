@@ -80,7 +80,7 @@ class EnrollmentServiceTest {
 
         assertThat(response.status()).isEqualTo(EnrollmentStatus.ACTIVE);
         assertThat(response.studentPackage()).isNotNull();
-        assertThat(response.studentPackage().status()).isEqualTo(StudentPackageStatus.ACTIVE);
+        assertThat(response.studentPackage().status()).isEqualTo(StudentPackageStatus.CONFIRMED);
         assertThat(response.invoice()).isNotNull();
         assertThat(response.invoice().status()).isEqualTo(InvoiceStatus.UNPAID);
         verify(enrollmentRepository).save(any(Enrollment.class));

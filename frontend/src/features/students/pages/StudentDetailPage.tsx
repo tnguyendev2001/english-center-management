@@ -1,16 +1,10 @@
 import { Card, Descriptions, Empty, Space, Spin, Table, Typography } from 'antd'
-import dayjs from 'dayjs'
 import { useParams } from 'react-router-dom'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
 import { useMakeupCredits } from '../../makeupCredits/makeupCreditQueries'
-import {
-  formatRemainingSessions,
-  formatTotalAvailableSessions,
-  LearningProgressWarning,
-} from '../../studentPackages/components/LearningProgressWarning'
 import { useStudentPackages } from '../../studentPackages/studentPackageQueries'
-import type { StudentPackageProgress } from '../../studentPackages/studentPackageTypes'
+import type { EnrollmentLearningProgress } from '../../studentPackages/studentPackageTypes'
 import { useStudentDetail } from '../studentQueries'
 
 const { Title, Text } = Typography
@@ -63,51 +57,35 @@ export function StudentDetailPage() {
 
       <Card title="Tiến độ học">
         <Table
-          rowKey="id"
+          rowKey="enrollmentId"
           dataSource={studentPackagesQuery.data ?? []}
           loading={studentPackagesQuery.isLoading}
           pagination={false}
           columns={[
             { title: 'Lớp học', dataIndex: 'classroomName', key: 'classroomName' },
-            { title: 'Gói học phí', dataIndex: 'packageName', key: 'packageName' },
+            {
+              title: 'Gói gần nhất',
+              dataIndex: 'latestPackageName',
+              key: 'latestPackageName',
+            },
             {
               title: 'Học phí',
-              dataIndex: 'price',
-              key: 'price',
-              render: (value: number) => <MoneyText value={value} />,
+              key: 'latestPackagePrice',
+              render: (_: unknown, record: EnrollmentLearningProgress) =>
+                record.latestPackagePrice != null ? (
+                  <MoneyText value={record.latestPackagePrice} />
+                ) : (
+                  '-'
+                ),
             },
             { title: 'Tổng buổi', dataIndex: 'totalSessions', key: 'totalSessions' },
             { title: 'Đã học', dataIndex: 'usedSessions', key: 'usedSessions' },
             {
               title: 'Còn lại',
               key: 'remainingSessions',
-              render: (_: unknown, record: StudentPackageProgress) => formatRemainingSessions(record),
-            },
-            {
-              title: 'Cảnh báo',
-              key: 'warningMessage',
-              render: (_: unknown, record: StudentPackageProgress) => (
-                <LearningProgressWarning progress={record} />
-              ),
+              render: (_: unknown, record: EnrollmentLearningProgress) => record.remainingSessions,
             },
             { title: 'Buổi bù', dataIndex: 'makeupAvailableSessions', key: 'makeupAvailableSessions' },
-            {
-              title: 'Tổng khả dụng',
-              key: 'totalAvailableSessions',
-              render: (_: unknown, record: StudentPackageProgress) => formatTotalAvailableSessions(record),
-            },
-            {
-              title: 'Trạng thái',
-              dataIndex: 'status',
-              key: 'status',
-              render: (status: string) => <StatusTag status={status} />,
-            },
-            {
-              title: 'Ngày bắt đầu',
-              dataIndex: 'startDate',
-              key: 'startDate',
-              render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
-            },
           ]}
         />
       </Card>

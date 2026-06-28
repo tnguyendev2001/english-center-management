@@ -19,6 +19,7 @@ import com.englishcenter.student.dto.StudentResponse;
 import com.englishcenter.student.mapper.StudentMapper;
 import com.englishcenter.studentpackage.StudentPackage;
 import com.englishcenter.studentpackage.StudentPackageRepository;
+import com.englishcenter.studentpackage.StudentPackageSourceType;
 import com.englishcenter.studentpackage.StudentPackageStatus;
 import com.englishcenter.tuitionpackage.TuitionPackage;
 import com.englishcenter.tuitionpackage.TuitionPackageRepository;
@@ -173,6 +174,8 @@ public class EnrollmentService {
         enrollment.setStatus(EnrollmentStatus.ACTIVE);
         enrollment.setSelectedPackage(tuitionPackage);
         enrollment.setPackageNameSnapshot(tuitionPackage.getName());
+        enrollment.setTotalSessions(tuitionPackage.getTotalSessions());
+        enrollment.setUsedSessions(0);
         enrollment.setTotalSessionsSnapshot(tuitionPackage.getTotalSessions());
         enrollment.setPackagePriceSnapshot(tuitionPackage.getPrice());
         enrollment.setDiscountAmount(discountAmount);
@@ -202,7 +205,8 @@ public class EnrollmentService {
         studentPackage.setAdjustmentAmount(adjustmentAmount);
         studentPackage.setFinalAmount(finalAmount);
         studentPackage.setStartDate(enrollment.getStartDate());
-        studentPackage.setStatus(StudentPackageStatus.ACTIVE);
+        studentPackage.setStatus(StudentPackageStatus.CONFIRMED);
+        studentPackage.setSourceType(StudentPackageSourceType.ENROLLMENT);
         studentPackage.setCycleNo(1);
         return studentPackage;
     }

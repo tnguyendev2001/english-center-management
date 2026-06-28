@@ -26,6 +26,7 @@ import com.englishcenter.makeupcredit.MakeupCreditRepository;
 import com.englishcenter.makeupcredit.MakeupCreditStatus;
 import com.englishcenter.student.Student;
 import com.englishcenter.student.StudentRepository;
+import com.englishcenter.enrollment.EnrollmentSessionService;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -53,6 +54,7 @@ class AttendanceServiceTest {
     private MakeupCreditRepository makeupCreditRepository;
 
     private final AttendanceMapper attendanceMapper = new AttendanceMapper();
+    private final EnrollmentSessionService enrollmentSessionService = new EnrollmentSessionService();
 
     @Test
     void markRejectsNonOngoingClassroom() {
@@ -91,6 +93,7 @@ class AttendanceServiceTest {
         when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
         when(enrollmentRepository.findByClassroomIdAndStatus(2L, EnrollmentStatus.ACTIVE))
                 .thenReturn(List.of(enrollment));
+        mockEnrollmentSessions(enrollment, 12, 0);
         when(studentRepository.findAllById(any())).thenReturn(List.of(student));
         when(attendanceRepository.findBySessionIdAndStudentId(1L, 3L)).thenReturn(Optional.empty());
         when(attendanceRepository.save(any(Attendance.class))).thenAnswer(invocation -> {
@@ -123,10 +126,12 @@ class AttendanceServiceTest {
         existing.setSession(session);
         existing.setStudent(student);
         existing.setStatus(AttendanceStatus.ABSENT);
+        existing.setValid(true);
 
         when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
         when(enrollmentRepository.findByClassroomIdAndStatus(2L, EnrollmentStatus.ACTIVE))
                 .thenReturn(List.of(enrollment));
+        mockEnrollmentSessions(enrollment, 12, 0);
         when(studentRepository.findAllById(any())).thenReturn(List.of(student));
         when(attendanceRepository.findBySessionIdAndStudentId(1L, 3L)).thenReturn(Optional.of(existing));
         when(attendanceRepository.save(existing)).thenReturn(existing);
@@ -149,6 +154,7 @@ class AttendanceServiceTest {
         existing.setSession(session);
         existing.setStudent(student);
         existing.setStatus(AttendanceStatus.EXCUSED);
+        existing.setValid(true);
         MakeupCredit credit = new MakeupCredit();
         credit.setStatus(MakeupCreditStatus.AVAILABLE);
         credit.setUsedSessions(0);
@@ -156,6 +162,7 @@ class AttendanceServiceTest {
         when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
         when(enrollmentRepository.findByClassroomIdAndStatus(2L, EnrollmentStatus.ACTIVE))
                 .thenReturn(List.of(enrollment));
+        mockEnrollmentSessions(enrollment, 12, 0);
         when(studentRepository.findAllById(any())).thenReturn(List.of(student));
         when(attendanceRepository.findBySessionIdAndStudentId(1L, 3L)).thenReturn(Optional.of(existing));
         when(attendanceRepository.save(existing)).thenReturn(existing);
@@ -182,6 +189,7 @@ class AttendanceServiceTest {
         existing.setSession(session);
         existing.setStudent(student);
         existing.setStatus(AttendanceStatus.EXCUSED);
+        existing.setValid(true);
         MakeupCredit credit = new MakeupCredit();
         credit.setStatus(MakeupCreditStatus.USED);
         credit.setUsedSessions(1);
@@ -189,6 +197,7 @@ class AttendanceServiceTest {
         when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
         when(enrollmentRepository.findByClassroomIdAndStatus(2L, EnrollmentStatus.ACTIVE))
                 .thenReturn(List.of(enrollment));
+        mockEnrollmentSessions(enrollment, 12, 0);
         when(studentRepository.findAllById(any())).thenReturn(List.of(student));
         when(attendanceRepository.findBySessionIdAndStudentId(1L, 3L)).thenReturn(Optional.of(existing));
         when(makeupCreditRepository.findByStudentIdAndSourceSessionIdAndReason(
@@ -218,6 +227,7 @@ class AttendanceServiceTest {
         when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
         when(enrollmentRepository.findByClassroomIdAndStatus(2L, EnrollmentStatus.ACTIVE))
                 .thenReturn(List.of(enrollment));
+        mockEnrollmentSessions(enrollment, 12, 0);
         when(studentRepository.findAllById(any())).thenReturn(List.of(student));
         when(attendanceRepository.findBySessionIdAndStudentId(1L, 3L)).thenReturn(Optional.of(existing));
 
@@ -237,6 +247,7 @@ class AttendanceServiceTest {
         existing.setSession(session);
         existing.setStudent(student);
         existing.setStatus(AttendanceStatus.PRESENT);
+        existing.setValid(true);
         MakeupCredit credit = new MakeupCredit();
         credit.setStatus(MakeupCreditStatus.CANCELED);
         credit.setUsedSessions(0);
@@ -244,6 +255,7 @@ class AttendanceServiceTest {
         when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
         when(enrollmentRepository.findByClassroomIdAndStatus(2L, EnrollmentStatus.ACTIVE))
                 .thenReturn(List.of(enrollment));
+        mockEnrollmentSessions(enrollment, 12, 0);
         when(studentRepository.findAllById(any())).thenReturn(List.of(student));
         when(attendanceRepository.findBySessionIdAndStudentId(1L, 3L)).thenReturn(Optional.of(existing));
         when(attendanceRepository.save(existing)).thenReturn(existing);
@@ -260,6 +272,102 @@ class AttendanceServiceTest {
         assertThat(credit.getStatus()).isEqualTo(MakeupCreditStatus.AVAILABLE);
     }
 
+    @Test
+    void markReactivatesVoidedPresentAttendanceAndConsumesSession() {
+        AttendanceService service = newService();
+        ClassSession session = session(ClassSessionStatus.SCHEDULED);
+        Student student = student();
+        Enrollment enrollment = enrollment(student, session.getClassroom());
+        Attendance existing = new Attendance();
+        existing.setId(10L);
+        existing.setSession(session);
+        existing.setStudent(student);
+        existing.setStatus(AttendanceStatus.PRESENT);
+        existing.setValid(false);
+        existing.setVoidReason("Hoàn tác điểm danh");
+
+        when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
+        when(enrollmentRepository.findByClassroomIdAndStatus(2L, EnrollmentStatus.ACTIVE))
+                .thenReturn(List.of(enrollment));
+        mockEnrollmentSessions(enrollment, 4, 0);
+        when(studentRepository.findAllById(any())).thenReturn(List.of(student));
+        when(attendanceRepository.findBySessionIdAndStudentId(1L, 3L)).thenReturn(Optional.of(existing));
+        when(attendanceRepository.save(existing)).thenReturn(existing);
+        when(enrollmentRepository.save(enrollment)).thenReturn(enrollment);
+
+        service.mark(markRequest(AttendanceStatus.PRESENT));
+
+        assertThat(enrollment.getUsedSessions()).isEqualTo(1);
+        assertThat(existing.getValid()).isTrue();
+        assertThat(existing.getVoidReason()).isNull();
+        assertThat(existing.getStatus()).isEqualTo(AttendanceStatus.PRESENT);
+    }
+
+    @Test
+    void markPresentToExcusedDecrementsUsedSessions() {
+        AttendanceService service = newService();
+        ClassSession session = session(ClassSessionStatus.COMPLETED);
+        Student student = student();
+        Enrollment enrollment = enrollment(student, session.getClassroom());
+        Attendance existing = new Attendance();
+        existing.setId(10L);
+        existing.setSession(session);
+        existing.setStudent(student);
+        existing.setStatus(AttendanceStatus.PRESENT);
+        existing.setValid(true);
+
+        when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
+        when(enrollmentRepository.findByClassroomIdAndStatus(2L, EnrollmentStatus.ACTIVE))
+                .thenReturn(List.of(enrollment));
+        mockEnrollmentSessions(enrollment, 4, 1);
+        when(studentRepository.findAllById(any())).thenReturn(List.of(student));
+        when(attendanceRepository.findBySessionIdAndStudentId(1L, 3L)).thenReturn(Optional.of(existing));
+        when(attendanceRepository.save(existing)).thenReturn(existing);
+        when(enrollmentRepository.save(enrollment)).thenReturn(enrollment);
+        when(makeupCreditRepository.findByStudentIdAndSourceSessionIdAndReason(
+                3L,
+                1L,
+                MakeupCreditReason.EXCUSED_ABSENCE
+        )).thenReturn(Optional.empty());
+        when(makeupCreditRepository.save(any(MakeupCredit.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.mark(markRequest(AttendanceStatus.EXCUSED));
+
+        assertThat(enrollment.getUsedSessions()).isZero();
+    }
+
+    @Test
+    void markExcusedToAbsentIncrementsUsedSessions() {
+        AttendanceService service = newService();
+        ClassSession session = session(ClassSessionStatus.COMPLETED);
+        Student student = student();
+        Enrollment enrollment = enrollment(student, session.getClassroom());
+        Attendance existing = new Attendance();
+        existing.setId(10L);
+        existing.setSession(session);
+        existing.setStudent(student);
+        existing.setStatus(AttendanceStatus.EXCUSED);
+        existing.setValid(true);
+
+        when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
+        when(enrollmentRepository.findByClassroomIdAndStatus(2L, EnrollmentStatus.ACTIVE))
+                .thenReturn(List.of(enrollment));
+        mockEnrollmentSessions(enrollment, 4, 0);
+        when(studentRepository.findAllById(any())).thenReturn(List.of(student));
+        when(attendanceRepository.findBySessionIdAndStudentId(1L, 3L)).thenReturn(Optional.of(existing));
+        when(attendanceRepository.save(existing)).thenReturn(existing);
+        when(enrollmentRepository.save(enrollment)).thenReturn(enrollment);
+        when(makeupCreditRepository.findByStudentIdAndSourceSessionIdAndReason(
+                3L,
+                1L,
+                MakeupCreditReason.EXCUSED_ABSENCE
+        )).thenReturn(Optional.empty());
+
+        service.mark(markRequest(AttendanceStatus.ABSENT, "Corrected from excused"));
+
+        assertThat(enrollment.getUsedSessions()).isEqualTo(1);
+    }
+
     private AttendanceService newService() {
         return new AttendanceService(
                 attendanceRepository,
@@ -267,8 +375,14 @@ class AttendanceServiceTest {
                 enrollmentRepository,
                 studentRepository,
                 makeupCreditRepository,
+                enrollmentSessionService,
                 attendanceMapper
         );
+    }
+
+    private void mockEnrollmentSessions(Enrollment enrollment, int totalSessions, int usedSessions) {
+        enrollment.setTotalSessions(totalSessions);
+        enrollment.setUsedSessions(usedSessions);
     }
 
     private MarkAttendanceRequest markRequest(AttendanceStatus status) {

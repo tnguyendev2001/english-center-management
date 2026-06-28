@@ -7,13 +7,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.englishcenter.attendance.AttendanceRepository;
-import com.englishcenter.classroom.dto.ClassroomCreateRequest;
+import com.englishcenter.enrollment.EnrollmentRepository;
+import com.englishcenter.enrollment.EnrollmentSessionService;
 import com.englishcenter.classroom.dto.ClassroomResponse;
 import com.englishcenter.classroom.dto.ClassroomUpdateRequest;
 import com.englishcenter.classroom.mapper.ClassroomMapper;
 import com.englishcenter.common.exception.BusinessException;
-import com.englishcenter.studentpackage.StudentPackageRepository;
+import com.englishcenter.classroom.dto.ClassroomCreateRequest;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Optional;
@@ -29,12 +29,10 @@ class ClassroomServiceTest {
     private ClassroomRepository classroomRepository;
 
     @Mock
-    private StudentPackageRepository studentPackageRepository;
-
-    @Mock
-    private AttendanceRepository attendanceRepository;
+    private EnrollmentRepository enrollmentRepository;
 
     private final ClassroomMapper classroomMapper = new ClassroomMapper();
+    private final EnrollmentSessionService enrollmentSessionService = new EnrollmentSessionService();
 
     @Test
     void createRejectsDuplicateClassCode() {
@@ -164,8 +162,8 @@ class ClassroomServiceTest {
         return new ClassroomService(
                 classroomRepository,
                 classroomMapper,
-                studentPackageRepository,
-                attendanceRepository
+                enrollmentRepository,
+                enrollmentSessionService
         );
     }
 

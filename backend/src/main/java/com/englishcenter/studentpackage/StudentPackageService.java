@@ -44,9 +44,11 @@ public class StudentPackageService {
             throw new NotFoundException("Student not found");
         }
 
-        return studentPackageRepository.findByStudentIdAndStatusOrderByStartDateDesc(
-                        studentId,
-                        StudentPackageStatus.ACTIVE
+        return ActiveStudentPackageSupport.dedupeByEnrollment(
+                        studentPackageRepository.findByStudentIdAndStatusOrderByStartDateDesc(
+                                studentId,
+                                StudentPackageStatus.ACTIVE
+                        )
                 )
                 .stream()
                 .map(this::toProgressResponse)
@@ -59,9 +61,11 @@ public class StudentPackageService {
             throw new NotFoundException("Classroom not found");
         }
 
-        return studentPackageRepository.findByClassroomIdAndStatusOrderByStartDateDesc(
-                        classroomId,
-                        StudentPackageStatus.ACTIVE
+        return ActiveStudentPackageSupport.dedupeByEnrollment(
+                        studentPackageRepository.findByClassroomIdAndStatusOrderByStartDateDesc(
+                                classroomId,
+                                StudentPackageStatus.ACTIVE
+                        )
                 )
                 .stream()
                 .map(this::toProgressResponse)

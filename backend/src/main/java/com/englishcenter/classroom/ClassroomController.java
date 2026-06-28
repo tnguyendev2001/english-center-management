@@ -1,6 +1,10 @@
 package com.englishcenter.classroom;
 
 import com.englishcenter.classroom.dto.ClassroomCreateRequest;
+import com.englishcenter.classroom.dto.ClassroomRenewalCandidateResponse;
+import com.englishcenter.classroom.dto.ClassroomRenewalConfirmResponse;
+import com.englishcenter.classroom.dto.ClassroomRenewalPreviewResponse;
+import com.englishcenter.classroom.dto.ClassroomRenewalRequest;
 import com.englishcenter.classroom.dto.ClassroomResponse;
 import com.englishcenter.classroom.dto.ClassroomUpdateRequest;
 import com.englishcenter.common.api.ApiResponse;
@@ -25,10 +29,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/classrooms")
 public class ClassroomController {
     private final ClassroomService classroomService;
+    private final ClassroomRenewalService classroomRenewalService;
     private final EnrollmentService enrollmentService;
 
-    public ClassroomController(ClassroomService classroomService, EnrollmentService enrollmentService) {
+    public ClassroomController(
+            ClassroomService classroomService,
+            ClassroomRenewalService classroomRenewalService,
+            EnrollmentService enrollmentService
+    ) {
         this.classroomService = classroomService;
+        this.classroomRenewalService = classroomRenewalService;
         this.enrollmentService = enrollmentService;
     }
 
@@ -63,6 +73,30 @@ public class ClassroomController {
     @GetMapping("/{id}/eligible-students")
     public ApiResponse<List<StudentResponse>> getEligibleStudents(@PathVariable Long id) {
         return ApiResponse.success(enrollmentService.getEligibleStudents(id));
+    }
+
+    @GetMapping("/{id}/renewal-candidates")
+    public ApiResponse<List<ClassroomRenewalCandidateResponse>> getRenewalCandidates(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "2") int remainingThreshold
+    ) {
+        return ApiResponse.success(classroomRenewalService.getCandidates(id, remainingThreshold));
+    }
+
+    @PostMapping("/{id}/renewals/preview")
+    public ApiResponse<ClassroomRenewalPreviewResponse> previewRenewals(
+            @PathVariable Long id,
+            @Valid @RequestBody ClassroomRenewalRequest request
+    ) {
+        return ApiResponse.success(classroomRenewalService.preview(id, request));
+    }
+
+    @PostMapping("/{id}/renewals/confirm")
+    public ApiResponse<ClassroomRenewalConfirmResponse> confirmRenewals(
+            @PathVariable Long id,
+            @Valid @RequestBody ClassroomRenewalRequest request
+    ) {
+        return ApiResponse.success(classroomRenewalService.confirm(id, request));
     }
 
     @PutMapping("/{id}")

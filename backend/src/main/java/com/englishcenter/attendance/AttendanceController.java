@@ -1,6 +1,8 @@
 package com.englishcenter.attendance;
 
 import com.englishcenter.attendance.dto.AttendanceResponse;
+import com.englishcenter.attendance.dto.AttendanceReadinessRequest;
+import com.englishcenter.attendance.dto.AttendanceReadinessResponse;
 import com.englishcenter.attendance.dto.MarkAttendanceRequest;
 import com.englishcenter.common.api.ApiResponse;
 import com.englishcenter.common.api.PageMeta;
@@ -24,6 +26,13 @@ public class AttendanceController {
     @PostMapping("/api/attendance/mark")
     public ApiResponse<List<AttendanceResponse>> mark(@Valid @RequestBody MarkAttendanceRequest request) {
         return ApiResponse.success(attendanceService.mark(request));
+    }
+
+    @PostMapping("/api/attendance/readiness")
+    public ApiResponse<AttendanceReadinessResponse> checkReadiness(
+            @Valid @RequestBody AttendanceReadinessRequest request
+    ) {
+        return ApiResponse.success(attendanceService.checkReadiness(request.sessionId()));
     }
 
     @GetMapping("/api/attendance")

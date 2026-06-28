@@ -1,10 +1,13 @@
 package com.englishcenter.packagechange;
 
-import com.englishcenter.attendance.AttendanceRepository;
 import com.englishcenter.classpackage.ClassPackageRepository;
-import com.englishcenter.classsession.ClassSessionStatus;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
+import com.englishcenter.enrollment.Enrollment;
+import com.englishcenter.enrollment.EnrollmentProgressService;
+import com.englishcenter.enrollment.EnrollmentRepository;
+import com.englishcenter.enrollment.EnrollmentStatus;
+import com.englishcenter.enrollment.dto.EnrollmentLearningProgressResponse;
 import com.englishcenter.invoice.Invoice;
 import com.englishcenter.invoice.InvoiceRepository;
 import com.englishcenter.invoice.InvoiceStatus;
@@ -17,8 +20,8 @@ import com.englishcenter.packagechange.dto.ChangePackageResponse;
 import com.englishcenter.payment.PaymentRepository;
 import com.englishcenter.studentpackage.StudentPackage;
 import com.englishcenter.studentpackage.StudentPackageRepository;
+import com.englishcenter.studentpackage.StudentPackageSourceType;
 import com.englishcenter.studentpackage.StudentPackageStatus;
-import com.englishcenter.studentpackage.mapper.StudentPackageMapper;
 import com.englishcenter.tuitionpackage.TuitionPackage;
 import com.englishcenter.tuitionpackage.TuitionPackageRepository;
 import com.englishcenter.tuitionpackage.TuitionPackageStatus;
@@ -38,35 +41,35 @@ public class PackageChangeService {
     private final StudentPackageRepository studentPackageRepository;
     private final TuitionPackageRepository tuitionPackageRepository;
     private final ClassPackageRepository classPackageRepository;
-    private final AttendanceRepository attendanceRepository;
     private final MakeupCreditRepository makeupCreditRepository;
     private final PaymentRepository paymentRepository;
     private final InvoiceRepository invoiceRepository;
     private final PackageChangeLogRepository packageChangeLogRepository;
-    private final StudentPackageMapper studentPackageMapper;
+    private final EnrollmentRepository enrollmentRepository;
+    private final EnrollmentProgressService enrollmentProgressService;
     private final InvoiceMapper invoiceMapper;
 
     public PackageChangeService(
             StudentPackageRepository studentPackageRepository,
             TuitionPackageRepository tuitionPackageRepository,
             ClassPackageRepository classPackageRepository,
-            AttendanceRepository attendanceRepository,
             MakeupCreditRepository makeupCreditRepository,
             PaymentRepository paymentRepository,
             InvoiceRepository invoiceRepository,
             PackageChangeLogRepository packageChangeLogRepository,
-            StudentPackageMapper studentPackageMapper,
+            EnrollmentRepository enrollmentRepository,
+            EnrollmentProgressService enrollmentProgressService,
             InvoiceMapper invoiceMapper
     ) {
         this.studentPackageRepository = studentPackageRepository;
         this.tuitionPackageRepository = tuitionPackageRepository;
         this.classPackageRepository = classPackageRepository;
-        this.attendanceRepository = attendanceRepository;
         this.makeupCreditRepository = makeupCreditRepository;
         this.paymentRepository = paymentRepository;
         this.invoiceRepository = invoiceRepository;
         this.packageChangeLogRepository = packageChangeLogRepository;
-        this.studentPackageMapper = studentPackageMapper;
+        this.enrollmentRepository = enrollmentRepository;
+        this.enrollmentProgressService = enrollmentProgressService;
         this.invoiceMapper = invoiceMapper;
     }
 
@@ -88,6 +91,7 @@ public class PackageChangeService {
     public ChangePackageResponse changePackage(Long oldStudentPackageId, ChangePackageRequest request) {
         StudentPackage oldStudentPackage = findStudentPackageForUpdate(oldStudentPackageId);
         TuitionPackage newTuitionPackage = findTuitionPackage(request.newTuitionPackageId());
+        Enrollment enrollment = oldStudentPackage.getEnrollment();
 
         validateChangeAllowed(oldStudentPackage, newTuitionPackage);
         validateNoExistingPackageChange(oldStudentPackage.getId());
@@ -96,7 +100,7 @@ public class PackageChangeService {
             throw new BusinessException("Package change reason is required");
         }
 
-        int usedSessions = getUsedSessions(oldStudentPackage);
+        int usedSessions = enrollment.getUsedSessions();
         validateModeAllowed(request.changeMode(), usedSessions, newTuitionPackage);
         ChangePackagePreviewResponse calculation = calculate(oldStudentPackage, newTuitionPackage, request.changeMode());
         LocalDate changeDate = LocalDate.now();
@@ -108,6 +112,13 @@ public class PackageChangeService {
                 oldStudentPackage.getId(),
                 LocalDateTime.now()
         );
+
+        if (request.changeMode() == PackageChangeMode.REPLACEMENT_CHANGE) {
+            enrollment.setTotalSessions(newTuitionPackage.getTotalSessions());
+        } else {
+            enrollment.setTotalSessions(enrollment.getTotalSessions() + newTuitionPackage.getTotalSessions());
+        }
+        enrollmentRepository.save(enrollment);
 
         StudentPackage newStudentPackage = createStudentPackage(
                 oldStudentPackage,
@@ -133,14 +144,12 @@ public class PackageChangeService {
         PackageChangeLog log = createLog(oldStudentPackage, newStudentPackage, calculation, reason);
         log = packageChangeLogRepository.save(log);
 
+        EnrollmentLearningProgressResponse progress = enrollmentProgressService.getByEnrollmentId(enrollment.getId());
+
         return new ChangePackageResponse(
                 log.getId(),
                 calculation,
-                studentPackageMapper.toProgressResponse(
-                        newStudentPackage,
-                        calculation.changeMode() == PackageChangeMode.REPLACEMENT_CHANGE ? calculation.usedSessions() : 0,
-                        calculation.makeupAvailableSessions()
-                ),
+                progress,
                 newInvoice == null ? null : invoiceMapper.toResponse(newInvoice)
         );
     }
@@ -150,9 +159,10 @@ public class PackageChangeService {
             TuitionPackage newTuitionPackage,
             PackageChangeMode changeMode
     ) {
-        int usedSessions = getUsedSessions(oldStudentPackage);
+        Enrollment enrollment = oldStudentPackage.getEnrollment();
+        int usedSessions = enrollment.getUsedSessions();
         validateModeAllowed(changeMode, usedSessions, newTuitionPackage);
-        int remainingSessions = Math.max(oldStudentPackage.getTotalSessions() - usedSessions, 0);
+        int remainingSessions = Math.max(enrollment.getTotalSessions() - usedSessions, 0);
         int makeupAvailableSessions = makeupCreditRepository.sumAvailableMakeupSessions(
                 oldStudentPackage.getStudent().getId(),
                 oldStudentPackage.getClassroom().getId(),
@@ -183,7 +193,10 @@ public class PackageChangeService {
                 oldDebt = money(balanceFromOldPackage.abs());
             }
             amountToPay = money(newTuitionPackage.getPrice().subtract(unusedCredit).add(oldDebt));
-            remainingSessionsAfterChange = newTuitionPackage.getTotalSessions();
+            remainingSessionsAfterChange = Math.max(
+                    enrollment.getTotalSessions() + newTuitionPackage.getTotalSessions() - usedSessions,
+                    0
+            );
         }
 
         if (amountToPay.compareTo(ZERO) < 0) {
@@ -199,7 +212,7 @@ public class PackageChangeService {
                 changeMode,
                 allowedModes(),
                 oldStudentPackage.getPackageName(),
-                oldStudentPackage.getTotalSessions(),
+                enrollment.getTotalSessions(),
                 money(oldStudentPackage.getPrice()),
                 money(oldStudentPackage.getFinalAmount()),
                 usedSessions,
@@ -250,7 +263,12 @@ public class PackageChangeService {
         newStudentPackage.setStartDate(
                 changeMode == PackageChangeMode.REPLACEMENT_CHANGE ? oldStudentPackage.getStartDate() : changeDate
         );
-        newStudentPackage.setStatus(StudentPackageStatus.ACTIVE);
+        newStudentPackage.setStatus(StudentPackageStatus.CONFIRMED);
+        newStudentPackage.setSourceType(
+                changeMode == PackageChangeMode.REPLACEMENT_CHANGE
+                        ? StudentPackageSourceType.PACKAGE_CHANGE_REPLACEMENT
+                        : StudentPackageSourceType.PACKAGE_CHANGE_NEW_CYCLE
+        );
         newStudentPackage.setCycleNo(
                 studentPackageRepository.findMaxCycleNoByEnrollmentId(oldStudentPackage.getEnrollment().getId()) + 1
         );
@@ -313,16 +331,6 @@ public class PackageChangeService {
         return log;
     }
 
-    private int getUsedSessions(StudentPackage oldStudentPackage) {
-        return Math.toIntExact(attendanceRepository.countUsedSessions(
-                oldStudentPackage.getStudent().getId(),
-                oldStudentPackage.getClassroom().getId(),
-                oldStudentPackage.getStartDate(),
-                oldStudentPackage.getEndDate(),
-                ClassSessionStatus.CANCELED
-        ));
-    }
-
     private StudentPackage findStudentPackage(Long id) {
         return studentPackageRepository.findWithRelationsById(id)
                 .orElseThrow(() -> new NotFoundException("Student package not found"));
@@ -339,8 +347,16 @@ public class PackageChangeService {
     }
 
     private void validateChangeAllowed(StudentPackage oldStudentPackage, TuitionPackage newTuitionPackage) {
-        if (oldStudentPackage.getStatus() != StudentPackageStatus.ACTIVE) {
-            throw new BusinessException("Only active student package can be changed");
+        Enrollment enrollment = oldStudentPackage.getEnrollment();
+        if (enrollment.getStatus() != EnrollmentStatus.ACTIVE) {
+            throw new BusinessException("Enrollment must be active to change package");
+        }
+
+        StudentPackage latestPackage = studentPackageRepository
+                .findTopByEnrollmentIdOrderByCycleNoDescIdDesc(enrollment.getId())
+                .orElseThrow(() -> new BusinessException("Student package not found"));
+        if (!latestPackage.getId().equals(oldStudentPackage.getId())) {
+            throw new BusinessException("Only the latest student package can be changed");
         }
 
         if (newTuitionPackage.getStatus() != TuitionPackageStatus.ACTIVE) {

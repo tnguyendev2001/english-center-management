@@ -1,6 +1,8 @@
 package com.englishcenter.attendance;
 
 import com.englishcenter.attendance.dto.AttendanceItemRequest;
+import com.englishcenter.attendance.dto.AttendanceReadinessBlockedStudentResponse;
+import com.englishcenter.attendance.dto.AttendanceReadinessResponse;
 import com.englishcenter.attendance.dto.AttendanceResponse;
 import com.englishcenter.attendance.dto.MarkAttendanceRequest;
 import com.englishcenter.attendance.mapper.AttendanceMapper;
@@ -12,6 +14,7 @@ import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
 import com.englishcenter.enrollment.Enrollment;
 import com.englishcenter.enrollment.EnrollmentRepository;
+import com.englishcenter.enrollment.EnrollmentSessionService;
 import com.englishcenter.enrollment.EnrollmentStatus;
 import com.englishcenter.makeupcredit.MakeupCredit;
 import com.englishcenter.makeupcredit.MakeupCreditReason;
@@ -20,6 +23,7 @@ import com.englishcenter.makeupcredit.MakeupCreditStatus;
 import com.englishcenter.student.Student;
 import com.englishcenter.student.StudentRepository;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,6 +45,7 @@ public class AttendanceService {
     private final EnrollmentRepository enrollmentRepository;
     private final StudentRepository studentRepository;
     private final MakeupCreditRepository makeupCreditRepository;
+    private final EnrollmentSessionService enrollmentSessionService;
     private final AttendanceMapper attendanceMapper;
 
     public AttendanceService(
@@ -49,6 +54,7 @@ public class AttendanceService {
             EnrollmentRepository enrollmentRepository,
             StudentRepository studentRepository,
             MakeupCreditRepository makeupCreditRepository,
+            EnrollmentSessionService enrollmentSessionService,
             AttendanceMapper attendanceMapper
     ) {
         this.attendanceRepository = attendanceRepository;
@@ -56,6 +62,7 @@ public class AttendanceService {
         this.enrollmentRepository = enrollmentRepository;
         this.studentRepository = studentRepository;
         this.makeupCreditRepository = makeupCreditRepository;
+        this.enrollmentSessionService = enrollmentSessionService;
         this.attendanceMapper = attendanceMapper;
     }
 
@@ -65,10 +72,15 @@ public class AttendanceService {
                 .orElseThrow(() -> new NotFoundException("Class session not found"));
         validateClassroomAllowsAttendance(session);
         validateSessionAllowsAttendance(session);
+        AttendanceReadinessResponse readiness = ensureAttendanceReady(session);
+        if (!readiness.ready()) {
+            throw new BusinessException("Một số học viên đã hết buổi. Vui lòng gia hạn gói trước khi điểm danh.");
+        }
 
         Map<Long, Student> activeStudents = activeStudentsById(session.getClassroom().getId());
+        Map<Long, Enrollment> enrollmentsByStudentId = activeEnrollmentsByStudentId(session.getClassroom().getId());
         List<Attendance> saved = request.items().stream()
-                .map(item -> markOne(session, activeStudents, item))
+                .map(item -> markOne(session, activeStudents, enrollmentsByStudentId, item))
                 .toList();
 
         session.setStatus(ClassSessionStatus.COMPLETED);
@@ -91,9 +103,19 @@ public class AttendanceService {
                 .map(attendanceMapper::toResponse);
     }
 
+    @Transactional
+    public AttendanceReadinessResponse checkReadiness(Long sessionId) {
+        ClassSession session = classSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new NotFoundException("Class session not found"));
+        validateClassroomAllowsAttendance(session);
+        validateSessionAllowsAttendance(session);
+        return ensureAttendanceReady(session);
+    }
+
     private Attendance markOne(
             ClassSession session,
             Map<Long, Student> activeStudents,
+            Map<Long, Enrollment> enrollmentsByStudentId,
             AttendanceItemRequest item
     ) {
         Student student = activeStudents.get(item.studentId());
@@ -101,13 +123,22 @@ public class AttendanceService {
             throw new BusinessException("Student is not actively enrolled in this classroom");
         }
 
+        Enrollment enrollment = enrollmentsByStudentId.get(student.getId());
+        if (enrollment == null) {
+            throw new BusinessException("Student is not actively enrolled in this classroom");
+        }
+
         Optional<Attendance> existingOptional = attendanceRepository.findBySessionIdAndStudentId(
                 session.getId(),
                 student.getId()
         );
-        AttendanceStatus previousStatus = existingOptional.map(Attendance::getStatus).orElse(null);
+        Attendance existingAttendance = existingOptional.orElse(null);
+        AttendanceStatus previousValidStatus = existingAttendance != null
+                && Boolean.TRUE.equals(existingAttendance.getValid())
+                ? existingAttendance.getStatus()
+                : null;
 
-        if (previousStatus == AttendanceStatus.EXCUSED
+        if (previousValidStatus == AttendanceStatus.EXCUSED
                 && (item.status() == AttendanceStatus.PRESENT || item.status() == AttendanceStatus.ABSENT)) {
             String correctionReason = trimToNull(item.correctionReason());
             if (correctionReason == null) {
@@ -116,11 +147,19 @@ public class AttendanceService {
             cancelMakeupCreditForExcusedCorrection(session, student, correctionReason);
         }
 
+        enrollmentSessionService.applyAttendanceDelta(
+                enrollment,
+                existingAttendance,
+                session,
+                item.status()
+        );
+        enrollmentRepository.save(enrollment);
+
         Attendance attendance = existingOptional.orElseGet(Attendance::new);
         attendance.setSession(session);
         attendance.setStudent(student);
         attendance.setStatus(item.status());
-        attendance.setNote(resolveAttendanceNote(item, previousStatus));
+        attendance.setNote(resolveAttendanceNote(item, previousValidStatus));
         attendance.setMarkedAt(LocalDateTime.now());
         attendance.setValid(true);
         attendance.setVoidReason(null);
@@ -204,6 +243,58 @@ public class AttendanceService {
         }
     }
 
+    private AttendanceReadinessResponse ensureAttendanceReady(ClassSession session) {
+        List<Enrollment> enrollments = enrollmentRepository.findByClassroomIdAndStatus(
+                session.getClassroom().getId(),
+                EnrollmentStatus.ACTIVE
+        );
+        List<AttendanceReadinessBlockedStudentResponse> blockedStudents = new ArrayList<>();
+
+        for (Enrollment enrollment : enrollments) {
+            int remainingSessions = enrollmentSessionService.remainingSessions(enrollment);
+            if (remainingSessions > 0) {
+                continue;
+            }
+
+            Optional<Attendance> existingOptional = attendanceRepository.findBySessionIdAndStudentId(
+                    session.getId(),
+                    enrollment.getStudent().getId()
+            );
+            if (existingOptional.isPresent()
+                    && enrollmentSessionService.consumesSession(existingOptional.get(), session)) {
+                continue;
+            }
+
+            blockedStudents.add(blockedStudent(
+                    enrollment,
+                    remainingSessions,
+                    "Hết buổi - cần gia hạn gói trước khi điểm danh"
+            ));
+        }
+
+        return new AttendanceReadinessResponse(
+                session.getId(),
+                session.getClassroom().getId(),
+                blockedStudents.isEmpty(),
+                blockedStudents,
+                List.of()
+        );
+    }
+
+    private AttendanceReadinessBlockedStudentResponse blockedStudent(
+            Enrollment enrollment,
+            int remainingSessions,
+            String reason
+    ) {
+        return new AttendanceReadinessBlockedStudentResponse(
+                enrollment.getStudent().getId(),
+                enrollment.getId(),
+                enrollment.getStudent().getFullName(),
+                remainingSessions,
+                reason
+        );
+    }
+
     private void validateClassroomAllowsAttendance(ClassSession session) {
         if (session.getClassroom().getStatus() != ClassroomStatus.ONGOING) {
             throw new BusinessException("Cannot mark attendance for classroom that is not ongoing");
@@ -232,6 +323,12 @@ public class AttendanceService {
         return studentRepository.findAllById(studentIds)
                 .stream()
                 .collect(Collectors.toMap(Student::getId, Function.identity()));
+    }
+
+    private Map<Long, Enrollment> activeEnrollmentsByStudentId(Long classroomId) {
+        return enrollmentRepository.findByClassroomIdAndStatus(classroomId, EnrollmentStatus.ACTIVE)
+                .stream()
+                .collect(Collectors.toMap(enrollment -> enrollment.getStudent().getId(), Function.identity()));
     }
 
     private String trimToNull(String value) {

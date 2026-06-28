@@ -56,6 +56,12 @@ public class Enrollment {
     @Column(name = "package_name_snapshot", nullable = false)
     private String packageNameSnapshot;
 
+    @Column(name = "total_sessions", nullable = false)
+    private Integer totalSessions;
+
+    @Column(name = "used_sessions", nullable = false)
+    private Integer usedSessions;
+
     @Column(name = "total_sessions_snapshot", nullable = false)
     private Integer totalSessionsSnapshot;
 

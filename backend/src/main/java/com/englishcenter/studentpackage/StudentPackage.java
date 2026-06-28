@@ -76,6 +76,10 @@ public class StudentPackage {
     @Column(name = "status", nullable = false, length = 20)
     private StudentPackageStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source_type", nullable = false, length = 50)
+    private StudentPackageSourceType sourceType;
+
     @Column(name = "cycle_no", nullable = false)
     private Integer cycleNo;
 

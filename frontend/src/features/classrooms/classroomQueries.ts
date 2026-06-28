@@ -1,12 +1,27 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createClassroom, getClassroom, getClassrooms, getEligibleStudents, updateClassroom } from './classroomApi'
-import type { ClassroomPayload, ClassroomSearchParams } from './classroomTypes'
+import { attendanceKeys } from '../attendance/attendanceQueries'
+import { debtKeys } from '../debts/debtQueries'
+import { invoiceKeys } from '../invoices/invoiceQueries'
+import { studentPackageKeys } from '../studentPackages/studentPackageQueries'
+import {
+  confirmClassroomRenewals,
+  createClassroom,
+  getClassroom,
+  getClassrooms,
+  getEligibleStudents,
+  getRenewalCandidates,
+  previewClassroomRenewals,
+  updateClassroom,
+} from './classroomApi'
+import type { ClassroomPayload, ClassroomRenewalPayload, ClassroomSearchParams } from './classroomTypes'
 
 export const classroomKeys = {
   all: ['classrooms'] as const,
   list: (params: ClassroomSearchParams) => ['classrooms', 'list', params] as const,
   detail: (id: number) => ['classrooms', 'detail', id] as const,
   eligibleStudents: (classroomId: number) => ['classrooms', classroomId, 'eligible-students'] as const,
+  renewalCandidates: (classroomId: number, remainingThreshold: number) =>
+    ['classrooms', classroomId, 'renewal-candidates', remainingThreshold] as const,
 }
 
 export function useClassrooms(params: ClassroomSearchParams) {
@@ -29,6 +44,35 @@ export function useEligibleStudents(classroomId: number, enabled = true) {
     queryKey: classroomKeys.eligibleStudents(classroomId),
     queryFn: () => getEligibleStudents(classroomId),
     enabled: Number.isFinite(classroomId) && enabled,
+  })
+}
+
+export function useRenewalCandidates(classroomId: number, remainingThreshold: number, enabled = true) {
+  return useQuery({
+    queryKey: classroomKeys.renewalCandidates(classroomId, remainingThreshold),
+    queryFn: () => getRenewalCandidates(classroomId, remainingThreshold),
+    enabled: Number.isFinite(classroomId) && enabled,
+  })
+}
+
+export function usePreviewClassroomRenewals(classroomId: number) {
+  return useMutation({
+    mutationFn: (payload: ClassroomRenewalPayload) => previewClassroomRenewals(classroomId, payload),
+  })
+}
+
+export function useConfirmClassroomRenewals(classroomId: number) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (payload: ClassroomRenewalPayload) => confirmClassroomRenewals(classroomId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: classroomKeys.all })
+      queryClient.invalidateQueries({ queryKey: studentPackageKeys.all })
+      queryClient.invalidateQueries({ queryKey: invoiceKeys.all })
+      queryClient.invalidateQueries({ queryKey: debtKeys.all })
+      queryClient.invalidateQueries({ queryKey: attendanceKeys.all })
+    },
   })
 }
 

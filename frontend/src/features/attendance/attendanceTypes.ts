@@ -24,3 +24,27 @@ export interface MarkAttendancePayload {
   sessionId: number
   items: AttendanceItemPayload[]
 }
+
+export interface AttendanceReadinessBlockedStudent {
+  studentId: number
+  enrollmentId: number
+  studentName: string
+  remainingSessions: number
+  reason: string
+}
+
+export interface AttendanceReadinessActivatedPackage {
+  studentId: number
+  enrollmentId: number
+  studentName: string
+  activatedStudentPackageId: number
+  packageName: string
+}
+
+export interface AttendanceReadiness {
+  sessionId: number
+  classroomId: number
+  ready: boolean
+  blockedStudents: AttendanceReadinessBlockedStudent[]
+  activatedPackages: AttendanceReadinessActivatedPackage[]
+}

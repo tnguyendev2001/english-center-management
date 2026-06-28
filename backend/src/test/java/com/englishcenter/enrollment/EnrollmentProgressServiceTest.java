@@ -1,24 +1,22 @@
-package com.englishcenter.studentpackage;
+package com.englishcenter.enrollment;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-import com.englishcenter.attendance.AttendanceRepository;
 import com.englishcenter.classroom.Classroom;
 import com.englishcenter.classroom.ClassroomRepository;
-import com.englishcenter.classsession.ClassSessionStatus;
-import com.englishcenter.enrollment.Enrollment;
+import com.englishcenter.enrollment.dto.EnrollmentLearningProgressResponse;
+import com.englishcenter.enrollment.mapper.EnrollmentLearningProgressMapper;
 import com.englishcenter.makeupcredit.MakeupCreditRepository;
 import com.englishcenter.makeupcredit.MakeupCreditStatus;
 import com.englishcenter.student.Student;
 import com.englishcenter.student.StudentRepository;
 import com.englishcenter.studentpackage.LearningProgressWarningType;
-import com.englishcenter.studentpackage.dto.StudentPackageProgressResponse;
-import com.englishcenter.studentpackage.mapper.StudentPackageMapper;
+import com.englishcenter.studentpackage.StudentPackage;
+import com.englishcenter.studentpackage.StudentPackageRepository;
 import com.englishcenter.tuitionpackage.TuitionPackage;
 import com.englishcenter.tuitionpackage.TuitionPackageStatus;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,9 +24,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-class StudentPackageServiceTest {
+class EnrollmentProgressServiceTest {
     @Mock
-    private StudentPackageRepository studentPackageRepository;
+    private EnrollmentRepository enrollmentRepository;
 
     @Mock
     private StudentRepository studentRepository;
@@ -37,88 +35,75 @@ class StudentPackageServiceTest {
     private ClassroomRepository classroomRepository;
 
     @Mock
-    private AttendanceRepository attendanceRepository;
+    private StudentPackageRepository studentPackageRepository;
 
     @Mock
     private MakeupCreditRepository makeupCreditRepository;
 
-    private final StudentPackageMapper studentPackageMapper = new StudentPackageMapper();
+    private final EnrollmentLearningProgressMapper enrollmentLearningProgressMapper =
+            new EnrollmentLearningProgressMapper();
 
     @Test
-    void getByClassroomIdReturnsActivePackageProgressOnly() {
-        StudentPackageService service = newService();
-        StudentPackage activePackage = studentPackage(21L, tuitionPackage(4L, "12 sessions", 12, "700000"));
+    void getByClassroomIdReturnsEnrollmentProgress() {
+        EnrollmentProgressService service = newService();
+        Enrollment enrollment = enrollment(10L, 12, 0);
+        StudentPackage latestPackage = latestPackage(enrollment, tuitionPackage(4L, "12 sessions", 12, "700000"));
 
         when(classroomRepository.existsById(2L)).thenReturn(true);
-        when(studentPackageRepository.findByClassroomIdAndStatusOrderByStartDateDesc(
-                2L,
-                StudentPackageStatus.ACTIVE
-        )).thenReturn(List.of(activePackage));
-        when(attendanceRepository.countUsedSessions(
-                1L,
-                2L,
-                activePackage.getStartDate(),
-                activePackage.getEndDate(),
-                ClassSessionStatus.CANCELED
-        )).thenReturn(0L);
+        when(enrollmentRepository.findByClassroomIdAndStatus(2L, EnrollmentStatus.ACTIVE))
+                .thenReturn(List.of(enrollment));
+        when(studentPackageRepository.findTopByEnrollmentIdOrderByCycleNoDescIdDesc(10L))
+                .thenReturn(java.util.Optional.of(latestPackage));
         when(makeupCreditRepository.sumAvailableMakeupSessions(1L, 2L, MakeupCreditStatus.AVAILABLE))
                 .thenReturn(0);
 
-        List<StudentPackageProgressResponse> progress = service.getByClassroomId(2L);
+        List<EnrollmentLearningProgressResponse> progress = service.getByClassroomId(2L);
 
         assertThat(progress).hasSize(1);
-        assertThat(progress.getFirst().id()).isEqualTo(21L);
-        assertThat(progress.getFirst().packageName()).isEqualTo("12 sessions");
-        assertThat(progress.getFirst().price()).isEqualByComparingTo("700000");
+        assertThat(progress.getFirst().enrollmentId()).isEqualTo(10L);
+        assertThat(progress.getFirst().latestPackageName()).isEqualTo("12 sessions");
+        assertThat(progress.getFirst().latestPackagePrice()).isEqualByComparingTo("700000");
         assertThat(progress.getFirst().totalSessions()).isEqualTo(12);
         assertThat(progress.getFirst().remainingSessions()).isEqualTo(12);
         assertThat(progress.getFirst().overusedSessions()).isZero();
-        assertThat(progress.getFirst().warningType()).isEqualTo(LearningProgressWarningType.NONE);
-        assertThat(progress.getFirst().status()).isEqualTo(StudentPackageStatus.ACTIVE);
+        assertThat(progress.getFirst().warningType()).isEqualTo(LearningProgressWarningType.OK);
     }
 
     @Test
     void getByClassroomIdCalculatesOverusedSessionsAndWarning() {
-        StudentPackageService service = newService();
-        StudentPackage activePackage = studentPackage(21L, tuitionPackage(4L, "8 sessions", 8, "500000"));
+        EnrollmentProgressService service = newService();
+        Enrollment enrollment = enrollment(10L, 8, 11);
+        StudentPackage latestPackage = latestPackage(enrollment, tuitionPackage(4L, "8 sessions", 8, "500000"));
 
         when(classroomRepository.existsById(2L)).thenReturn(true);
-        when(studentPackageRepository.findByClassroomIdAndStatusOrderByStartDateDesc(
-                2L,
-                StudentPackageStatus.ACTIVE
-        )).thenReturn(List.of(activePackage));
-        when(attendanceRepository.countUsedSessions(
-                1L,
-                2L,
-                activePackage.getStartDate(),
-                activePackage.getEndDate(),
-                ClassSessionStatus.CANCELED
-        )).thenReturn(11L);
+        when(enrollmentRepository.findByClassroomIdAndStatus(2L, EnrollmentStatus.ACTIVE))
+                .thenReturn(List.of(enrollment));
+        when(studentPackageRepository.findTopByEnrollmentIdOrderByCycleNoDescIdDesc(10L))
+                .thenReturn(java.util.Optional.of(latestPackage));
         when(makeupCreditRepository.sumAvailableMakeupSessions(1L, 2L, MakeupCreditStatus.AVAILABLE))
                 .thenReturn(0);
 
-        List<StudentPackageProgressResponse> progress = service.getByClassroomId(2L);
+        List<EnrollmentLearningProgressResponse> progress = service.getByClassroomId(2L);
 
         assertThat(progress.getFirst().usedSessions()).isEqualTo(11);
         assertThat(progress.getFirst().remainingSessions()).isZero();
         assertThat(progress.getFirst().overusedSessions()).isEqualTo(3);
-        assertThat(progress.getFirst().totalAvailableSessions()).isZero();
         assertThat(progress.getFirst().warningType()).isEqualTo(LearningProgressWarningType.OVERUSED);
         assertThat(progress.getFirst().warningMessage()).isEqualTo("Vượt 3 buổi - cần gia hạn");
     }
 
-    private StudentPackageService newService() {
-        return new StudentPackageService(
-                studentPackageRepository,
+    private EnrollmentProgressService newService() {
+        return new EnrollmentProgressService(
+                enrollmentRepository,
                 studentRepository,
                 classroomRepository,
-                attendanceRepository,
+                studentPackageRepository,
                 makeupCreditRepository,
-                studentPackageMapper
+                enrollmentLearningProgressMapper
         );
     }
 
-    private StudentPackage studentPackage(Long id, TuitionPackage tuitionPackage) {
+    private Enrollment enrollment(Long id, int totalSessions, int usedSessions) {
         Student student = new Student();
         student.setId(1L);
         student.setFullName("Nguyen Van A");
@@ -127,23 +112,32 @@ class StudentPackageServiceTest {
         classroom.setId(2L);
         classroom.setClassName("Starter A");
 
-        Enrollment enrollment = new Enrollment();
-        enrollment.setId(10L);
+        TuitionPackage selectedPackage = tuitionPackage(3L, "12 sessions", 12, "700000");
 
+        Enrollment enrollment = new Enrollment();
+        enrollment.setId(id);
+        enrollment.setStudent(student);
+        enrollment.setClassroom(classroom);
+        enrollment.setSelectedPackage(selectedPackage);
+        enrollment.setStatus(EnrollmentStatus.ACTIVE);
+        enrollment.setPackageNameSnapshot("12 sessions");
+        enrollment.setTotalSessions(totalSessions);
+        enrollment.setUsedSessions(usedSessions);
+        enrollment.setTotalSessionsSnapshot(12);
+        enrollment.setPackagePriceSnapshot(new BigDecimal("700000"));
+        return enrollment;
+    }
+
+    private StudentPackage latestPackage(Enrollment enrollment, TuitionPackage tuitionPackage) {
         StudentPackage studentPackage = new StudentPackage();
-        studentPackage.setId(id);
-        studentPackage.setStudent(student);
-        studentPackage.setClassroom(classroom);
+        studentPackage.setId(21L);
+        studentPackage.setStudent(enrollment.getStudent());
+        studentPackage.setClassroom(enrollment.getClassroom());
         studentPackage.setEnrollment(enrollment);
         studentPackage.setTuitionPackage(tuitionPackage);
         studentPackage.setPackageName(tuitionPackage.getName());
         studentPackage.setTotalSessions(tuitionPackage.getTotalSessions());
         studentPackage.setPrice(tuitionPackage.getPrice());
-        studentPackage.setDiscountAmount(BigDecimal.ZERO);
-        studentPackage.setAdjustmentAmount(BigDecimal.ZERO);
-        studentPackage.setFinalAmount(tuitionPackage.getPrice());
-        studentPackage.setStartDate(LocalDate.of(2026, 7, 1));
-        studentPackage.setStatus(StudentPackageStatus.ACTIVE);
         studentPackage.setCycleNo(2);
         return studentPackage;
     }

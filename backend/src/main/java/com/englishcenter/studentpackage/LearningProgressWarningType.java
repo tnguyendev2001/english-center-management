@@ -4,5 +4,6 @@ public enum LearningProgressWarningType {
     OVERUSED,
     DEPLETED,
     LOW,
+    OK,
     NONE
 }

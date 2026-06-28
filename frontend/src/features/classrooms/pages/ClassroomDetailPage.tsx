@@ -1,4 +1,5 @@
 import {
+  Alert,
   Button,
   Card,
   Descriptions,
@@ -17,10 +18,12 @@ import type { ColumnsType } from 'antd/es/table'
 import { isAxiosError } from 'axios'
 import dayjs from 'dayjs'
 import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
 import { AddClassPackageModal } from '../../classPackages/components/AddClassPackageModal'
+import { RenewAllPackagesModal } from '../components/RenewAllPackagesModal'
 import {
   useAddClassPackage,
   useClassPackages,
@@ -28,6 +31,7 @@ import {
 } from '../../classPackages/classPackageQueries'
 import type { ClassPackage } from '../../classPackages/classPackageTypes'
 import { AttendanceMarkPanel } from '../../attendance/components/AttendanceMarkPanel'
+import { attendanceKeys } from '../../attendance/attendanceQueries'
 import { CancelSessionModal } from '../../classSessions/components/CancelSessionModal'
 import { GenerateSessionsModal } from '../../classSessions/components/GenerateSessionsModal'
 import {
@@ -47,19 +51,15 @@ import { useEnrollments, useEnrollStudent } from '../../enrollments/enrollmentQu
 import type { EnrollStudentPayload } from '../../enrollments/enrollmentTypes'
 import { ChangePackageModal } from '../../studentPackages/components/ChangePackageModal'
 import {
-  formatRemainingSessions,
-  formatTotalAvailableSessions,
-  LearningProgressWarning,
-} from '../../studentPackages/components/LearningProgressWarning'
-import {
   useChangePackage,
   useClassroomStudentPackages,
   usePreviewChangePackage,
 } from '../../studentPackages/studentPackageQueries'
+import { buildProgressByEnrollmentId } from '../../studentPackages/studentPackageUtils'
 import type {
   ChangePackagePayload,
   ChangePackagePreviewPayload,
-  StudentPackageProgress,
+  EnrollmentLearningProgress,
 } from '../../studentPackages/studentPackageTypes'
 import { useTuitionPackages } from '../../tuitionPackages/tuitionPackageQueries'
 import type { TuitionPackageSearchParams } from '../../tuitionPackages/tuitionPackageTypes'
@@ -73,14 +73,16 @@ type CancelSessionMode = 'normal' | 'correction'
 export function ClassroomDetailPage() {
   const { id } = useParams()
   const classroomId = Number(id)
+  const queryClient = useQueryClient()
   const [addPackageModalOpen, setAddPackageModalOpen] = useState(false)
   const [enrollModalOpen, setEnrollModalOpen] = useState(false)
+  const [renewalModalOpen, setRenewalModalOpen] = useState(false)
   const [generateSessionsOpen, setGenerateSessionsOpen] = useState(false)
   const [cancelingSession, setCancelingSession] = useState<ClassSession>()
   const [cancelSessionMode, setCancelSessionMode] = useState<CancelSessionMode>('normal')
   const [activeTab, setActiveTab] = useState('info')
   const [attendanceSessionId, setAttendanceSessionId] = useState<number>()
-  const [changingPackage, setChangingPackage] = useState<StudentPackageProgress>()
+  const [changingPackage, setChangingPackage] = useState<EnrollmentLearningProgress>()
   const tuitionPackageParams: TuitionPackageSearchParams = useMemo(
     () => ({
       page: 0,
@@ -102,8 +104,8 @@ export function ClassroomDetailPage() {
   const cancelClassSession = useCancelClassSession()
   const correctionCancelClassSession = useCorrectionCancelClassSession()
   const restoreClassSession = useRestoreClassSession()
-  const previewChangePackage = usePreviewChangePackage(changingPackage?.id)
-  const changePackage = useChangePackage(changingPackage?.id)
+  const previewChangePackage = usePreviewChangePackage(changingPackage?.latestStudentPackageId ?? undefined)
+  const changePackage = useChangePackage(changingPackage?.latestStudentPackageId ?? undefined)
 
   if (!Number.isFinite(classroomId)) {
     return <Empty description="Không tìm thấy lớp học" />
@@ -124,19 +126,19 @@ export function ClassroomDetailPage() {
   const activeEnrollments = (enrollmentsQuery.data?.data ?? []).filter(
     (enrollment) => enrollment.classroomId === classroomId && enrollment.status === 'ACTIVE',
   )
-  const progressByEnrollmentId = new Map(
-    (studentPackagesQuery.data ?? [])
-      .filter((pkg) => pkg.status === 'ACTIVE')
-      .map((pkg) => [pkg.enrollmentId, pkg]),
-  )
+  const progressByEnrollmentId = buildProgressByEnrollmentId(studentPackagesQuery.data ?? [])
+  const activeProgress = studentPackagesQuery.data ?? []
+  const outOfSessionsCount = activeProgress.filter(
+    (progress: EnrollmentLearningProgress) => progress.remainingSessions <= 0,
+  ).length
+  const lowSessionsCount = activeProgress.filter(
+    (progress: EnrollmentLearningProgress) =>
+      progress.remainingSessions > 0 && progress.remainingSessions <= 2,
+  ).length
 
-  function getChangePackageDisabledReason(progress?: StudentPackageProgress) {
-    if (!progress) {
-      return 'Chưa có gói học đang hoạt động'
-    }
-
-    if (progress.status !== 'ACTIVE') {
-      return 'Gói học hiện tại không còn hoạt động'
+  function getChangePackageDisabledReason(progress?: EnrollmentLearningProgress) {
+    if (!progress?.latestStudentPackageId) {
+      return 'Chưa có gói học phí'
     }
 
     if (classroom.status === 'COMPLETED' || classroom.status === 'CANCELED') {
@@ -147,7 +149,7 @@ export function ClassroomDetailPage() {
       (classPackage) =>
         classPackage.active &&
         classPackage.tuitionPackageStatus === 'ACTIVE' &&
-        classPackage.tuitionPackageId !== progress.tuitionPackageId,
+        classPackage.tuitionPackageId !== progress.latestTuitionPackageId,
     )
 
     if (!hasAlternativePackage) {
@@ -363,6 +365,7 @@ export function ClassroomDetailPage() {
       loadingEnrollments={enrollmentsQuery.isLoading}
       selectedSessionId={attendanceSessionId}
       onSelectedSessionIdChange={setAttendanceSessionId}
+      onRenewNow={() => setRenewalModalOpen(true)}
       isActive={activeTab === 'attendance'}
     />
   )
@@ -527,6 +530,14 @@ export function ClassroomDetailPage() {
         <Text type="secondary">Thông tin chi tiết lớp học và các phần sẽ được triển khai sau.</Text>
       </Space>
 
+      {outOfSessionsCount > 0 || lowSessionsCount > 0 ? (
+        <Alert
+          type={outOfSessionsCount > 0 ? 'error' : 'warning'}
+          showIcon
+          message={`${outOfSessionsCount} học viên đã hết buổi, ${lowSessionsCount} học viên sắp hết buổi.`}
+        />
+      ) : null}
+
       <Space>
         {canEnroll ? (
           <Button type="primary" onClick={() => setEnrollModalOpen(true)}>
@@ -535,6 +546,9 @@ export function ClassroomDetailPage() {
         ) : (
           <Text type="secondary">Không thể ghi danh khi lớp đã kết thúc hoặc đã hủy.</Text>
         )}
+        <Button onClick={() => setRenewalModalOpen(true)} disabled={classPackages.length === 0}>
+          Gia hạn hàng loạt
+        </Button>
       </Space>
 
       <Card>
@@ -565,18 +579,20 @@ export function ClassroomDetailPage() {
                     { title: 'Mã học viên', dataIndex: 'studentCode', key: 'studentCode' },
                     { title: 'Tên học viên', dataIndex: 'studentName', key: 'studentName' },
                     {
-                      title: 'Gói học phí',
-                      key: 'packageName',
+                      title: 'Gói gần nhất',
+                      key: 'latestPackageName',
                       render: (_, enrollment) =>
-                        progressByEnrollmentId.get(enrollment.id)?.packageName ?? enrollment.packageNameSnapshot,
+                        progressByEnrollmentId.get(enrollment.id)?.latestPackageName
+                        ?? enrollment.packageNameSnapshot,
                     },
                     {
                       title: 'Học phí',
-                      key: 'packagePrice',
+                      key: 'latestPackagePrice',
                       render: (_, enrollment) => {
                         const progress = progressByEnrollmentId.get(enrollment.id)
+                        const price = progress?.latestPackagePrice
 
-                        return progress ? <MoneyText value={progress.price} /> : '-'
+                        return price != null ? <MoneyText value={price} /> : '-'
                       },
                     },
                     {
@@ -592,39 +608,14 @@ export function ClassroomDetailPage() {
                     {
                       title: 'Còn lại',
                       key: 'remainingSessions',
-                      render: (_, enrollment) => {
-                        const progress = progressByEnrollmentId.get(enrollment.id)
-
-                        return formatRemainingSessions(progress)
-                      },
-                    },
-                    {
-                      title: 'Vượt buổi',
-                      key: 'overusedSessions',
-                      render: (_, enrollment) => {
-                        const progress = progressByEnrollmentId.get(enrollment.id)
-
-                        return progress?.overusedSessions ? progress.overusedSessions : '-'
-                      },
-                    },
-                    {
-                      title: 'Cảnh báo',
-                      key: 'warningMessage',
-                      render: (_, enrollment) => (
-                        <LearningProgressWarning progress={progressByEnrollmentId.get(enrollment.id)} />
-                      ),
+                      render: (_, enrollment) =>
+                        progressByEnrollmentId.get(enrollment.id)?.remainingSessions ?? '-',
                     },
                     {
                       title: 'Buổi bù',
                       key: 'makeupAvailableSessions',
                       render: (_, enrollment) =>
                         progressByEnrollmentId.get(enrollment.id)?.makeupAvailableSessions ?? '-',
-                    },
-                    {
-                      title: 'Tổng khả dụng',
-                      key: 'totalAvailableSessions',
-                      render: (_, enrollment) =>
-                        formatTotalAvailableSessions(progressByEnrollmentId.get(enrollment.id)),
                     },
                     {
                       title: 'Ngày bắt đầu',
@@ -697,6 +688,18 @@ export function ClassroomDetailPage() {
         submitting={enrollStudent.isPending}
         onCancel={() => setEnrollModalOpen(false)}
         onSubmit={handleEnrollStudent}
+      />
+
+      <RenewAllPackagesModal
+        open={renewalModalOpen}
+        classroomId={classroom.id}
+        classPackages={classPackages}
+        onCancel={() => setRenewalModalOpen(false)}
+        onSuccess={() => {
+          void studentPackagesQuery.refetch()
+          void queryClient.invalidateQueries({ queryKey: attendanceKeys.all })
+          setRenewalModalOpen(false)
+        }}
       />
 
       <GenerateSessionsModal

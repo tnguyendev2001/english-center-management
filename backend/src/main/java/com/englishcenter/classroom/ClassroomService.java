@@ -4,13 +4,12 @@ import com.englishcenter.classroom.dto.ClassroomCreateRequest;
 import com.englishcenter.classroom.dto.ClassroomResponse;
 import com.englishcenter.classroom.dto.ClassroomUpdateRequest;
 import com.englishcenter.classroom.mapper.ClassroomMapper;
-import com.englishcenter.attendance.AttendanceRepository;
-import com.englishcenter.classsession.ClassSessionStatus;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
-import com.englishcenter.studentpackage.StudentPackage;
-import com.englishcenter.studentpackage.StudentPackageRepository;
-import com.englishcenter.studentpackage.StudentPackageStatus;
+import com.englishcenter.enrollment.Enrollment;
+import com.englishcenter.enrollment.EnrollmentRepository;
+import com.englishcenter.enrollment.EnrollmentSessionService;
+import com.englishcenter.enrollment.EnrollmentStatus;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -27,19 +26,19 @@ public class ClassroomService {
 
     private final ClassroomRepository classroomRepository;
     private final ClassroomMapper classroomMapper;
-    private final StudentPackageRepository studentPackageRepository;
-    private final AttendanceRepository attendanceRepository;
+    private final EnrollmentRepository enrollmentRepository;
+    private final EnrollmentSessionService enrollmentSessionService;
 
     public ClassroomService(
             ClassroomRepository classroomRepository,
             ClassroomMapper classroomMapper,
-            StudentPackageRepository studentPackageRepository,
-            AttendanceRepository attendanceRepository
+            EnrollmentRepository enrollmentRepository,
+            EnrollmentSessionService enrollmentSessionService
     ) {
         this.classroomRepository = classroomRepository;
         this.classroomMapper = classroomMapper;
-        this.studentPackageRepository = studentPackageRepository;
-        this.attendanceRepository = attendanceRepository;
+        this.enrollmentRepository = enrollmentRepository;
+        this.enrollmentSessionService = enrollmentSessionService;
     }
 
     @Transactional(readOnly = true)
@@ -100,21 +99,14 @@ public class ClassroomService {
         int outOfSessionsCount = 0;
         int lowSessionsCount = 0;
 
-        List<StudentPackage> activePackages = studentPackageRepository.findByClassroomIdAndStatusOrderByStartDateDesc(
+        List<Enrollment> enrollments = enrollmentRepository.findByClassroomIdAndStatus(
                 classroom.getId(),
-                StudentPackageStatus.ACTIVE
+                EnrollmentStatus.ACTIVE
         );
 
-        for (StudentPackage studentPackage : activePackages) {
-            int usedSessions = Math.toIntExact(attendanceRepository.countUsedSessions(
-                    studentPackage.getStudent().getId(),
-                    studentPackage.getClassroom().getId(),
-                    studentPackage.getStartDate(),
-                    studentPackage.getEndDate(),
-                    ClassSessionStatus.CANCELED
-            ));
-            int remainingSessions = Math.max(studentPackage.getTotalSessions() - usedSessions, 0);
-            int overusedSessions = Math.max(usedSessions - studentPackage.getTotalSessions(), 0);
+        for (Enrollment enrollment : enrollments) {
+            int remainingSessions = enrollmentSessionService.remainingSessions(enrollment);
+            int overusedSessions = enrollmentSessionService.overusedSessions(enrollment);
 
             if (overusedSessions > 0) {
                 overusedCount++;

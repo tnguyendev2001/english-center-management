@@ -2,14 +2,14 @@ import type { ApiResponse } from '../../api/apiResponse'
 import { httpClient } from '../../api/httpClient'
 import type {
   ChangePackagePayload,
-  ChangePackagePreview,
   ChangePackagePreviewPayload,
+  ChangePackagePreview,
   ChangePackageResult,
-  StudentPackageProgress,
+  EnrollmentLearningProgress,
 } from './studentPackageTypes'
 
 export async function getStudentPackages(studentId: number) {
-  const response = await httpClient.get<ApiResponse<StudentPackageProgress[]>>(
+  const response = await httpClient.get<ApiResponse<EnrollmentLearningProgress[]>>(
     `/students/${studentId}/packages`,
   )
 
@@ -17,7 +17,7 @@ export async function getStudentPackages(studentId: number) {
 }
 
 export async function getClassroomStudentPackages(classroomId: number) {
-  const response = await httpClient.get<ApiResponse<StudentPackageProgress[]>>(
+  const response = await httpClient.get<ApiResponse<EnrollmentLearningProgress[]>>(
     `/classrooms/${classroomId}/student-packages`,
   )
 
