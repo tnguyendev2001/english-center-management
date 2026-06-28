@@ -34,6 +34,9 @@ export function useEnrollStudent() {
       queryClient.invalidateQueries({ queryKey: enrollmentKeys.all })
       queryClient.invalidateQueries({ queryKey: invoiceKeys.all })
       queryClient.invalidateQueries({ queryKey: classroomKeys.detail(enrollment.classroomId) })
+      queryClient.invalidateQueries({
+        queryKey: classroomKeys.eligibleStudents(enrollment.classroomId),
+      })
     },
   })
 }

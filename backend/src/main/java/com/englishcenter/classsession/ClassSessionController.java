@@ -3,6 +3,7 @@ package com.englishcenter.classsession;
 import com.englishcenter.classsession.dto.CancelClassSessionRequest;
 import com.englishcenter.classsession.dto.ClassSessionResponse;
 import com.englishcenter.classsession.dto.GenerateClassSessionsRequest;
+import com.englishcenter.classsession.dto.GenerateClassSessionsResponse;
 import com.englishcenter.common.api.ApiResponse;
 import com.englishcenter.common.api.PageMeta;
 import jakarta.validation.Valid;
@@ -24,7 +25,7 @@ public class ClassSessionController {
     }
 
     @PostMapping("/api/class-sessions/generate")
-    public ApiResponse<List<ClassSessionResponse>> generate(
+    public ApiResponse<GenerateClassSessionsResponse> generate(
             @Valid @RequestBody GenerateClassSessionsRequest request
     ) {
         return ApiResponse.success(classSessionService.generate(request));
@@ -57,5 +58,18 @@ public class ClassSessionController {
             @Valid @RequestBody CancelClassSessionRequest request
     ) {
         return ApiResponse.success(classSessionService.cancel(id, request));
+    }
+
+    @PostMapping("/api/class-sessions/{id}/correction-cancel")
+    public ApiResponse<ClassSessionResponse> correctionCancel(
+            @PathVariable Long id,
+            @Valid @RequestBody CancelClassSessionRequest request
+    ) {
+        return ApiResponse.success(classSessionService.correctionCancel(id, request));
+    }
+
+    @PostMapping("/api/class-sessions/{id}/restore")
+    public ApiResponse<ClassSessionResponse> restore(@PathVariable Long id) {
+        return ApiResponse.success(classSessionService.restore(id));
     }
 }

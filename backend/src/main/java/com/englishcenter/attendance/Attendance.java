@@ -12,6 +12,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
@@ -53,4 +54,20 @@ public class Attendance {
 
     @Column(name = "marked_by", length = 100)
     private String markedBy;
+
+    @Column(name = "valid", nullable = false)
+    private Boolean valid = true;
+
+    @Column(name = "void_reason", length = 1000)
+    private String voidReason;
+
+    @Column(name = "voided_at")
+    private LocalDateTime voidedAt;
+
+    @PrePersist
+    void prePersist() {
+        if (valid == null) {
+            valid = true;
+        }
+    }
 }

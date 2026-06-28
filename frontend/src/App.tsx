@@ -1,6 +1,5 @@
 import { Layout, Menu, Typography } from 'antd'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { AttendancePage } from './features/attendance/pages/AttendancePage'
 import { ClassroomDetailPage } from './features/classrooms/pages/ClassroomDetailPage'
 import { ClassroomListPage } from './features/classrooms/pages/ClassroomListPage'
 import { DashboardPage } from './features/dashboard/pages/DashboardPage'
@@ -26,8 +25,6 @@ function App() {
       ? '/debts'
     : location.pathname.startsWith('/invoices')
       ? '/invoices'
-    : location.pathname.startsWith('/attendance')
-      ? '/attendance'
     : location.pathname.startsWith('/makeup-credits')
       ? '/makeup-credits'
     : location.pathname.startsWith('/reports')
@@ -58,7 +55,6 @@ function App() {
             { key: '/invoices', label: 'Học phí' },
             { key: '/payments', label: 'Thanh toán' },
             { key: '/debts', label: 'Công nợ' },
-            { key: '/attendance', label: 'Điểm danh' },
             { key: '/makeup-credits', label: 'Buổi bù' },
             { key: '/reports', label: 'Báo cáo' },
           ]}
@@ -79,7 +75,6 @@ function App() {
             <Route path="/invoices" element={<InvoiceListPage />} />
             <Route path="/payments" element={<PaymentListPage />} />
             <Route path="/debts" element={<DebtPage />} />
-            <Route path="/attendance" element={<AttendancePage />} />
             <Route path="/makeup-credits" element={<MakeupCreditPage />} />
             <Route path="/reports" element={<ReportsPage />} />
           </Routes>

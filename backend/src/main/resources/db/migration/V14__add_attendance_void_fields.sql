@@ -1,0 +1,4 @@
+ALTER TABLE attendance_records
+    ADD COLUMN valid BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN void_reason VARCHAR(1000) NULL,
+    ADD COLUMN voided_at DATETIME NULL;

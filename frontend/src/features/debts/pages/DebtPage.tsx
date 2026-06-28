@@ -1,10 +1,11 @@
-import { Button, Card, Col, message, Row, Space, Statistic, Table, Typography } from 'antd'
+import { Button, Card, Col, Input, message, Row, Space, Statistic, Table, Typography } from 'antd'
 import type { TablePaginationConfig } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { isAxiosError } from 'axios'
 import { useMemo, useState } from 'react'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
+import { matchesKeyword, paginateItems } from '../../../utils/clientPagination'
 import type { Invoice, InvoiceSearchParams } from '../../invoices/invoiceTypes'
 import { PaymentFormModal } from '../../payments/components/PaymentFormModal'
 import { useCreatePayment } from '../../payments/paymentQueries'
@@ -19,22 +20,41 @@ const invoiceStatusLabels = {
   PARTIALLY_PAID: 'Đóng một phần',
 }
 
+const FETCH_SIZE = 100
+
 export function DebtPage() {
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(10)
+  const [keyword, setKeyword] = useState('')
   const [collectingInvoice, setCollectingInvoice] = useState<Invoice>()
   const params: InvoiceSearchParams = useMemo(
     () => ({
-      page,
-      size,
+      page: 0,
+      size: FETCH_SIZE,
     }),
-    [page, size],
+    [],
   )
   const debtsQuery = useDebts(params)
   const revenueQuery = useRevenueSummary()
   const createPayment = useCreatePayment()
 
+  const filteredDebts = useMemo(() => {
+    return (debtsQuery.data?.data ?? []).filter((invoice) =>
+      matchesKeyword(keyword, invoice.studentName, invoice.invoiceCode),
+    )
+  }, [debtsQuery.data?.data, keyword])
+
+  const pagedDebts = useMemo(
+    () => paginateItems(filteredDebts, page, size),
+    [filteredDebts, page, size],
+  )
+
   const columns: ColumnsType<Invoice> = [
+    {
+      title: 'Mã học phí',
+      dataIndex: 'invoiceCode',
+      key: 'invoiceCode',
+    },
     {
       title: 'Học viên',
       dataIndex: 'studentName',
@@ -90,6 +110,11 @@ export function DebtPage() {
     setSize(pagination.pageSize ?? 10)
   }
 
+  function handleKeywordChange(value: string) {
+    setKeyword(value)
+    setPage(0)
+  }
+
   function handleCreatePayment(payload: CreatePaymentPayload) {
     if (!collectingInvoice) {
       return
@@ -122,7 +147,7 @@ export function DebtPage() {
         <Title level={2} style={{ margin: 0 }}>
           Công nợ
         </Title>
-        <Text type="secondary">Theo dõi hóa đơn còn nợ và doanh thu đã thu.</Text>
+        <Text type="secondary">Theo dõi học phí chưa đóng hoặc đóng một phần.</Text>
       </Space>
 
       <Row gutter={16}>
@@ -144,19 +169,29 @@ export function DebtPage() {
       </Row>
 
       <Card>
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={debtsQuery.data?.data ?? []}
-          loading={debtsQuery.isLoading}
-          pagination={{
-            current: (debtsQuery.data?.meta?.page ?? page) + 1,
-            pageSize: debtsQuery.data?.meta?.size ?? size,
-            total: debtsQuery.data?.meta?.totalElements ?? 0,
-            showSizeChanger: true,
-          }}
-          onChange={handleTableChange}
-        />
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Input.Search
+            allowClear
+            placeholder="Tìm học viên hoặc mã học phí"
+            style={{ width: 320 }}
+            value={keyword}
+            onChange={(event) => handleKeywordChange(event.target.value)}
+          />
+
+          <Table
+            rowKey="id"
+            columns={columns}
+            dataSource={pagedDebts}
+            loading={debtsQuery.isLoading}
+            pagination={{
+              current: page + 1,
+              pageSize: size,
+              total: filteredDebts.length,
+              showSizeChanger: true,
+            }}
+            onChange={handleTableChange}
+          />
+        </Space>
       </Card>
 
       <PaymentFormModal

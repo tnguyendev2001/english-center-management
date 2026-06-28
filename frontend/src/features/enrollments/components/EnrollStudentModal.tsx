@@ -98,6 +98,7 @@ export function EnrollStudentModal({
             loading={loadingStudents}
             optionFilterProp="label"
             placeholder="Chọn học viên"
+            notFoundContent="Không có học viên đủ điều kiện ghi danh"
             options={students.map((student) => ({
               label: `${student.fullName} (${student.studentCode})`,
               value: student.id,

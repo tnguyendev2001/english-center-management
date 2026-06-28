@@ -1,4 +1,5 @@
 import { Card, Space, Table, Typography } from 'antd'
+import dayjs from 'dayjs'
 import { StatusTag } from '../../../components/common/StatusTag'
 import { useMakeupCredits } from '../makeupCreditQueries'
 import type { MakeupCredit, MakeupCreditReason } from '../makeupCreditTypes'
@@ -33,9 +34,9 @@ export function MakeupCreditPage() {
             { title: 'Lớp học', dataIndex: 'classroomName', key: 'classroomName' },
             {
               title: 'Buổi nguồn',
-              dataIndex: 'sourceSessionId',
-              key: 'sourceSessionId',
-              render: (value?: number | null) => value ?? '-',
+              dataIndex: 'sourceSessionDate',
+              key: 'sourceSessionDate',
+              render: (value?: string | null) => (value ? dayjs(value).format('DD/MM/YYYY') : '-'),
             },
             {
               title: 'Lý do',
@@ -50,6 +51,12 @@ export function MakeupCreditPage() {
               dataIndex: 'status',
               key: 'status',
               render: (status: string) => <StatusTag status={status} />,
+            },
+            {
+              title: 'Ghi chú',
+              dataIndex: 'note',
+              key: 'note',
+              render: (value?: string | null) => value || '-',
             },
           ]}
         />

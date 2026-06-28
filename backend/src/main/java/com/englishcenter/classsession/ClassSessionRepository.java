@@ -1,6 +1,7 @@
 package com.englishcenter.classsession;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,4 +15,11 @@ public interface ClassSessionRepository extends JpaRepository<ClassSession, Long
     List<ClassSession> findBySessionDateOrderByStartTimeAsc(LocalDate sessionDate);
 
     int countByClassroomId(Long classroomId);
+
+    boolean existsByClassroomIdAndSessionDateAndStartTimeAndEndTime(
+            Long classroomId,
+            LocalDate sessionDate,
+            LocalTime startTime,
+            LocalTime endTime
+    );
 }

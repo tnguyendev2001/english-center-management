@@ -8,6 +8,7 @@ export interface MakeupCredit {
   classroomId: number
   classroomName: string
   sourceSessionId?: number | null
+  sourceSessionDate?: string | null
   reason: MakeupCreditReason
   creditSessions: number
   usedSessions: number

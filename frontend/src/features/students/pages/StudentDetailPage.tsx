@@ -1,7 +1,9 @@
 import { Card, Descriptions, Empty, Space, Spin, Table, Typography } from 'antd'
+import dayjs from 'dayjs'
 import { useParams } from 'react-router-dom'
 import { StatusTag } from '../../../components/common/StatusTag'
 import { useMakeupCredits } from '../../makeupCredits/makeupCreditQueries'
+import { useStudentPackages } from '../../studentPackages/studentPackageQueries'
 import { useStudentDetail } from '../studentQueries'
 
 const { Title, Text } = Typography
@@ -10,6 +12,7 @@ export function StudentDetailPage() {
   const { id } = useParams()
   const studentId = Number(id)
   const studentQuery = useStudentDetail(studentId)
+  const studentPackagesQuery = useStudentPackages(studentId)
   const makeupCreditsQuery = useMakeupCredits()
 
   if (!Number.isFinite(studentId)) {
@@ -51,6 +54,40 @@ export function StudentDetailPage() {
         </Descriptions>
       </Card>
 
+      <Card title="Tiến độ học">
+        <Table
+          rowKey="id"
+          dataSource={studentPackagesQuery.data ?? []}
+          loading={studentPackagesQuery.isLoading}
+          pagination={false}
+          columns={[
+            { title: 'Lớp học', dataIndex: 'classroomName', key: 'classroomName' },
+            { title: 'Gói học phí', dataIndex: 'packageName', key: 'packageName' },
+            { title: 'Tổng buổi', dataIndex: 'totalSessions', key: 'totalSessions' },
+            { title: 'Đã học', dataIndex: 'usedSessions', key: 'usedSessions' },
+            { title: 'Còn lại', dataIndex: 'remainingSessions', key: 'remainingSessions' },
+            { title: 'Buổi bù', dataIndex: 'makeupAvailableSessions', key: 'makeupAvailableSessions' },
+            {
+              title: 'Tổng khả dụng',
+              dataIndex: 'totalAvailableSessions',
+              key: 'totalAvailableSessions',
+            },
+            {
+              title: 'Trạng thái',
+              dataIndex: 'status',
+              key: 'status',
+              render: (status: string) => <StatusTag status={status} />,
+            },
+            {
+              title: 'Ngày bắt đầu',
+              dataIndex: 'startDate',
+              key: 'startDate',
+              render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
+            },
+          ]}
+        />
+      </Card>
+
       <Card title="Buổi bù">
         <Table
           rowKey="id"
@@ -72,6 +109,12 @@ export function StudentDetailPage() {
               dataIndex: 'status',
               key: 'status',
               render: (status: string) => <StatusTag status={status} />,
+            },
+            {
+              title: 'Ghi chú',
+              dataIndex: 'note',
+              key: 'note',
+              render: (value?: string | null) => value || '-',
             },
           ]}
         />

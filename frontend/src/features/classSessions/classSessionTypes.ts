@@ -22,6 +22,12 @@ export interface GenerateClassSessionsPayload {
   toDate?: string | null
 }
 
+export interface GenerateClassSessionsResponse {
+  createdCount: number
+  skippedCount: number
+  sessions: ClassSession[]
+}
+
 export interface CancelClassSessionPayload {
   reason: string
 }

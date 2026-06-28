@@ -5,6 +5,8 @@ import com.englishcenter.classroom.dto.ClassroomResponse;
 import com.englishcenter.classroom.dto.ClassroomUpdateRequest;
 import com.englishcenter.common.api.ApiResponse;
 import com.englishcenter.common.api.PageMeta;
+import com.englishcenter.enrollment.EnrollmentService;
+import com.englishcenter.student.dto.StudentResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -23,9 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/classrooms")
 public class ClassroomController {
     private final ClassroomService classroomService;
+    private final EnrollmentService enrollmentService;
 
-    public ClassroomController(ClassroomService classroomService) {
+    public ClassroomController(ClassroomService classroomService, EnrollmentService enrollmentService) {
         this.classroomService = classroomService;
+        this.enrollmentService = enrollmentService;
     }
 
     @GetMapping
@@ -54,6 +58,11 @@ public class ClassroomController {
     @GetMapping("/{id}")
     public ApiResponse<ClassroomResponse> getById(@PathVariable Long id) {
         return ApiResponse.success(classroomService.getById(id));
+    }
+
+    @GetMapping("/{id}/eligible-students")
+    public ApiResponse<List<StudentResponse>> getEligibleStudents(@PathVariable Long id) {
+        return ApiResponse.success(enrollmentService.getEligibleStudents(id));
     }
 
     @PutMapping("/{id}")

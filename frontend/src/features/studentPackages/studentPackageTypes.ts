@@ -21,3 +21,10 @@ export interface StudentPackage {
   createdAt: string
   updatedAt: string
 }
+
+export interface StudentPackageProgress extends StudentPackage {
+  usedSessions: number
+  remainingSessions: number
+  makeupAvailableSessions: number
+  totalAvailableSessions: number
+}

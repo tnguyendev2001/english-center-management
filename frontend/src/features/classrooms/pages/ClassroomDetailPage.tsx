@@ -32,7 +32,9 @@ import { GenerateSessionsModal } from '../../classSessions/components/GenerateSe
 import {
   useCancelClassSession,
   useClassSessions,
+  useCorrectionCancelClassSession,
   useGenerateClassSessions,
+  useRestoreClassSession,
 } from '../../classSessions/classSessionQueries'
 import type {
   CancelClassSessionPayload,
@@ -42,14 +44,15 @@ import type {
 import { EnrollStudentModal } from '../../enrollments/components/EnrollStudentModal'
 import { useEnrollments, useEnrollStudent } from '../../enrollments/enrollmentQueries'
 import type { EnrollStudentPayload } from '../../enrollments/enrollmentTypes'
-import { useStudents } from '../../students/studentQueries'
-import type { StudentSearchParams } from '../../students/studentTypes'
+import { useClassroomStudentPackages } from '../../studentPackages/studentPackageQueries'
 import { useTuitionPackages } from '../../tuitionPackages/tuitionPackageQueries'
 import type { TuitionPackageSearchParams } from '../../tuitionPackages/tuitionPackageTypes'
-import { useClassroomDetail } from '../classroomQueries'
+import { useClassroomDetail, useEligibleStudents } from '../classroomQueries'
 import { formatDaysOfWeek } from '../classroomTypes'
 
 const { Title, Text } = Typography
+
+type CancelSessionMode = 'normal' | 'correction'
 
 export function ClassroomDetailPage() {
   const { id } = useParams()
@@ -58,14 +61,10 @@ export function ClassroomDetailPage() {
   const [enrollModalOpen, setEnrollModalOpen] = useState(false)
   const [generateSessionsOpen, setGenerateSessionsOpen] = useState(false)
   const [cancelingSession, setCancelingSession] = useState<ClassSession>()
+  const [cancelSessionMode, setCancelSessionMode] = useState<CancelSessionMode>('normal')
+  const [activeTab, setActiveTab] = useState('info')
+  const [attendanceSessionId, setAttendanceSessionId] = useState<number>()
   const tuitionPackageParams: TuitionPackageSearchParams = useMemo(
-    () => ({
-      page: 0,
-      size: 100,
-    }),
-    [],
-  )
-  const studentParams: StudentSearchParams = useMemo(
     () => ({
       page: 0,
       size: 100,
@@ -75,14 +74,17 @@ export function ClassroomDetailPage() {
   const classroomQuery = useClassroomDetail(classroomId)
   const classPackagesQuery = useClassPackages(classroomId)
   const tuitionPackagesQuery = useTuitionPackages(tuitionPackageParams)
-  const studentsQuery = useStudents(studentParams)
+  const eligibleStudentsQuery = useEligibleStudents(classroomId, enrollModalOpen)
   const sessionsQuery = useClassSessions({ classroomId, page: 0, size: 100 })
   const enrollmentsQuery = useEnrollments({ page: 0, size: 100 })
+  const studentPackagesQuery = useClassroomStudentPackages(classroomId)
   const addClassPackage = useAddClassPackage(classroomId)
   const deactivateClassPackage = useDeactivateClassPackage(classroomId)
   const enrollStudent = useEnrollStudent()
   const generateSessions = useGenerateClassSessions()
   const cancelClassSession = useCancelClassSession()
+  const correctionCancelClassSession = useCorrectionCancelClassSession()
+  const restoreClassSession = useRestoreClassSession()
 
   if (!Number.isFinite(classroomId)) {
     return <Empty description="Không tìm thấy lớp học" />
@@ -98,9 +100,19 @@ export function ClassroomDetailPage() {
 
   const classroom = classroomQuery.data
   const classPackages = classPackagesQuery.data ?? []
+  const canEnroll = classroom.status === 'PLANNED' || classroom.status === 'ONGOING'
+  const canMarkAttendance = classroom.status === 'ONGOING'
   const activeEnrollments = (enrollmentsQuery.data?.data ?? []).filter(
     (enrollment) => enrollment.classroomId === classroomId && enrollment.status === 'ACTIVE',
   )
+  const progressByEnrollmentId = new Map(
+    (studentPackagesQuery.data ?? []).map((pkg) => [pkg.enrollmentId, pkg]),
+  )
+
+  function openAttendance(sessionId: number) {
+    setAttendanceSessionId(sessionId)
+    setActiveTab('attendance')
+  }
 
   const packageColumns: ColumnsType<ClassPackage> = [
     {
@@ -221,15 +233,54 @@ export function ClassroomDetailPage() {
       title: 'Thao tác',
       key: 'actions',
       render: (_, session) => (
-        <Space>
-          <Button
-            type="link"
-            danger
-            disabled={session.status === 'CANCELED'}
-            onClick={() => setCancelingSession(session)}
-          >
-            Hủy buổi
-          </Button>
+        <Space wrap>
+          {session.status === 'CANCELED' ? (
+            <Popconfirm
+              title="Khôi phục buổi học?"
+              description="Buổi học sẽ chuyển về trạng thái đã lên lịch và có thể điểm danh lại."
+              okText="Khôi phục"
+              cancelText="Đóng"
+              onConfirm={() => handleRestoreSession(session.id)}
+            >
+              <Button type="link" loading={restoreClassSession.isPending}>
+                Khôi phục
+              </Button>
+            </Popconfirm>
+          ) : session.status === 'COMPLETED' ? (
+            canMarkAttendance ? (
+              <>
+                <Button type="link" onClick={() => openAttendance(session.id)}>
+                  Xem/Sửa điểm danh
+                </Button>
+                <Button
+                  type="link"
+                  danger
+                  onClick={() => {
+                    setCancelSessionMode('correction')
+                    setCancelingSession(session)
+                  }}
+                >
+                  Hoàn tác điểm danh & hủy buổi
+                </Button>
+              </>
+            ) : null
+          ) : canMarkAttendance ? (
+            <>
+              <Button type="link" onClick={() => openAttendance(session.id)}>
+                Điểm danh
+              </Button>
+              <Button
+                type="link"
+                danger
+                onClick={() => {
+                  setCancelSessionMode('normal')
+                  setCancelingSession(session)
+                }}
+              >
+                Hủy buổi
+              </Button>
+            </>
+          ) : null}
         </Space>
       ),
     },
@@ -258,8 +309,12 @@ export function ClassroomDetailPage() {
     <AttendanceMarkPanel
       sessions={sessionsQuery.data?.data ?? []}
       enrollments={activeEnrollments}
+      classroomStatus={classroom.status}
       loadingSessions={sessionsQuery.isLoading}
       loadingEnrollments={enrollmentsQuery.isLoading}
+      selectedSessionId={attendanceSessionId}
+      onSelectedSessionIdChange={setAttendanceSessionId}
+      isActive={activeTab === 'attendance'}
     />
   )
 
@@ -318,9 +373,18 @@ export function ClassroomDetailPage() {
 
   function handleGenerateSessions(payload: GenerateClassSessionsPayload) {
     generateSessions.mutate(payload, {
-      onSuccess: () => {
-        message.success('Đã tạo lịch học')
+      onSuccess: (result) => {
+        message.success(`Đã tạo ${result.createdCount} buổi, bỏ qua ${result.skippedCount} buổi trùng`)
         setGenerateSessionsOpen(false)
+      },
+      onError: showErrorMessage,
+    })
+  }
+
+  function handleRestoreSession(sessionId: number) {
+    restoreClassSession.mutate(sessionId, {
+      onSuccess: () => {
+        message.success('Đã khôi phục buổi học')
       },
       onError: showErrorMessage,
     })
@@ -328,6 +392,20 @@ export function ClassroomDetailPage() {
 
   function handleCancelSession(payload: CancelClassSessionPayload) {
     if (!cancelingSession) {
+      return
+    }
+
+    if (cancelSessionMode === 'correction') {
+      correctionCancelClassSession.mutate(
+        { id: cancelingSession.id, payload },
+        {
+          onSuccess: () => {
+            message.success('Đã hoàn tác điểm danh và hủy buổi học')
+            setCancelingSession(undefined)
+          },
+          onError: showErrorMessage,
+        },
+      )
       return
     }
 
@@ -362,13 +440,19 @@ export function ClassroomDetailPage() {
       </Space>
 
       <Space>
-        <Button type="primary" onClick={() => setEnrollModalOpen(true)}>
-          Ghi danh học viên
-        </Button>
+        {canEnroll ? (
+          <Button type="primary" onClick={() => setEnrollModalOpen(true)}>
+            Ghi danh học viên
+          </Button>
+        ) : (
+          <Text type="secondary">Không thể ghi danh khi lớp đã kết thúc hoặc đã hủy.</Text>
+        )}
       </Space>
 
       <Card>
         <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
           items={[
             {
               key: 'info',
@@ -387,11 +471,40 @@ export function ClassroomDetailPage() {
                 <Table
                   rowKey="id"
                   dataSource={activeEnrollments}
-                  loading={enrollmentsQuery.isLoading}
+                  loading={enrollmentsQuery.isLoading || studentPackagesQuery.isLoading}
                   pagination={false}
                   columns={[
-                    { title: 'Học viên', dataIndex: 'studentName', key: 'studentName' },
+                    { title: 'Mã học viên', dataIndex: 'studentCode', key: 'studentCode' },
+                    { title: 'Tên học viên', dataIndex: 'studentName', key: 'studentName' },
                     { title: 'Gói học phí', dataIndex: 'packageNameSnapshot', key: 'packageNameSnapshot' },
+                    {
+                      title: 'Tổng buổi',
+                      key: 'totalSessions',
+                      render: (_, enrollment) => progressByEnrollmentId.get(enrollment.id)?.totalSessions ?? '-',
+                    },
+                    {
+                      title: 'Đã học',
+                      key: 'usedSessions',
+                      render: (_, enrollment) => progressByEnrollmentId.get(enrollment.id)?.usedSessions ?? '-',
+                    },
+                    {
+                      title: 'Còn lại',
+                      key: 'remainingSessions',
+                      render: (_, enrollment) =>
+                        progressByEnrollmentId.get(enrollment.id)?.remainingSessions ?? '-',
+                    },
+                    {
+                      title: 'Buổi bù',
+                      key: 'makeupAvailableSessions',
+                      render: (_, enrollment) =>
+                        progressByEnrollmentId.get(enrollment.id)?.makeupAvailableSessions ?? '-',
+                    },
+                    {
+                      title: 'Tổng khả dụng',
+                      key: 'totalAvailableSessions',
+                      render: (_, enrollment) =>
+                        progressByEnrollmentId.get(enrollment.id)?.totalAvailableSessions ?? '-',
+                    },
                     {
                       title: 'Ngày bắt đầu',
                       dataIndex: 'startDate',
@@ -430,9 +543,9 @@ export function ClassroomDetailPage() {
         open={enrollModalOpen}
         classroomId={classroom.id}
         classroomName={classroom.className}
-        students={studentsQuery.data?.data ?? []}
+        students={eligibleStudentsQuery.data ?? []}
         classPackages={classPackages}
-        loadingStudents={studentsQuery.isLoading}
+        loadingStudents={eligibleStudentsQuery.isLoading}
         loadingPackages={classPackagesQuery.isLoading}
         submitting={enrollStudent.isPending}
         onCancel={() => setEnrollModalOpen(false)}
@@ -449,8 +562,9 @@ export function ClassroomDetailPage() {
 
       <CancelSessionModal
         open={Boolean(cancelingSession)}
+        mode={cancelSessionMode}
         session={cancelingSession}
-        submitting={cancelClassSession.isPending}
+        submitting={cancelClassSession.isPending || correctionCancelClassSession.isPending}
         onCancel={() => setCancelingSession(undefined)}
         onSubmit={handleCancelSession}
       />

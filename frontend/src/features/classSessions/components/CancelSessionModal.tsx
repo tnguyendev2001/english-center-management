@@ -8,6 +8,7 @@ interface CancelSessionFormValues {
 
 interface CancelSessionModalProps {
   open: boolean
+  mode?: 'normal' | 'correction'
   session?: ClassSession
   submitting: boolean
   onCancel: () => void
@@ -16,12 +17,14 @@ interface CancelSessionModalProps {
 
 export function CancelSessionModal({
   open,
+  mode = 'normal',
   session,
   submitting,
   onCancel,
   onSubmit,
 }: CancelSessionModalProps) {
   const [form] = Form.useForm<CancelSessionFormValues>()
+  const isCorrection = mode === 'correction'
 
   useEffect(() => {
     if (open) {
@@ -35,17 +38,24 @@ export function CancelSessionModal({
 
   return (
     <Modal
-      title="Hủy buổi học"
+      title={isCorrection ? 'Hoàn tác điểm danh & hủy buổi' : 'Hủy buổi học'}
       open={open}
       onCancel={onCancel}
       onOk={() => form.submit()}
       confirmLoading={submitting}
-      okText="Hủy buổi"
+      okText={isCorrection ? 'Xác nhận hoàn tác & hủy' : 'Hủy buổi'}
       cancelText="Đóng"
       okButtonProps={{ danger: true }}
       destroyOnHidden
     >
-      <p>Buổi học #{session?.sessionNo} sẽ không tính là buổi đã học.</p>
+      {isCorrection ? (
+        <p>
+          Buổi học #{session?.sessionNo} đã điểm danh sẽ bị hủy. Điểm danh vẫn được giữ để đối chiếu
+          nhưng sẽ không còn tính vào buổi đã học. Buổi bù phát sinh từ buổi này cũng sẽ bị hủy.
+        </p>
+      ) : (
+        <p>Buổi học #{session?.sessionNo} sẽ không tính là buổi đã học.</p>
+      )}
       <Form form={form} layout="vertical" onFinish={handleFinish}>
         <Form.Item
           label="Lý do hủy"

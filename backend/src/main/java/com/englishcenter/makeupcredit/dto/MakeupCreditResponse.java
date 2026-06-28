@@ -2,6 +2,7 @@ package com.englishcenter.makeupcredit.dto;
 
 import com.englishcenter.makeupcredit.MakeupCreditReason;
 import com.englishcenter.makeupcredit.MakeupCreditStatus;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public record MakeupCreditResponse(
@@ -11,6 +12,7 @@ public record MakeupCreditResponse(
         Long classroomId,
         String classroomName,
         Long sourceSessionId,
+        LocalDate sourceSessionDate,
         MakeupCreditReason reason,
         Integer creditSessions,
         Integer usedSessions,

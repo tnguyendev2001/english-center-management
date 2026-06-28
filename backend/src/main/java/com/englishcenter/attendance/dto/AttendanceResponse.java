@@ -10,6 +10,9 @@ public record AttendanceResponse(
         String studentName,
         AttendanceStatus status,
         String note,
-        LocalDateTime markedAt
+        LocalDateTime markedAt,
+        boolean valid,
+        String voidReason,
+        LocalDateTime voidedAt
 ) {
 }

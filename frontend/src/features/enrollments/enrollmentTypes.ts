@@ -6,6 +6,7 @@ export type EnrollmentStatus = 'ACTIVE' | 'ON_HOLD' | 'DROPPED' | 'COMPLETED'
 export interface Enrollment {
   id: number
   studentId: number
+  studentCode: string
   studentName: string
   classroomId: number
   classroomName: string

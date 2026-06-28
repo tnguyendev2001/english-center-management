@@ -14,7 +14,10 @@ public class AttendanceMapper {
                 attendance.getStudent().getFullName(),
                 attendance.getStatus(),
                 attendance.getNote(),
-                attendance.getMarkedAt()
+                attendance.getMarkedAt(),
+                Boolean.TRUE.equals(attendance.getValid()),
+                attendance.getVoidReason(),
+                attendance.getVoidedAt()
         );
     }
 }

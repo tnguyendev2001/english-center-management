@@ -8,10 +8,11 @@ export const invoiceKeys = {
   detail: (id: number) => ['invoices', 'detail', id] as const,
 }
 
-export function useInvoices(params: InvoiceSearchParams) {
+export function useInvoices(params: InvoiceSearchParams, enabled = true) {
   return useQuery({
     queryKey: invoiceKeys.list(params),
     queryFn: () => getInvoices(params),
+    enabled,
   })
 }
 

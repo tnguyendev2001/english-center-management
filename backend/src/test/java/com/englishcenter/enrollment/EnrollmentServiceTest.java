@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.englishcenter.classpackage.ClassPackageRepository;
 import com.englishcenter.classroom.Classroom;
 import com.englishcenter.classroom.ClassroomRepository;
+import com.englishcenter.classroom.ClassroomStatus;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.enrollment.dto.EnrollStudentRequest;
 import com.englishcenter.enrollment.dto.EnrollmentResponse;
@@ -20,6 +21,8 @@ import com.englishcenter.invoice.InvoiceStatus;
 import com.englishcenter.invoice.mapper.InvoiceMapper;
 import com.englishcenter.student.Student;
 import com.englishcenter.student.StudentRepository;
+import com.englishcenter.student.StudentStatus;
+import com.englishcenter.student.mapper.StudentMapper;
 import com.englishcenter.studentpackage.StudentPackage;
 import com.englishcenter.studentpackage.StudentPackageRepository;
 import com.englishcenter.studentpackage.StudentPackageStatus;
@@ -30,6 +33,7 @@ import com.englishcenter.tuitionpackage.TuitionPackageStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -64,6 +68,7 @@ class EnrollmentServiceTest {
             new StudentPackageMapper(),
             new InvoiceMapper()
     );
+    private final StudentMapper studentMapper = new StudentMapper();
 
     @Test
     void enrollStudentCreatesEnrollmentStudentPackageAndInvoice() {
@@ -90,11 +95,43 @@ class EnrollmentServiceTest {
 
         assertThatThrownBy(() -> service.enrollStudent(validRequest()))
                 .isInstanceOf(BusinessException.class)
-                .hasMessage("Student already has an active enrollment in this classroom");
+                .hasMessage("Student already has an enrollment in this classroom");
 
         verify(enrollmentRepository, never()).save(any(Enrollment.class));
         verify(studentPackageRepository, never()).save(any(StudentPackage.class));
         verify(invoiceRepository, never()).save(any(Invoice.class));
+    }
+
+    @Test
+    void enrollStudentRejectsInactiveStudent() {
+        EnrollmentService service = newService();
+        Student student = student();
+        student.setStatus(StudentStatus.INACTIVE);
+        when(studentRepository.findById(1L)).thenReturn(Optional.of(student));
+        when(classroomRepository.findById(2L)).thenReturn(Optional.of(classroom()));
+        when(tuitionPackageRepository.findById(3L)).thenReturn(Optional.of(tuitionPackage()));
+
+        assertThatThrownBy(() -> service.enrollStudent(validRequest()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Only active students can be enrolled");
+
+        verify(enrollmentRepository, never()).save(any(Enrollment.class));
+    }
+
+    @Test
+    void enrollStudentRejectsCompletedClassroom() {
+        EnrollmentService service = newService();
+        Classroom classroom = classroom();
+        classroom.setStatus(ClassroomStatus.COMPLETED);
+        when(studentRepository.findById(1L)).thenReturn(Optional.of(student()));
+        when(classroomRepository.findById(2L)).thenReturn(Optional.of(classroom));
+        when(tuitionPackageRepository.findById(3L)).thenReturn(Optional.of(tuitionPackage()));
+
+        assertThatThrownBy(() -> service.enrollStudent(validRequest()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Cannot enroll students into completed or canceled classroom");
+
+        verify(enrollmentRepository, never()).save(any(Enrollment.class));
     }
 
     @Test
@@ -156,7 +193,8 @@ class EnrollmentServiceTest {
                 classPackageRepository,
                 studentPackageRepository,
                 invoiceRepository,
-                enrollmentMapper
+                enrollmentMapper,
+                studentMapper
         );
     }
 
@@ -168,10 +206,10 @@ class EnrollmentServiceTest {
                 .thenReturn(packageLinkedToClassroom);
 
         if (packageLinkedToClassroom) {
-            when(enrollmentRepository.existsByStudentIdAndClassroomIdAndStatus(
+            when(enrollmentRepository.existsByStudentIdAndClassroomIdAndStatusIn(
                     1L,
                     2L,
-                    EnrollmentStatus.ACTIVE
+                    List.of(EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD)
             )).thenReturn(hasDuplicateEnrollment);
         }
     }
@@ -216,6 +254,7 @@ class EnrollmentServiceTest {
         student.setId(1L);
         student.setStudentCode("STU001");
         student.setFullName("Nguyen Van A");
+        student.setStatus(StudentStatus.ACTIVE);
         return student;
     }
 
@@ -224,6 +263,7 @@ class EnrollmentServiceTest {
         classroom.setId(2L);
         classroom.setClassCode("CLS001");
         classroom.setClassName("Starter A");
+        classroom.setStatus(ClassroomStatus.PLANNED);
         return classroom;
     }
 

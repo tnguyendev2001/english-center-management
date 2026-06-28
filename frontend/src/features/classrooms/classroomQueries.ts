@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createClassroom, getClassroom, getClassrooms, updateClassroom } from './classroomApi'
+import { createClassroom, getClassroom, getClassrooms, getEligibleStudents, updateClassroom } from './classroomApi'
 import type { ClassroomPayload, ClassroomSearchParams } from './classroomTypes'
 
 export const classroomKeys = {
   all: ['classrooms'] as const,
   list: (params: ClassroomSearchParams) => ['classrooms', 'list', params] as const,
   detail: (id: number) => ['classrooms', 'detail', id] as const,
+  eligibleStudents: (classroomId: number) => ['classrooms', classroomId, 'eligible-students'] as const,
 }
 
 export function useClassrooms(params: ClassroomSearchParams) {
@@ -20,6 +21,14 @@ export function useClassroomDetail(id: number) {
     queryKey: classroomKeys.detail(id),
     queryFn: () => getClassroom(id),
     enabled: Number.isFinite(id),
+  })
+}
+
+export function useEligibleStudents(classroomId: number, enabled = true) {
+  return useQuery({
+    queryKey: classroomKeys.eligibleStudents(classroomId),
+    queryFn: () => getEligibleStudents(classroomId),
+    enabled: Number.isFinite(classroomId) && enabled,
   })
 }
 

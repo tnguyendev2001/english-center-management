@@ -12,6 +12,9 @@ public record AttendanceItemRequest(
         AttendanceStatus status,
 
         @Size(max = 1000, message = "Note must not exceed 1000 characters")
-        String note
+        String note,
+
+        @Size(max = 1000, message = "Correction reason must not exceed 1000 characters")
+        String correctionReason
 ) {
 }

@@ -26,10 +26,16 @@ import lombok.Setter;
 @Entity
 @Table(
         name = "class_sessions",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_class_sessions_classroom_session_no",
-                columnNames = {"classroom_id", "session_no"}
-        )
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_class_sessions_classroom_session_no",
+                        columnNames = {"classroom_id", "session_no"}
+                ),
+                @UniqueConstraint(
+                        name = "uk_class_sessions_classroom_date_time",
+                        columnNames = {"classroom_id", "session_date", "start_time", "end_time"}
+                )
+        }
 )
 public class ClassSession {
     @Id

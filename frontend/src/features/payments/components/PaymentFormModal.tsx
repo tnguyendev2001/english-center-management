@@ -69,7 +69,7 @@ export function PaymentFormModal({
     >
       {invoice ? (
         <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
-          <Descriptions.Item label="Học viên">{invoice.studentName}</Descriptions.Item>
+          <Descriptions.Item label="Học viên">{invoice.studentId} - {invoice.studentName}</Descriptions.Item>
           <Descriptions.Item label="Lớp học">{invoice.classroomName}</Descriptions.Item>
           <Descriptions.Item label="Còn phải đóng">
             <MoneyText value={invoice.remainingAmount} />

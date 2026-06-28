@@ -3,6 +3,7 @@ package com.englishcenter.enrollment;
 import com.englishcenter.classpackage.ClassPackageRepository;
 import com.englishcenter.classroom.Classroom;
 import com.englishcenter.classroom.ClassroomRepository;
+import com.englishcenter.classroom.ClassroomStatus;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
 import com.englishcenter.enrollment.dto.EnrollStudentRequest;
@@ -13,6 +14,9 @@ import com.englishcenter.invoice.InvoiceRepository;
 import com.englishcenter.invoice.InvoiceStatus;
 import com.englishcenter.student.Student;
 import com.englishcenter.student.StudentRepository;
+import com.englishcenter.student.StudentStatus;
+import com.englishcenter.student.dto.StudentResponse;
+import com.englishcenter.student.mapper.StudentMapper;
 import com.englishcenter.studentpackage.StudentPackage;
 import com.englishcenter.studentpackage.StudentPackageRepository;
 import com.englishcenter.studentpackage.StudentPackageStatus;
@@ -21,6 +25,7 @@ import com.englishcenter.tuitionpackage.TuitionPackageRepository;
 import com.englishcenter.tuitionpackage.TuitionPackageStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -42,6 +47,7 @@ public class EnrollmentService {
     private final StudentPackageRepository studentPackageRepository;
     private final InvoiceRepository invoiceRepository;
     private final EnrollmentMapper enrollmentMapper;
+    private final StudentMapper studentMapper;
 
     public EnrollmentService(
             EnrollmentRepository enrollmentRepository,
@@ -51,7 +57,8 @@ public class EnrollmentService {
             ClassPackageRepository classPackageRepository,
             StudentPackageRepository studentPackageRepository,
             InvoiceRepository invoiceRepository,
-            EnrollmentMapper enrollmentMapper
+            EnrollmentMapper enrollmentMapper,
+            StudentMapper studentMapper
     ) {
         this.enrollmentRepository = enrollmentRepository;
         this.studentRepository = studentRepository;
@@ -61,6 +68,7 @@ public class EnrollmentService {
         this.studentPackageRepository = studentPackageRepository;
         this.invoiceRepository = invoiceRepository;
         this.enrollmentMapper = enrollmentMapper;
+        this.studentMapper = studentMapper;
     }
 
     @Transactional
@@ -70,9 +78,11 @@ public class EnrollmentService {
         TuitionPackage tuitionPackage = findTuitionPackage(request.tuitionPackageId());
         BigDecimal discountAmount = normalizeDiscountAmount(request.discountAmount());
 
+        validateStudentEligible(student);
+        validateClassroomOpenForEnrollment(classroom);
         validateTuitionPackageActive(tuitionPackage);
         validateTuitionPackageBelongsToClassroom(classroom.getId(), tuitionPackage.getId());
-        validateNoDuplicateActiveEnrollment(student.getId(), classroom.getId());
+        validateNoExistingEnrollment(student.getId(), classroom.getId());
         validateFinalAmount(tuitionPackage.getPrice(), discountAmount);
 
         BigDecimal adjustmentAmount = ZERO;
@@ -114,6 +124,16 @@ public class EnrollmentService {
 
         // TODO: Save ActivityLog for ENROLL_STUDENT when the ActivityLog module exists.
         return enrollmentMapper.toResponse(enrollment, studentPackage, invoice);
+    }
+
+    @Transactional(readOnly = true)
+    public List<StudentResponse> getEligibleStudents(Long classroomId) {
+        findClassroom(classroomId);
+
+        return studentRepository.findEligibleForEnrollment(classroomId)
+                .stream()
+                .map(studentMapper::toResponse)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -247,13 +267,26 @@ public class EnrollmentService {
         }
     }
 
-    private void validateNoDuplicateActiveEnrollment(Long studentId, Long classroomId) {
-        if (enrollmentRepository.existsByStudentIdAndClassroomIdAndStatus(
+    private void validateStudentEligible(Student student) {
+        if (student.getStatus() != StudentStatus.ACTIVE) {
+            throw new BusinessException("Only active students can be enrolled");
+        }
+    }
+
+    private void validateClassroomOpenForEnrollment(Classroom classroom) {
+        if (classroom.getStatus() != ClassroomStatus.PLANNED
+                && classroom.getStatus() != ClassroomStatus.ONGOING) {
+            throw new BusinessException("Cannot enroll students into completed or canceled classroom");
+        }
+    }
+
+    private void validateNoExistingEnrollment(Long studentId, Long classroomId) {
+        if (enrollmentRepository.existsByStudentIdAndClassroomIdAndStatusIn(
                 studentId,
                 classroomId,
-                EnrollmentStatus.ACTIVE
+                List.of(EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD)
         )) {
-            throw new BusinessException("Student already has an active enrollment in this classroom");
+            throw new BusinessException("Student already has an enrollment in this classroom");
         }
     }
 

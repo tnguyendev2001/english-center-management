@@ -7,9 +7,10 @@ export const debtKeys = {
   list: (params: InvoiceSearchParams) => ['debts', 'list', params] as const,
 }
 
-export function useDebts(params: InvoiceSearchParams) {
+export function useDebts(params: InvoiceSearchParams, enabled = true) {
   return useQuery({
     queryKey: debtKeys.list(params),
     queryFn: () => getDebts(params),
+    enabled,
   })
 }

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { classSessionKeys } from '../classSessions/classSessionQueries'
 import { makeupCreditKeys } from '../makeupCredits/makeupCreditQueries'
+import { studentPackageKeys } from '../studentPackages/studentPackageQueries'
 import { getAttendance, markAttendance } from './attendanceApi'
 
 export const attendanceKeys = {
@@ -25,6 +26,7 @@ export function useMarkAttendance() {
       queryClient.invalidateQueries({ queryKey: attendanceKeys.bySession(variables.sessionId) })
       queryClient.invalidateQueries({ queryKey: makeupCreditKeys.all })
       queryClient.invalidateQueries({ queryKey: classSessionKeys.all })
+      queryClient.invalidateQueries({ queryKey: studentPackageKeys.all })
     },
   })
 }

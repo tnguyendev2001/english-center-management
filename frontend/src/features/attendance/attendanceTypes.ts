@@ -8,12 +8,16 @@ export interface Attendance {
   status: AttendanceStatus
   note?: string | null
   markedAt: string
+  valid: boolean
+  voidReason?: string | null
+  voidedAt?: string | null
 }
 
 export interface AttendanceItemPayload {
   studentId: number
   status: AttendanceStatus
   note?: string | null
+  correctionReason?: string | null
 }
 
 export interface MarkAttendancePayload {

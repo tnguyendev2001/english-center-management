@@ -1,5 +1,6 @@
 import type { ApiResponse } from '../../api/apiResponse'
 import { httpClient } from '../../api/httpClient'
+import type { Student } from '../students/studentTypes'
 import type { Classroom, ClassroomPayload, ClassroomSearchParams } from './classroomTypes'
 
 export async function getClassrooms(params: ClassroomSearchParams) {
@@ -12,6 +13,14 @@ export async function getClassrooms(params: ClassroomSearchParams) {
 
 export async function getClassroom(id: number) {
   const response = await httpClient.get<ApiResponse<Classroom>>(`/classrooms/${id}`)
+
+  return response.data.data
+}
+
+export async function getEligibleStudents(classroomId: number) {
+  const response = await httpClient.get<ApiResponse<Student[]>>(
+    `/classrooms/${classroomId}/eligible-students`,
+  )
 
   return response.data.data
 }

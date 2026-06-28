@@ -30,6 +30,7 @@ public class EnrollmentMapper {
         return new EnrollmentResponse(
                 enrollment.getId(),
                 enrollment.getStudent().getId(),
+                enrollment.getStudent().getStudentCode(),
                 enrollment.getStudent().getFullName(),
                 enrollment.getClassroom().getId(),
                 enrollment.getClassroom().getClassName(),
