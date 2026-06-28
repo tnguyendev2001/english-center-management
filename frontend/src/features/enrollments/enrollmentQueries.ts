@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { classroomKeys } from '../classrooms/classroomQueries'
+import { dashboardKeys } from '../dashboard/dashboardQueries'
 import { invoiceKeys } from '../invoices/invoiceQueries'
+import { reportKeys } from '../reports/reportQueries'
 import { enrollStudent, getEnrollment, getEnrollments } from './enrollmentApi'
 import type { EnrollmentSearchParams } from './enrollmentTypes'
 
@@ -33,6 +35,8 @@ export function useEnrollStudent() {
     onSuccess: (enrollment) => {
       queryClient.invalidateQueries({ queryKey: enrollmentKeys.all })
       queryClient.invalidateQueries({ queryKey: invoiceKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
+      queryClient.invalidateQueries({ queryKey: reportKeys.all })
       queryClient.invalidateQueries({ queryKey: classroomKeys.detail(enrollment.classroomId) })
       queryClient.invalidateQueries({
         queryKey: classroomKeys.eligibleStudents(enrollment.classroomId),

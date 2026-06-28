@@ -681,6 +681,9 @@ export function ClassroomDetailPage() {
         open={enrollModalOpen}
         classroomId={classroom.id}
         classroomName={classroom.className}
+        classroomStartDate={classroom.startDate}
+        classroomDaysOfWeek={classroom.daysOfWeek}
+        sessions={sessionsQuery.data?.data ?? []}
         students={eligibleStudentsQuery.data ?? []}
         classPackages={classPackages}
         loadingStudents={eligibleStudentsQuery.isLoading}

@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ClassroomRepository extends JpaRepository<Classroom, Long> {
+    long countByStatus(ClassroomStatus status);
+
     boolean existsByClassCode(String classCode);
 
     boolean existsByClassCodeAndIdNot(String classCode, Long id);

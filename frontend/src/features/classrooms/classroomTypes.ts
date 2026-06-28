@@ -29,7 +29,7 @@ const CLASS_DAY_OF_WEEK_ORDER: ClassDayOfWeek[] = [
   'SUNDAY',
 ]
 
-const CLASS_DAY_OF_WEEK_LABELS: Record<ClassDayOfWeek, string> = {
+export const CLASS_DAY_OF_WEEK_LABELS: Record<ClassDayOfWeek, string> = {
   MONDAY: 'Thứ 2',
   TUESDAY: 'Thứ 3',
   WEDNESDAY: 'Thứ 4',

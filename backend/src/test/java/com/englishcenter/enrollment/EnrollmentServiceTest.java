@@ -3,14 +3,17 @@ package com.englishcenter.enrollment;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.englishcenter.classpackage.ClassPackageRepository;
+import com.englishcenter.classroom.ClassDayOfWeek;
 import com.englishcenter.classroom.Classroom;
 import com.englishcenter.classroom.ClassroomRepository;
 import com.englishcenter.classroom.ClassroomStatus;
+import com.englishcenter.classsession.ClassSessionRepository;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.enrollment.dto.EnrollStudentRequest;
 import com.englishcenter.enrollment.dto.EnrollmentResponse;
@@ -35,6 +38,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -63,6 +67,9 @@ class EnrollmentServiceTest {
 
     @Mock
     private InvoiceRepository invoiceRepository;
+
+    @Mock
+    private ClassSessionRepository classSessionRepository;
 
     private final EnrollmentMapper enrollmentMapper = new EnrollmentMapper(
             new StudentPackageMapper(),
@@ -184,6 +191,53 @@ class EnrollmentServiceTest {
         assertThat(invoice.getRemainingAmount()).isEqualByComparingTo(invoice.getFinalAmount());
     }
 
+    @Test
+    void enrollStudentRejectsInvalidLearningStartDate() {
+        EnrollmentService service = newService();
+        mockValidLookups(false, true);
+
+        EnrollStudentRequest request = new EnrollStudentRequest(
+                1L,
+                2L,
+                3L,
+                LocalDate.of(2026, 6, 30),
+                LocalDate.of(2026, 6, 29),
+                new BigDecimal("50000"),
+                "First enrollment"
+        );
+
+        assertThatThrownBy(() -> service.enrollStudent(request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage(
+                        "Learning start date must be on or after classroom start date and match a study day"
+                );
+
+        verify(enrollmentRepository, never()).save(any(Enrollment.class));
+    }
+
+    @Test
+    void enrollStudentDefaultsLearningStartDateWhenNotProvided() {
+        EnrollmentService service = newService();
+        mockValidLookups(false, true);
+        mockSaves();
+
+        EnrollStudentRequest request = new EnrollStudentRequest(
+                1L,
+                2L,
+                3L,
+                null,
+                LocalDate.of(2026, 6, 29),
+                new BigDecimal("50000"),
+                "First enrollment"
+        );
+
+        service.enrollStudent(request);
+
+        ArgumentCaptor<Enrollment> enrollmentCaptor = ArgumentCaptor.forClass(Enrollment.class);
+        verify(enrollmentRepository).save(enrollmentCaptor.capture());
+        assertThat(enrollmentCaptor.getValue().getStartDate()).isEqualTo(LocalDate.of(2026, 7, 1));
+    }
+
     private EnrollmentService newService() {
         return new EnrollmentService(
                 enrollmentRepository,
@@ -193,6 +247,7 @@ class EnrollmentServiceTest {
                 classPackageRepository,
                 studentPackageRepository,
                 invoiceRepository,
+                classSessionRepository,
                 enrollmentMapper,
                 studentMapper
         );
@@ -211,6 +266,7 @@ class EnrollmentServiceTest {
                     2L,
                     List.of(EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD)
             )).thenReturn(hasDuplicateEnrollment);
+            lenient().when(classSessionRepository.countByClassroomId(2L)).thenReturn(0);
         }
     }
 
@@ -244,6 +300,7 @@ class EnrollmentServiceTest {
                 2L,
                 3L,
                 LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 6, 29),
                 new BigDecimal("50000"),
                 "First enrollment"
         );
@@ -264,6 +321,8 @@ class EnrollmentServiceTest {
         classroom.setClassCode("CLS001");
         classroom.setClassName("Starter A");
         classroom.setStatus(ClassroomStatus.PLANNED);
+        classroom.setStartDate(LocalDate.of(2026, 6, 30));
+        classroom.setDaysOfWeek(Set.of(ClassDayOfWeek.MONDAY, ClassDayOfWeek.WEDNESDAY));
         return classroom;
     }
 

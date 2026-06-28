@@ -16,8 +16,9 @@ public record EnrollStudentRequest(
         @NotNull(message = "Tuition package id is required")
         Long tuitionPackageId,
 
-        @NotNull(message = "Start date is required")
-        LocalDate startDate,
+        LocalDate learningStartDate,
+
+        LocalDate enrollmentDate,
 
         @DecimalMin(value = "0.00", message = "Discount amount must be greater than or equal to 0")
         BigDecimal discountAmount,

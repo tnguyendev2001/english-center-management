@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { dashboardKeys } from '../dashboard/dashboardQueries'
 import { debtKeys } from '../debts/debtQueries'
 import { invoiceKeys } from '../invoices/invoiceQueries'
+import { reportKeys } from '../reports/reportQueries'
 import { revenueKeys } from '../revenue/revenueQueries'
 import { cancelPayment, createPayment, getPayments } from './paymentApi'
 import type { CancelPaymentPayload, CreatePaymentPayload, PaymentSearchParams } from './paymentTypes'
@@ -46,4 +48,6 @@ function invalidateMoneyQueries(queryClient: ReturnType<typeof useQueryClient>) 
   queryClient.invalidateQueries({ queryKey: paymentKeys.all })
   queryClient.invalidateQueries({ queryKey: debtKeys.all })
   queryClient.invalidateQueries({ queryKey: revenueKeys.all })
+  queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
+  queryClient.invalidateQueries({ queryKey: reportKeys.all })
 }

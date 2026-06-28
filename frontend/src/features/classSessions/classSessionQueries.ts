@@ -11,6 +11,7 @@ import type {
   CancelClassSessionPayload,
   ClassSessionSearchParams,
 } from './classSessionTypes'
+import { dashboardKeys } from '../dashboard/dashboardQueries'
 import { makeupCreditKeys } from '../makeupCredits/makeupCreditQueries'
 import { studentPackageKeys } from '../studentPackages/studentPackageQueries'
 
@@ -41,6 +42,7 @@ export function useGenerateClassSessions() {
     mutationFn: generateClassSessions,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: classSessionKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
     },
   })
 }
@@ -53,6 +55,7 @@ export function useCancelClassSession() {
       cancelClassSession(id, payload),
     onSuccess: (_session, variables) => {
       queryClient.invalidateQueries({ queryKey: classSessionKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
       queryClient.invalidateQueries({ queryKey: ['attendance', 'session', variables.id] })
     },
   })
@@ -66,6 +69,7 @@ export function useCorrectionCancelClassSession() {
       correctionCancelClassSession(id, payload),
     onSuccess: (_session, variables) => {
       queryClient.invalidateQueries({ queryKey: classSessionKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
       queryClient.invalidateQueries({ queryKey: ['attendance', 'session', variables.id] })
       queryClient.invalidateQueries({ queryKey: studentPackageKeys.all })
       queryClient.invalidateQueries({ queryKey: makeupCreditKeys.all })
@@ -80,6 +84,7 @@ export function useRestoreClassSession() {
     mutationFn: (id: number) => restoreClassSession(id),
     onSuccess: (_session, id) => {
       queryClient.invalidateQueries({ queryKey: classSessionKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
       queryClient.invalidateQueries({ queryKey: ['attendance', 'session', id] })
     },
   })

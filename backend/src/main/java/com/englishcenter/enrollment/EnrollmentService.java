@@ -4,6 +4,8 @@ import com.englishcenter.classpackage.ClassPackageRepository;
 import com.englishcenter.classroom.Classroom;
 import com.englishcenter.classroom.ClassroomRepository;
 import com.englishcenter.classroom.ClassroomStatus;
+import com.englishcenter.classsession.ClassSessionRepository;
+import com.englishcenter.classsession.ClassSessionStatus;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
 import com.englishcenter.enrollment.dto.EnrollStudentRequest;
@@ -47,6 +49,7 @@ public class EnrollmentService {
     private final ClassPackageRepository classPackageRepository;
     private final StudentPackageRepository studentPackageRepository;
     private final InvoiceRepository invoiceRepository;
+    private final ClassSessionRepository classSessionRepository;
     private final EnrollmentMapper enrollmentMapper;
     private final StudentMapper studentMapper;
 
@@ -58,6 +61,7 @@ public class EnrollmentService {
             ClassPackageRepository classPackageRepository,
             StudentPackageRepository studentPackageRepository,
             InvoiceRepository invoiceRepository,
+            ClassSessionRepository classSessionRepository,
             EnrollmentMapper enrollmentMapper,
             StudentMapper studentMapper
     ) {
@@ -68,6 +72,7 @@ public class EnrollmentService {
         this.classPackageRepository = classPackageRepository;
         this.studentPackageRepository = studentPackageRepository;
         this.invoiceRepository = invoiceRepository;
+        this.classSessionRepository = classSessionRepository;
         this.enrollmentMapper = enrollmentMapper;
         this.studentMapper = studentMapper;
     }
@@ -86,6 +91,11 @@ public class EnrollmentService {
         validateNoExistingEnrollment(student.getId(), classroom.getId());
         validateFinalAmount(tuitionPackage.getPrice(), discountAmount);
 
+        LocalDate learningStartDate = resolveLearningStartDate(classroom, request.learningStartDate());
+        LocalDate enrollmentDate = request.enrollmentDate() != null
+                ? request.enrollmentDate()
+                : LocalDate.now();
+
         BigDecimal adjustmentAmount = ZERO;
         BigDecimal finalAmount = tuitionPackage.getPrice().subtract(discountAmount).add(adjustmentAmount);
 
@@ -95,7 +105,8 @@ public class EnrollmentService {
                 classroom,
                 tuitionPackage,
                 discountAmount,
-                finalAmount
+                finalAmount,
+                learningStartDate
         );
         enrollment = enrollmentRepository.save(enrollment);
 
@@ -119,7 +130,7 @@ public class EnrollmentService {
                 discountAmount,
                 adjustmentAmount,
                 finalAmount,
-                request.startDate()
+                enrollmentDate
         );
         invoice = invoiceRepository.save(invoice);
 
@@ -165,12 +176,13 @@ public class EnrollmentService {
             Classroom classroom,
             TuitionPackage tuitionPackage,
             BigDecimal discountAmount,
-            BigDecimal finalAmount
+            BigDecimal finalAmount,
+            LocalDate learningStartDate
     ) {
         Enrollment enrollment = new Enrollment();
         enrollment.setStudent(student);
         enrollment.setClassroom(classroom);
-        enrollment.setStartDate(request.startDate());
+        enrollment.setStartDate(learningStartDate);
         enrollment.setStatus(EnrollmentStatus.ACTIVE);
         enrollment.setSelectedPackage(tuitionPackage);
         enrollment.setPackageNameSnapshot(tuitionPackage.getName());
@@ -301,6 +313,38 @@ public class EnrollmentService {
 
         if (discountAmount.compareTo(price) > 0) {
             throw new BusinessException("Discount amount must not exceed package price");
+        }
+    }
+
+    private LocalDate resolveLearningStartDate(Classroom classroom, LocalDate requestedLearningStartDate) {
+        if (requestedLearningStartDate == null) {
+            return EnrollmentLearningDateHelper.findFirstValidLearningDate(
+                    classroom,
+                    classroom.getStartDate()
+            );
+        }
+
+        if (!EnrollmentLearningDateHelper.isValidLearningDate(classroom, requestedLearningStartDate)) {
+            throw new BusinessException(
+                    "Learning start date must be on or after classroom start date and match a study day"
+            );
+        }
+
+        validateLearningStartDateAgainstExistingSessions(classroom.getId(), requestedLearningStartDate);
+        return requestedLearningStartDate;
+    }
+
+    private void validateLearningStartDateAgainstExistingSessions(Long classroomId, LocalDate learningStartDate) {
+        if (classSessionRepository.countByClassroomId(classroomId) == 0) {
+            return;
+        }
+
+        if (!classSessionRepository.existsByClassroomIdAndSessionDateAndStatusNot(
+                classroomId,
+                learningStartDate,
+                ClassSessionStatus.CANCELED
+        )) {
+            throw new BusinessException("Learning start date must match an existing non-canceled class session");
         }
     }
 

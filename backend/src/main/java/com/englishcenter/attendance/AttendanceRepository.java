@@ -1,5 +1,6 @@
 package com.englishcenter.attendance;
 
+import com.englishcenter.attendance.AttendanceStatus;
 import com.englishcenter.classsession.ClassSessionStatus;
 import java.time.LocalDate;
 import java.util.List;
@@ -38,5 +39,74 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,
             @Param("canceledStatus") ClassSessionStatus canceledStatus
+    );
+
+    @Query("""
+            SELECT attendance
+            FROM Attendance attendance
+            JOIN attendance.session session
+            JOIN attendance.student student
+            JOIN session.classroom classroom
+            WHERE session.status <> com.englishcenter.classsession.ClassSessionStatus.CANCELED
+              AND attendance.valid = true
+              AND (:classroomId IS NULL OR classroom.id = :classroomId)
+              AND (:sessionDate IS NULL OR session.sessionDate = :sessionDate)
+              AND (:status IS NULL OR attendance.status = :status)
+              AND (
+                  :keyword IS NULL OR :keyword = ''
+                  OR LOWER(student.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+              )
+            ORDER BY session.sessionDate DESC, student.fullName ASC
+            """)
+    Page<Attendance> searchReport(
+            @Param("classroomId") Long classroomId,
+            @Param("keyword") String keyword,
+            @Param("sessionDate") LocalDate sessionDate,
+            @Param("status") AttendanceStatus status,
+            Pageable pageable
+    );
+
+    @Query("""
+            SELECT COUNT(attendance)
+            FROM Attendance attendance
+            JOIN attendance.session session
+            JOIN attendance.student student
+            WHERE session.status <> com.englishcenter.classsession.ClassSessionStatus.CANCELED
+              AND attendance.valid = true
+              AND (:classroomId IS NULL OR session.classroom.id = :classroomId)
+              AND (:sessionDate IS NULL OR session.sessionDate = :sessionDate)
+              AND (:status IS NULL OR attendance.status = :status)
+              AND (
+                  :keyword IS NULL OR :keyword = ''
+                  OR LOWER(student.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+              )
+            """)
+    long countReportFiltered(
+            @Param("classroomId") Long classroomId,
+            @Param("keyword") String keyword,
+            @Param("sessionDate") LocalDate sessionDate,
+            @Param("status") AttendanceStatus status
+    );
+
+    @Query("""
+            SELECT COUNT(attendance)
+            FROM Attendance attendance
+            JOIN attendance.session session
+            JOIN attendance.student student
+            WHERE session.status <> com.englishcenter.classsession.ClassSessionStatus.CANCELED
+              AND attendance.valid = true
+              AND attendance.status = :attendanceStatus
+              AND (:classroomId IS NULL OR session.classroom.id = :classroomId)
+              AND (:sessionDate IS NULL OR session.sessionDate = :sessionDate)
+              AND (
+                  :keyword IS NULL OR :keyword = ''
+                  OR LOWER(student.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+              )
+            """)
+    long countReportByStatus(
+            @Param("attendanceStatus") AttendanceStatus attendanceStatus,
+            @Param("classroomId") Long classroomId,
+            @Param("keyword") String keyword,
+            @Param("sessionDate") LocalDate sessionDate
     );
 }

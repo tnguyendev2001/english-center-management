@@ -1,16 +1,27 @@
-import { DatePicker, Descriptions, Form, Input, InputNumber, Modal, Select } from 'antd'
+import { Alert, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Select } from 'antd'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import { useEffect, useMemo } from 'react'
 import { MoneyText } from '../../../components/common/MoneyText'
 import type { ClassPackage } from '../../classPackages/classPackageTypes'
+import type { ClassDayOfWeek } from '../../classrooms/classroomTypes'
+import type { ClassSession } from '../../classSessions/classSessionTypes'
 import type { Student } from '../../students/studentTypes'
+import {
+  disableInvalidLearningDates,
+  findFirstValidLearningDate,
+  formatLearningDate,
+  formatSessionOptionLabel,
+  getEnrollableSessions,
+  isClassroomStartDateMismatch,
+} from '../enrollmentLearningDateUtils'
 import type { EnrollStudentPayload } from '../enrollmentTypes'
 
 interface EnrollStudentFormValues {
   studentId: number
   tuitionPackageId: number
-  startDate: Dayjs
+  enrollmentDate: Dayjs
+  learningStartDate: Dayjs | string
   discountAmount?: number
   note?: string
 }
@@ -19,6 +30,9 @@ interface EnrollStudentModalProps {
   open: boolean
   classroomId: number
   classroomName: string
+  classroomStartDate: string
+  classroomDaysOfWeek: ClassDayOfWeek[]
+  sessions: ClassSession[]
   students: Student[]
   classPackages: ClassPackage[]
   loadingStudents: boolean
@@ -32,6 +46,9 @@ export function EnrollStudentModal({
   open,
   classroomId,
   classroomName,
+  classroomStartDate,
+  classroomDaysOfWeek,
+  sessions,
   students,
   classPackages,
   loadingStudents,
@@ -44,15 +61,36 @@ export function EnrollStudentModal({
   const selectedPackageId = Form.useWatch('tuitionPackageId', form)
   const discountAmount = Form.useWatch('discountAmount', form) ?? 0
 
+  const enrollableSessions = useMemo(
+    () => getEnrollableSessions(sessions, classroomStartDate),
+    [classroomStartDate, sessions],
+  )
+  const hasEnrollableSessions = enrollableSessions.length > 0
+  const firstValidLearningDate = useMemo(
+    () => findFirstValidLearningDate(classroomStartDate, classroomDaysOfWeek),
+    [classroomDaysOfWeek, classroomStartDate],
+  )
+  const classroomStartMismatch = useMemo(
+    () => isClassroomStartDateMismatch(classroomStartDate, classroomDaysOfWeek),
+    [classroomDaysOfWeek, classroomStartDate],
+  )
+  const disableLearningDate = useMemo(
+    () => disableInvalidLearningDates(classroomStartDate, classroomDaysOfWeek),
+    [classroomDaysOfWeek, classroomStartDate],
+  )
+
   useEffect(() => {
     if (open) {
       form.resetFields()
       form.setFieldsValue({
-        startDate: dayjs(),
+        enrollmentDate: dayjs(),
+        learningStartDate: hasEnrollableSessions
+          ? enrollableSessions[0].sessionDate
+          : firstValidLearningDate,
         discountAmount: 0,
       })
     }
-  }, [form, open])
+  }, [enrollableSessions, firstValidLearningDate, form, hasEnrollableSessions, open])
 
   const selectedPackage = useMemo(
     () => classPackages.find((classPackage) => classPackage.tuitionPackageId === selectedPackageId),
@@ -61,11 +99,17 @@ export function EnrollStudentModal({
   const finalAmount = selectedPackage ? Math.max(selectedPackage.price - discountAmount, 0) : 0
 
   function handleFinish(values: EnrollStudentFormValues) {
+    const learningStartDate =
+      typeof values.learningStartDate === 'string'
+        ? values.learningStartDate
+        : values.learningStartDate.format('YYYY-MM-DD')
+
     onSubmit({
       studentId: values.studentId,
       classroomId,
       tuitionPackageId: values.tuitionPackageId,
-      startDate: values.startDate.format('YYYY-MM-DD'),
+      enrollmentDate: values.enrollmentDate.format('YYYY-MM-DD'),
+      learningStartDate,
       discountAmount: values.discountAmount ?? 0,
       note: values.note ?? null,
     })
@@ -87,6 +131,15 @@ export function EnrollStudentModal({
         <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
           <Descriptions.Item label="Lớp học">{classroomName}</Descriptions.Item>
         </Descriptions>
+
+        {classroomStartMismatch ? (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={`Ngày bắt đầu lớp không trùng lịch học. Buổi học đầu tiên sẽ là ${formatLearningDate(firstValidLearningDate)}.`}
+          />
+        ) : null}
 
         <Form.Item
           label="Học viên"
@@ -124,12 +177,41 @@ export function EnrollStudentModal({
         </Form.Item>
 
         <Form.Item
-          label="Ngày bắt đầu"
-          name="startDate"
-          rules={[{ required: true, message: 'Vui lòng chọn ngày bắt đầu' }]}
+          label="Ngày ghi danh"
+          name="enrollmentDate"
+          rules={[{ required: true, message: 'Vui lòng chọn ngày ghi danh' }]}
         >
           <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} />
         </Form.Item>
+
+        {hasEnrollableSessions ? (
+          <Form.Item
+            label="Ngày bắt đầu học"
+            name="learningStartDate"
+            rules={[{ required: true, message: 'Vui lòng chọn buổi học đầu tiên' }]}
+            extra="Chọn buổi học đầu tiên từ lịch đã tạo"
+          >
+            <Select
+              placeholder="Chọn buổi học đầu tiên"
+              options={enrollableSessions.map((session) => ({
+                label: formatSessionOptionLabel(session),
+                value: session.sessionDate,
+              }))}
+            />
+          </Form.Item>
+        ) : (
+          <Form.Item
+            label="Ngày bắt đầu học"
+            name="learningStartDate"
+            rules={[{ required: true, message: 'Vui lòng chọn ngày bắt đầu học' }]}
+          >
+            <DatePicker
+              format="DD/MM/YYYY"
+              style={{ width: '100%' }}
+              disabledDate={disableLearningDate}
+            />
+          </Form.Item>
+        )}
 
         <Form.Item label="Giảm giá" name="discountAmount">
           <InputNumber min={0} precision={0} addonAfter="VND" style={{ width: '100%' }} />

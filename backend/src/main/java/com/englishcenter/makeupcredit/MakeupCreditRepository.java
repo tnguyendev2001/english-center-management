@@ -31,4 +31,11 @@ public interface MakeupCreditRepository extends JpaRepository<MakeupCredit, Long
             @Param("classroomId") Long classroomId,
             @Param("availableStatus") MakeupCreditStatus availableStatus
     );
+
+    @Query("""
+            SELECT COALESCE(SUM(c.creditSessions - c.usedSessions), 0)
+            FROM MakeupCredit c
+            WHERE c.status = :availableStatus
+            """)
+    int sumAllAvailableMakeupSessions(@Param("availableStatus") MakeupCreditStatus availableStatus);
 }

@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { attendanceKeys } from '../attendance/attendanceQueries'
+import { dashboardKeys } from '../dashboard/dashboardQueries'
 import { debtKeys } from '../debts/debtQueries'
 import { invoiceKeys } from '../invoices/invoiceQueries'
+import { reportKeys } from '../reports/reportQueries'
 import { studentPackageKeys } from '../studentPackages/studentPackageQueries'
 import {
   confirmClassroomRenewals,
@@ -72,6 +74,8 @@ export function useConfirmClassroomRenewals(classroomId: number) {
       queryClient.invalidateQueries({ queryKey: invoiceKeys.all })
       queryClient.invalidateQueries({ queryKey: debtKeys.all })
       queryClient.invalidateQueries({ queryKey: attendanceKeys.all })
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
+      queryClient.invalidateQueries({ queryKey: reportKeys.all })
     },
   })
 }

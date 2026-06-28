@@ -48,15 +48,15 @@ function App() {
           mode="inline"
           selectedKeys={[selectedKey]}
           items={[
-            { key: '/dashboard', label: 'Dashboard' },
+            { key: '/dashboard', label: 'Tổng quan' },
             { key: '/students', label: 'Học viên' },
             { key: '/classrooms', label: 'Lớp học' },
-            { key: '/tuition-packages', label: 'Gói học phí' },
             { key: '/invoices', label: 'Học phí' },
             { key: '/payments', label: 'Thanh toán' },
-            { key: '/debts', label: 'Công nợ' },
             { key: '/makeup-credits', label: 'Buổi bù' },
             { key: '/reports', label: 'Báo cáo' },
+            { key: '/debts', label: 'Công nợ' },
+            { key: '/tuition-packages', label: 'Gói học phí' },
           ]}
           onClick={(event) => navigate(event.key)}
         />

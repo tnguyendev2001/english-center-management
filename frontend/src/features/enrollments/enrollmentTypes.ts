@@ -30,7 +30,8 @@ export interface EnrollStudentPayload {
   studentId: number
   classroomId: number
   tuitionPackageId: number
-  startDate: string
+  learningStartDate?: string | null
+  enrollmentDate?: string | null
   discountAmount?: number | null
   note?: string | null
 }

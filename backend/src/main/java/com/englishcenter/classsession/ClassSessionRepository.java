@@ -1,5 +1,6 @@
 package com.englishcenter.classsession;
 
+import com.englishcenter.classsession.ClassSessionStatus;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -14,6 +15,16 @@ public interface ClassSessionRepository extends JpaRepository<ClassSession, Long
 
     List<ClassSession> findBySessionDateOrderByStartTimeAsc(LocalDate sessionDate);
 
+    int countBySessionDateAndStatusNot(LocalDate sessionDate, ClassSessionStatus status);
+
+    int countBySessionDateBetweenAndStatus(LocalDate fromDate, LocalDate toDate, ClassSessionStatus status);
+
+    int countByClassroomIdAndSessionDateGreaterThanEqualAndStatusNot(
+            Long classroomId,
+            LocalDate fromDate,
+            ClassSessionStatus status
+    );
+
     int countByClassroomId(Long classroomId);
 
     boolean existsByClassroomIdAndSessionDateAndStartTimeAndEndTime(
@@ -21,5 +32,11 @@ public interface ClassSessionRepository extends JpaRepository<ClassSession, Long
             LocalDate sessionDate,
             LocalTime startTime,
             LocalTime endTime
+    );
+
+    boolean existsByClassroomIdAndSessionDateAndStatusNot(
+            Long classroomId,
+            LocalDate sessionDate,
+            ClassSessionStatus status
     );
 }

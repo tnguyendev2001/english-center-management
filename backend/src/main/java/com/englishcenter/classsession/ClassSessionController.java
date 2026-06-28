@@ -47,11 +47,6 @@ public class ClassSessionController {
         return ApiResponse.success(sessions.getContent(), meta);
     }
 
-    @GetMapping("/api/dashboard/today-sessions")
-    public ApiResponse<List<ClassSessionResponse>> getTodaySessions() {
-        return ApiResponse.success(classSessionService.getTodaySessions());
-    }
-
     @PostMapping("/api/class-sessions/{id}/cancel")
     public ApiResponse<ClassSessionResponse> cancel(
             @PathVariable Long id,
