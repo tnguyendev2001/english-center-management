@@ -13,6 +13,7 @@ import type { PaymentMethod } from '../../payments/paymentTypes'
 import type { Payment } from '../../payments/paymentTypes'
 import { debtItemToInvoice, type DebtReportItem } from '../../reports/reportTypes'
 import type { DashboardTodaySession, SessionWarning } from '../dashboardTypes'
+import { classroomDetailPath } from '../../classrooms/classroomRoutes'
 import {
   useDashboardDebtAlerts,
   useDashboardRecentPayments,
@@ -67,11 +68,21 @@ export function DashboardPage() {
       render: (_, session) => (
         <Space size="small" wrap>
           {session.attendanceStatus !== 'CANCELED' && (
-            <Button type="link" onClick={() => navigate(`/classrooms/${session.classroomId}`)}>
+            <Button
+              type="link"
+              onClick={() =>
+                navigate(
+                  classroomDetailPath(session.classroomId, {
+                    tab: 'attendance',
+                    sessionId: session.sessionId,
+                  }),
+                )
+              }
+            >
               Điểm danh
             </Button>
           )}
-          <Button type="link" onClick={() => navigate(`/classrooms/${session.classroomId}`)}>
+          <Button type="link" onClick={() => navigate(classroomDetailPath(session.classroomId))}>
             Xem lớp
           </Button>
         </Space>

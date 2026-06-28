@@ -17,9 +17,9 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import { isAxiosError } from 'axios'
 import dayjs from 'dayjs'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
 import { AddClassPackageModal } from '../../classPackages/components/AddClassPackageModal'
@@ -64,6 +64,7 @@ import type {
 import { useTuitionPackages } from '../../tuitionPackages/tuitionPackageQueries'
 import type { TuitionPackageSearchParams } from '../../tuitionPackages/tuitionPackageTypes'
 import { useClassroomDetail, useEligibleStudents } from '../classroomQueries'
+import { parseClassroomDetailSearchParams } from '../classroomRoutes'
 import { formatDaysOfWeek } from '../classroomTypes'
 
 const { Title, Text } = Typography
@@ -72,16 +73,23 @@ type CancelSessionMode = 'normal' | 'correction'
 
 export function ClassroomDetailPage() {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
   const classroomId = Number(id)
   const queryClient = useQueryClient()
+  const initialSearch = useMemo(
+    () => parseClassroomDetailSearchParams(searchParams),
+    [searchParams],
+  )
   const [addPackageModalOpen, setAddPackageModalOpen] = useState(false)
   const [enrollModalOpen, setEnrollModalOpen] = useState(false)
   const [renewalModalOpen, setRenewalModalOpen] = useState(false)
   const [generateSessionsOpen, setGenerateSessionsOpen] = useState(false)
   const [cancelingSession, setCancelingSession] = useState<ClassSession>()
   const [cancelSessionMode, setCancelSessionMode] = useState<CancelSessionMode>('normal')
-  const [activeTab, setActiveTab] = useState('info')
-  const [attendanceSessionId, setAttendanceSessionId] = useState<number>()
+  const [activeTab, setActiveTab] = useState(initialSearch.tab)
+  const [attendanceSessionId, setAttendanceSessionId] = useState<number | undefined>(
+    initialSearch.tab === 'attendance' ? initialSearch.sessionId : undefined,
+  )
   const [changingPackage, setChangingPackage] = useState<EnrollmentLearningProgress>()
   const tuitionPackageParams: TuitionPackageSearchParams = useMemo(
     () => ({
@@ -106,6 +114,15 @@ export function ClassroomDetailPage() {
   const restoreClassSession = useRestoreClassSession()
   const previewChangePackage = usePreviewChangePackage(changingPackage?.latestStudentPackageId ?? undefined)
   const changePackage = useChangePackage(changingPackage?.latestStudentPackageId ?? undefined)
+
+  useEffect(() => {
+    const { tab, sessionId } = parseClassroomDetailSearchParams(searchParams)
+    setActiveTab(tab)
+
+    if (tab === 'attendance') {
+      setAttendanceSessionId(sessionId)
+    }
+  }, [searchParams])
 
   if (!Number.isFinite(classroomId)) {
     return <Empty description="Không tìm thấy lớp học" />
