@@ -23,6 +23,18 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             SELECT COALESCE(SUM(payment.amount), 0)
             FROM Payment payment
             WHERE payment.status = com.englishcenter.payment.PaymentStatus.VALID
+              AND payment.invoice.id IN (
+                  SELECT invoice.id
+                  FROM Invoice invoice
+                  WHERE invoice.studentPackage.id = :studentPackageId
+              )
+            """)
+    BigDecimal sumValidAmountByStudentPackageId(@Param("studentPackageId") Long studentPackageId);
+
+    @Query("""
+            SELECT COALESCE(SUM(payment.amount), 0)
+            FROM Payment payment
+            WHERE payment.status = com.englishcenter.payment.PaymentStatus.VALID
               AND payment.paymentDate BETWEEN :fromDate AND :toDate
             """)
     BigDecimal sumValidAmountBetween(

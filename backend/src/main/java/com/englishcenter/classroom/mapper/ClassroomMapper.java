@@ -49,6 +49,15 @@ public class ClassroomMapper {
     }
 
     public ClassroomResponse toResponse(Classroom classroom) {
+        return toResponse(classroom, 0, 0, 0);
+    }
+
+    public ClassroomResponse toResponse(
+            Classroom classroom,
+            int studentsOverusedSessionsCount,
+            int studentsOutOfSessionsCount,
+            int studentsLowSessionsCount
+    ) {
         return new ClassroomResponse(
                 classroom.getId(),
                 classroom.getClassCode(),
@@ -63,6 +72,9 @@ public class ClassroomMapper {
                 classroom.getEndTime(),
                 classroom.getStatus(),
                 classroom.getNote(),
+                studentsOverusedSessionsCount,
+                studentsOutOfSessionsCount,
+                studentsLowSessionsCount,
                 classroom.getCreatedAt(),
                 classroom.getUpdatedAt()
         );

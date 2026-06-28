@@ -63,6 +63,9 @@ export interface Classroom {
   endTime: string
   status: ClassroomStatus
   note?: string | null
+  studentsOverusedSessionsCount: number
+  studentsOutOfSessionsCount: number
+  studentsLowSessionsCount: number
   createdAt: string
   updatedAt: string
 }

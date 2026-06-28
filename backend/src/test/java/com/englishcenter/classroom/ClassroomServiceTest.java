@@ -7,11 +7,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.englishcenter.attendance.AttendanceRepository;
 import com.englishcenter.classroom.dto.ClassroomCreateRequest;
 import com.englishcenter.classroom.dto.ClassroomResponse;
 import com.englishcenter.classroom.dto.ClassroomUpdateRequest;
 import com.englishcenter.classroom.mapper.ClassroomMapper;
 import com.englishcenter.common.exception.BusinessException;
+import com.englishcenter.studentpackage.StudentPackageRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Optional;
@@ -26,11 +28,17 @@ class ClassroomServiceTest {
     @Mock
     private ClassroomRepository classroomRepository;
 
+    @Mock
+    private StudentPackageRepository studentPackageRepository;
+
+    @Mock
+    private AttendanceRepository attendanceRepository;
+
     private final ClassroomMapper classroomMapper = new ClassroomMapper();
 
     @Test
     void createRejectsDuplicateClassCode() {
-        ClassroomService classroomService = new ClassroomService(classroomRepository, classroomMapper);
+        ClassroomService classroomService = newService();
         ClassroomCreateRequest request = validCreateRequest();
 
         when(classroomRepository.existsByClassCode("CLS001")).thenReturn(true);
@@ -44,7 +52,7 @@ class ClassroomServiceTest {
 
     @Test
     void createSavesClassroom() {
-        ClassroomService classroomService = new ClassroomService(classroomRepository, classroomMapper);
+        ClassroomService classroomService = newService();
         ClassroomCreateRequest request = validCreateRequest();
 
         when(classroomRepository.existsByClassCode("CLS001")).thenReturn(false);
@@ -69,7 +77,7 @@ class ClassroomServiceTest {
 
     @Test
     void updateRejectsDuplicateClassCode() {
-        ClassroomService classroomService = new ClassroomService(classroomRepository, classroomMapper);
+        ClassroomService classroomService = newService();
         Classroom classroom = existingClassroom();
         ClassroomUpdateRequest request = validUpdateRequest();
 
@@ -86,7 +94,7 @@ class ClassroomServiceTest {
 
     @Test
     void updateSavesClassroom() {
-        ClassroomService classroomService = new ClassroomService(classroomRepository, classroomMapper);
+        ClassroomService classroomService = newService();
         Classroom classroom = existingClassroom();
         ClassroomUpdateRequest request = validUpdateRequest();
 
@@ -109,7 +117,7 @@ class ClassroomServiceTest {
 
     @Test
     void createRejectsEndTimeBeforeStartTime() {
-        ClassroomService classroomService = new ClassroomService(classroomRepository, classroomMapper);
+        ClassroomService classroomService = newService();
         ClassroomCreateRequest request = new ClassroomCreateRequest(
                 "CLS001",
                 "Starter A",
@@ -149,6 +157,15 @@ class ClassroomServiceTest {
                 LocalTime.of(19, 30),
                 ClassroomStatus.PLANNED,
                 "Evening class"
+        );
+    }
+
+    private ClassroomService newService() {
+        return new ClassroomService(
+                classroomRepository,
+                classroomMapper,
+                studentPackageRepository,
+                attendanceRepository
         );
     }
 

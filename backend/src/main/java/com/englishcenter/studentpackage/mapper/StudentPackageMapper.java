@@ -1,5 +1,6 @@
 package com.englishcenter.studentpackage.mapper;
 
+import com.englishcenter.studentpackage.LearningProgressWarningType;
 import com.englishcenter.studentpackage.StudentPackage;
 import com.englishcenter.studentpackage.dto.StudentPackageProgressResponse;
 import com.englishcenter.studentpackage.dto.StudentPackageResponse;
@@ -37,8 +38,11 @@ public class StudentPackageMapper {
             int makeupAvailableSessions
     ) {
         int totalSessions = studentPackage.getTotalSessions();
-        int remainingSessions = totalSessions - usedSessions;
+        int remainingSessions = Math.max(totalSessions - usedSessions, 0);
+        int overusedSessions = Math.max(usedSessions - totalSessions, 0);
         int totalAvailableSessions = remainingSessions + makeupAvailableSessions;
+        LearningProgressWarningType warningType = resolveWarningType(remainingSessions, overusedSessions);
+        String warningMessage = buildWarningMessage(remainingSessions, overusedSessions);
 
         return new StudentPackageProgressResponse(
                 studentPackage.getId(),
@@ -62,8 +66,43 @@ public class StudentPackageMapper {
                 studentPackage.getUpdatedAt(),
                 usedSessions,
                 remainingSessions,
+                overusedSessions,
                 makeupAvailableSessions,
-                totalAvailableSessions
+                totalAvailableSessions,
+                warningType,
+                warningMessage
         );
+    }
+
+    private LearningProgressWarningType resolveWarningType(int remainingSessions, int overusedSessions) {
+        if (overusedSessions > 0) {
+            return LearningProgressWarningType.OVERUSED;
+        }
+
+        if (remainingSessions == 0) {
+            return LearningProgressWarningType.DEPLETED;
+        }
+
+        if (remainingSessions <= 2) {
+            return LearningProgressWarningType.LOW;
+        }
+
+        return LearningProgressWarningType.NONE;
+    }
+
+    private String buildWarningMessage(int remainingSessions, int overusedSessions) {
+        if (overusedSessions > 0) {
+            return "Vượt " + overusedSessions + " buổi - cần gia hạn";
+        }
+
+        if (remainingSessions == 0) {
+            return "Hết buổi - cần gia hạn";
+        }
+
+        if (remainingSessions <= 2) {
+            return "Sắp hết buổi";
+        }
+
+        return null;
     }
 }

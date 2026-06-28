@@ -21,6 +21,9 @@ public record ClassroomResponse(
         LocalTime endTime,
         ClassroomStatus status,
         String note,
+        int studentsOverusedSessionsCount,
+        int studentsOutOfSessionsCount,
+        int studentsLowSessionsCount,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

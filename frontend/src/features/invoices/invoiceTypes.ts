@@ -1,4 +1,4 @@
-export type InvoiceStatus = 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' | 'CANCELED'
+export type InvoiceStatus = 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' | 'CANCELED' | 'REPLACED'
 
 export interface Invoice {
   id: number

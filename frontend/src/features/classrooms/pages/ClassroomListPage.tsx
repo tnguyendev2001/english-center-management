@@ -1,4 +1,4 @@
-import { Button, Card, Input, message, Space, Table, Typography } from 'antd'
+import { Button, Card, Input, message, Space, Table, Tag, Typography } from 'antd'
 import type { TablePaginationConfig } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { isAxiosError } from 'axios'
@@ -80,6 +80,11 @@ export function ClassroomListPage() {
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => <StatusTag status={status} />,
+    },
+    {
+      title: 'Cảnh báo buổi',
+      key: 'learningProgressWarning',
+      render: (_, classroom) => <ClassroomLearningProgressWarning classroom={classroom} />,
     },
     {
       title: 'Thao tác',
@@ -202,4 +207,20 @@ export function ClassroomListPage() {
 
 function formatTime(value: string) {
   return value.slice(0, 5)
+}
+
+function ClassroomLearningProgressWarning({ classroom }: { classroom: Classroom }) {
+  if (classroom.studentsOverusedSessionsCount > 0) {
+    return <Tag color="error">Có học viên vượt buổi</Tag>
+  }
+
+  if (classroom.studentsOutOfSessionsCount > 0) {
+    return <Tag color="error">Có học viên hết buổi</Tag>
+  }
+
+  if (classroom.studentsLowSessionsCount > 0) {
+    return <Tag color="warning">Có học viên sắp hết buổi</Tag>
+  }
+
+  return <>-</>
 }

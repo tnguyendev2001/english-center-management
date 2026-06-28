@@ -1,9 +1,16 @@
 import { Card, Descriptions, Empty, Space, Spin, Table, Typography } from 'antd'
 import dayjs from 'dayjs'
 import { useParams } from 'react-router-dom'
+import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
 import { useMakeupCredits } from '../../makeupCredits/makeupCreditQueries'
+import {
+  formatRemainingSessions,
+  formatTotalAvailableSessions,
+  LearningProgressWarning,
+} from '../../studentPackages/components/LearningProgressWarning'
 import { useStudentPackages } from '../../studentPackages/studentPackageQueries'
+import type { StudentPackageProgress } from '../../studentPackages/studentPackageTypes'
 import { useStudentDetail } from '../studentQueries'
 
 const { Title, Text } = Typography
@@ -63,14 +70,31 @@ export function StudentDetailPage() {
           columns={[
             { title: 'Lớp học', dataIndex: 'classroomName', key: 'classroomName' },
             { title: 'Gói học phí', dataIndex: 'packageName', key: 'packageName' },
+            {
+              title: 'Học phí',
+              dataIndex: 'price',
+              key: 'price',
+              render: (value: number) => <MoneyText value={value} />,
+            },
             { title: 'Tổng buổi', dataIndex: 'totalSessions', key: 'totalSessions' },
             { title: 'Đã học', dataIndex: 'usedSessions', key: 'usedSessions' },
-            { title: 'Còn lại', dataIndex: 'remainingSessions', key: 'remainingSessions' },
+            {
+              title: 'Còn lại',
+              key: 'remainingSessions',
+              render: (_: unknown, record: StudentPackageProgress) => formatRemainingSessions(record),
+            },
+            {
+              title: 'Cảnh báo',
+              key: 'warningMessage',
+              render: (_: unknown, record: StudentPackageProgress) => (
+                <LearningProgressWarning progress={record} />
+              ),
+            },
             { title: 'Buổi bù', dataIndex: 'makeupAvailableSessions', key: 'makeupAvailableSessions' },
             {
               title: 'Tổng khả dụng',
-              dataIndex: 'totalAvailableSessions',
               key: 'totalAvailableSessions',
+              render: (_: unknown, record: StudentPackageProgress) => formatTotalAvailableSessions(record),
             },
             {
               title: 'Trạng thái',

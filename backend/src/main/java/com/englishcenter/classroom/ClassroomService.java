@@ -4,10 +4,16 @@ import com.englishcenter.classroom.dto.ClassroomCreateRequest;
 import com.englishcenter.classroom.dto.ClassroomResponse;
 import com.englishcenter.classroom.dto.ClassroomUpdateRequest;
 import com.englishcenter.classroom.mapper.ClassroomMapper;
+import com.englishcenter.attendance.AttendanceRepository;
+import com.englishcenter.classsession.ClassSessionStatus;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
+import com.englishcenter.studentpackage.StudentPackage;
+import com.englishcenter.studentpackage.StudentPackageRepository;
+import com.englishcenter.studentpackage.StudentPackageStatus;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -21,10 +27,19 @@ public class ClassroomService {
 
     private final ClassroomRepository classroomRepository;
     private final ClassroomMapper classroomMapper;
+    private final StudentPackageRepository studentPackageRepository;
+    private final AttendanceRepository attendanceRepository;
 
-    public ClassroomService(ClassroomRepository classroomRepository, ClassroomMapper classroomMapper) {
+    public ClassroomService(
+            ClassroomRepository classroomRepository,
+            ClassroomMapper classroomMapper,
+            StudentPackageRepository studentPackageRepository,
+            AttendanceRepository attendanceRepository
+    ) {
         this.classroomRepository = classroomRepository;
         this.classroomMapper = classroomMapper;
+        this.studentPackageRepository = studentPackageRepository;
+        this.attendanceRepository = attendanceRepository;
     }
 
     @Transactional(readOnly = true)
@@ -39,12 +54,12 @@ public class ClassroomService {
                 ? classroomRepository.findAll(pageable)
                 : classroomRepository.search(keyword.trim(), pageable);
 
-        return classrooms.map(classroomMapper::toResponse);
+        return classrooms.map(this::toResponseWithLearningProgressWarnings);
     }
 
     @Transactional(readOnly = true)
     public ClassroomResponse getById(Long id) {
-        return classroomMapper.toResponse(findClassroom(id));
+        return toResponseWithLearningProgressWarnings(findClassroom(id));
     }
 
     @Transactional
@@ -78,6 +93,39 @@ public class ClassroomService {
     private Classroom findClassroom(Long id) {
         return classroomRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Classroom not found"));
+    }
+
+    private ClassroomResponse toResponseWithLearningProgressWarnings(Classroom classroom) {
+        int overusedCount = 0;
+        int outOfSessionsCount = 0;
+        int lowSessionsCount = 0;
+
+        List<StudentPackage> activePackages = studentPackageRepository.findByClassroomIdAndStatusOrderByStartDateDesc(
+                classroom.getId(),
+                StudentPackageStatus.ACTIVE
+        );
+
+        for (StudentPackage studentPackage : activePackages) {
+            int usedSessions = Math.toIntExact(attendanceRepository.countUsedSessions(
+                    studentPackage.getStudent().getId(),
+                    studentPackage.getClassroom().getId(),
+                    studentPackage.getStartDate(),
+                    studentPackage.getEndDate(),
+                    ClassSessionStatus.CANCELED
+            ));
+            int remainingSessions = Math.max(studentPackage.getTotalSessions() - usedSessions, 0);
+            int overusedSessions = Math.max(usedSessions - studentPackage.getTotalSessions(), 0);
+
+            if (overusedSessions > 0) {
+                overusedCount++;
+            } else if (remainingSessions == 0) {
+                outOfSessionsCount++;
+            } else if (remainingSessions <= 2) {
+                lowSessionsCount++;
+            }
+        }
+
+        return classroomMapper.toResponse(classroom, overusedCount, outOfSessionsCount, lowSessionsCount);
     }
 
     private void validateSchedule(

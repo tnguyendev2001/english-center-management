@@ -16,6 +16,7 @@ const statusConfigs: Record<string, StatusConfig> = {
   UNPAID: { label: 'Chưa đóng', color: 'red' },
   PARTIALLY_PAID: { label: 'Đóng một phần', color: 'gold' },
   PAID: { label: 'Đã đóng', color: 'green' },
+  REPLACED: { label: 'Đã thay thế do đổi gói', color: 'default' },
   VALID: { label: 'Hợp lệ', color: 'green' },
   SCHEDULED: { label: 'Đã lên lịch', color: 'blue' },
   PRESENT: { label: 'Có mặt', color: 'green' },

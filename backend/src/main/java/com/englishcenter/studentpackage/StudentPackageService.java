@@ -44,7 +44,10 @@ public class StudentPackageService {
             throw new NotFoundException("Student not found");
         }
 
-        return studentPackageRepository.findByStudentIdOrderByStartDateDesc(studentId)
+        return studentPackageRepository.findByStudentIdAndStatusOrderByStartDateDesc(
+                        studentId,
+                        StudentPackageStatus.ACTIVE
+                )
                 .stream()
                 .map(this::toProgressResponse)
                 .toList();
@@ -56,7 +59,10 @@ public class StudentPackageService {
             throw new NotFoundException("Classroom not found");
         }
 
-        return studentPackageRepository.findByClassroomIdOrderByStartDateDesc(classroomId)
+        return studentPackageRepository.findByClassroomIdAndStatusOrderByStartDateDesc(
+                        classroomId,
+                        StudentPackageStatus.ACTIVE
+                )
                 .stream()
                 .map(this::toProgressResponse)
                 .toList();
@@ -66,6 +72,8 @@ public class StudentPackageService {
         Long studentId = studentPackage.getStudent().getId();
         Long classroomId = studentPackage.getClassroom().getId();
 
+        // Attendance has no studentPackageId; scope used sessions to this active package cycle
+        // via startDate/endDate (NEW_CYCLE uses change date; REPLACEMENT keeps original start date).
         int usedSessions = Math.toIntExact(attendanceRepository.countUsedSessions(
                 studentId,
                 classroomId,

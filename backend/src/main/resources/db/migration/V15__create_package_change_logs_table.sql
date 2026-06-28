@@ -1,0 +1,32 @@
+CREATE TABLE package_change_logs (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    student_id BIGINT NOT NULL,
+    classroom_id BIGINT NOT NULL,
+    old_student_package_id BIGINT NOT NULL,
+    new_student_package_id BIGINT NOT NULL,
+    old_package_name VARCHAR(255) NOT NULL,
+    new_package_name VARCHAR(255) NOT NULL,
+    old_total_sessions INT NOT NULL,
+    new_total_sessions INT NOT NULL,
+    old_final_amount DECIMAL(15,2) NOT NULL,
+    new_package_price DECIMAL(15,2) NOT NULL,
+    used_sessions INT NOT NULL,
+    old_unit_price DECIMAL(15,2) NOT NULL,
+    used_amount DECIMAL(15,2) NOT NULL,
+    paid_amount DECIMAL(15,2) NOT NULL,
+    adjustment_amount DECIMAL(15,2) NOT NULL,
+    adjustment_type VARCHAR(20) NOT NULL,
+    new_invoice_final_amount DECIMAL(15,2) NOT NULL,
+    reason VARCHAR(1000) NOT NULL,
+    changed_by VARCHAR(100) NULL,
+    changed_at DATETIME NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT fk_package_change_logs_student FOREIGN KEY (student_id) REFERENCES students (id),
+    CONSTRAINT fk_package_change_logs_classroom FOREIGN KEY (classroom_id) REFERENCES classrooms (id),
+    CONSTRAINT fk_package_change_logs_old_package FOREIGN KEY (old_student_package_id) REFERENCES student_packages (id),
+    CONSTRAINT fk_package_change_logs_new_package FOREIGN KEY (new_student_package_id) REFERENCES student_packages (id)
+);
+
+CREATE INDEX idx_package_change_logs_student_id ON package_change_logs (student_id);
+CREATE INDEX idx_package_change_logs_classroom_id ON package_change_logs (classroom_id);
+CREATE INDEX idx_package_change_logs_changed_at ON package_change_logs (changed_at);

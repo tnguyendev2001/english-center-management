@@ -35,13 +35,14 @@ import type { Invoice, InvoiceSearchParams, InvoiceStatus } from '../invoiceType
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
 
-type InvoiceTab = 'needs-collection' | 'paid' | 'canceled' | 'all'
+type InvoiceTab = 'needs-collection' | 'paid' | 'replaced' | 'canceled' | 'all'
 
 const invoiceStatusLabels = {
   UNPAID: 'Chưa đóng',
   PARTIALLY_PAID: 'Đóng một phần',
   PAID: 'Đã đóng',
   CANCELED: 'Đã hủy',
+  REPLACED: 'Đã thay thế do đổi gói',
 }
 
 const FETCH_SIZE = 100
@@ -59,7 +60,14 @@ export function InvoiceListPage() {
 
   const invoiceParams: InvoiceSearchParams = useMemo(
     () => ({
-      status: tab === 'paid' ? 'PAID' : tab === 'canceled' ? 'CANCELED' : undefined,
+      status:
+        tab === 'paid'
+          ? 'PAID'
+          : tab === 'replaced'
+            ? 'REPLACED'
+            : tab === 'canceled'
+              ? 'CANCELED'
+              : undefined,
       classroomId,
       page: 0,
       size: FETCH_SIZE,
@@ -269,6 +277,7 @@ export function InvoiceListPage() {
           { label: 'Đóng một phần', value: 'PARTIALLY_PAID' as const },
           { label: 'Đã đóng', value: 'PAID' as const },
           { label: 'Đã hủy', value: 'CANCELED' as const },
+          { label: 'Đã thay thế do đổi gói', value: 'REPLACED' as const },
         ]
 
   return (
@@ -319,6 +328,7 @@ export function InvoiceListPage() {
             items={[
               { key: 'needs-collection', label: 'Cần thu' },
               { key: 'paid', label: 'Đã đóng' },
+              { key: 'replaced', label: 'Đã thay thế' },
               { key: 'canceled', label: 'Đã hủy' },
               { key: 'all', label: 'Tất cả' },
             ]}

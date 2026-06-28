@@ -10,6 +10,7 @@ import {
   Spin,
   Table,
   Tabs,
+  Tooltip,
   Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -44,7 +45,22 @@ import type {
 import { EnrollStudentModal } from '../../enrollments/components/EnrollStudentModal'
 import { useEnrollments, useEnrollStudent } from '../../enrollments/enrollmentQueries'
 import type { EnrollStudentPayload } from '../../enrollments/enrollmentTypes'
-import { useClassroomStudentPackages } from '../../studentPackages/studentPackageQueries'
+import { ChangePackageModal } from '../../studentPackages/components/ChangePackageModal'
+import {
+  formatRemainingSessions,
+  formatTotalAvailableSessions,
+  LearningProgressWarning,
+} from '../../studentPackages/components/LearningProgressWarning'
+import {
+  useChangePackage,
+  useClassroomStudentPackages,
+  usePreviewChangePackage,
+} from '../../studentPackages/studentPackageQueries'
+import type {
+  ChangePackagePayload,
+  ChangePackagePreviewPayload,
+  StudentPackageProgress,
+} from '../../studentPackages/studentPackageTypes'
 import { useTuitionPackages } from '../../tuitionPackages/tuitionPackageQueries'
 import type { TuitionPackageSearchParams } from '../../tuitionPackages/tuitionPackageTypes'
 import { useClassroomDetail, useEligibleStudents } from '../classroomQueries'
@@ -64,6 +80,7 @@ export function ClassroomDetailPage() {
   const [cancelSessionMode, setCancelSessionMode] = useState<CancelSessionMode>('normal')
   const [activeTab, setActiveTab] = useState('info')
   const [attendanceSessionId, setAttendanceSessionId] = useState<number>()
+  const [changingPackage, setChangingPackage] = useState<StudentPackageProgress>()
   const tuitionPackageParams: TuitionPackageSearchParams = useMemo(
     () => ({
       page: 0,
@@ -85,6 +102,8 @@ export function ClassroomDetailPage() {
   const cancelClassSession = useCancelClassSession()
   const correctionCancelClassSession = useCorrectionCancelClassSession()
   const restoreClassSession = useRestoreClassSession()
+  const previewChangePackage = usePreviewChangePackage(changingPackage?.id)
+  const changePackage = useChangePackage(changingPackage?.id)
 
   if (!Number.isFinite(classroomId)) {
     return <Empty description="Không tìm thấy lớp học" />
@@ -106,8 +125,37 @@ export function ClassroomDetailPage() {
     (enrollment) => enrollment.classroomId === classroomId && enrollment.status === 'ACTIVE',
   )
   const progressByEnrollmentId = new Map(
-    (studentPackagesQuery.data ?? []).map((pkg) => [pkg.enrollmentId, pkg]),
+    (studentPackagesQuery.data ?? [])
+      .filter((pkg) => pkg.status === 'ACTIVE')
+      .map((pkg) => [pkg.enrollmentId, pkg]),
   )
+
+  function getChangePackageDisabledReason(progress?: StudentPackageProgress) {
+    if (!progress) {
+      return 'Chưa có gói học đang hoạt động'
+    }
+
+    if (progress.status !== 'ACTIVE') {
+      return 'Gói học hiện tại không còn hoạt động'
+    }
+
+    if (classroom.status === 'COMPLETED' || classroom.status === 'CANCELED') {
+      return 'Không thể đổi gói khi lớp đã kết thúc hoặc đã hủy'
+    }
+
+    const hasAlternativePackage = classPackages.some(
+      (classPackage) =>
+        classPackage.active &&
+        classPackage.tuitionPackageStatus === 'ACTIVE' &&
+        classPackage.tuitionPackageId !== progress.tuitionPackageId,
+    )
+
+    if (!hasAlternativePackage) {
+      return 'Lớp chưa có gói học phí khác đang áp dụng'
+    }
+
+    return undefined
+  }
 
   function openAttendance(sessionId: number) {
     setAttendanceSessionId(sessionId)
@@ -309,6 +357,7 @@ export function ClassroomDetailPage() {
     <AttendanceMarkPanel
       sessions={sessionsQuery.data?.data ?? []}
       enrollments={activeEnrollments}
+      studentPackages={studentPackagesQuery.data ?? []}
       classroomStatus={classroom.status}
       loadingSessions={sessionsQuery.isLoading}
       loadingEnrollments={enrollmentsQuery.isLoading}
@@ -369,6 +418,45 @@ export function ClassroomDetailPage() {
       },
       onError: showErrorMessage,
     })
+  }
+
+  function handlePreviewChangePackage(payload: ChangePackagePreviewPayload) {
+    previewChangePackage.mutate(payload, {
+      onError: showErrorMessage,
+    })
+  }
+
+  function handleChangePackage(payload: ChangePackagePayload) {
+    changePackage.mutate(payload, {
+      onSuccess: (result) => {
+        message.success('Đã đổi gói học phí')
+        Modal.success({
+          title: 'Đổi gói thành công',
+          content: (
+            <Descriptions column={1} size="small">
+              <Descriptions.Item label="Gói mới">
+                {result.calculation.newPackageName}
+              </Descriptions.Item>
+              <Descriptions.Item label="Số tiền cần đóng">
+                <MoneyText value={result.calculation.amountToPay} />
+              </Descriptions.Item>
+              <Descriptions.Item label="Hóa đơn mới">
+                {result.newInvoice ? result.newInvoice.invoiceCode : 'Không tạo vì không còn phải thu'}
+              </Descriptions.Item>
+            </Descriptions>
+          ),
+          okText: 'Đóng',
+        })
+        closeChangePackageModal()
+      },
+      onError: showErrorMessage,
+    })
+  }
+
+  function closeChangePackageModal() {
+    setChangingPackage(undefined)
+    previewChangePackage.reset()
+    changePackage.reset()
   }
 
   function handleGenerateSessions(payload: GenerateClassSessionsPayload) {
@@ -476,7 +564,21 @@ export function ClassroomDetailPage() {
                   columns={[
                     { title: 'Mã học viên', dataIndex: 'studentCode', key: 'studentCode' },
                     { title: 'Tên học viên', dataIndex: 'studentName', key: 'studentName' },
-                    { title: 'Gói học phí', dataIndex: 'packageNameSnapshot', key: 'packageNameSnapshot' },
+                    {
+                      title: 'Gói học phí',
+                      key: 'packageName',
+                      render: (_, enrollment) =>
+                        progressByEnrollmentId.get(enrollment.id)?.packageName ?? enrollment.packageNameSnapshot,
+                    },
+                    {
+                      title: 'Học phí',
+                      key: 'packagePrice',
+                      render: (_, enrollment) => {
+                        const progress = progressByEnrollmentId.get(enrollment.id)
+
+                        return progress ? <MoneyText value={progress.price} /> : '-'
+                      },
+                    },
                     {
                       title: 'Tổng buổi',
                       key: 'totalSessions',
@@ -490,8 +592,27 @@ export function ClassroomDetailPage() {
                     {
                       title: 'Còn lại',
                       key: 'remainingSessions',
-                      render: (_, enrollment) =>
-                        progressByEnrollmentId.get(enrollment.id)?.remainingSessions ?? '-',
+                      render: (_, enrollment) => {
+                        const progress = progressByEnrollmentId.get(enrollment.id)
+
+                        return formatRemainingSessions(progress)
+                      },
+                    },
+                    {
+                      title: 'Vượt buổi',
+                      key: 'overusedSessions',
+                      render: (_, enrollment) => {
+                        const progress = progressByEnrollmentId.get(enrollment.id)
+
+                        return progress?.overusedSessions ? progress.overusedSessions : '-'
+                      },
+                    },
+                    {
+                      title: 'Cảnh báo',
+                      key: 'warningMessage',
+                      render: (_, enrollment) => (
+                        <LearningProgressWarning progress={progressByEnrollmentId.get(enrollment.id)} />
+                      ),
                     },
                     {
                       title: 'Buổi bù',
@@ -503,13 +624,39 @@ export function ClassroomDetailPage() {
                       title: 'Tổng khả dụng',
                       key: 'totalAvailableSessions',
                       render: (_, enrollment) =>
-                        progressByEnrollmentId.get(enrollment.id)?.totalAvailableSessions ?? '-',
+                        formatTotalAvailableSessions(progressByEnrollmentId.get(enrollment.id)),
                     },
                     {
                       title: 'Ngày bắt đầu',
                       dataIndex: 'startDate',
                       key: 'startDate',
                       render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
+                    },
+                    {
+                      title: 'Thao tác',
+                      key: 'actions',
+                      render: (_, enrollment) => {
+                        const progress = progressByEnrollmentId.get(enrollment.id)
+                        const disabledReason = getChangePackageDisabledReason(progress)
+
+                        return (
+                          <Tooltip title={disabledReason}>
+                            <span>
+                              <Button
+                                type="link"
+                                disabled={Boolean(disabledReason)}
+                                onClick={() => {
+                                  if (progress) {
+                                    setChangingPackage(progress)
+                                  }
+                                }}
+                              >
+                                Đổi gói
+                              </Button>
+                            </span>
+                          </Tooltip>
+                        )
+                      },
                     },
                   ]}
                 />
@@ -567,6 +714,24 @@ export function ClassroomDetailPage() {
         submitting={cancelClassSession.isPending || correctionCancelClassSession.isPending}
         onCancel={() => setCancelingSession(undefined)}
         onSubmit={handleCancelSession}
+      />
+
+      <ChangePackageModal
+        open={Boolean(changingPackage)}
+        currentPackage={changingPackage}
+        classPackages={classPackages}
+        preview={previewChangePackage.data}
+        loadingPackages={classPackagesQuery.isLoading}
+        previewing={previewChangePackage.isPending}
+        previewError={
+          previewChangePackage.isError
+            ? 'Không thể tính bù trừ. Vui lòng kiểm tra lại gói mới và thử lại.'
+            : undefined
+        }
+        submitting={changePackage.isPending}
+        onPreview={handlePreviewChangePackage}
+        onSubmit={handleChangePackage}
+        onCancel={closeChangePackageModal}
       />
 
     </Space>

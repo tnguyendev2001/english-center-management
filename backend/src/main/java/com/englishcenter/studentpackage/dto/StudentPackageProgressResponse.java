@@ -1,5 +1,6 @@
 package com.englishcenter.studentpackage.dto;
 
+import com.englishcenter.studentpackage.LearningProgressWarningType;
 import com.englishcenter.studentpackage.StudentPackageStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -27,7 +28,10 @@ public record StudentPackageProgressResponse(
         LocalDateTime updatedAt,
         int usedSessions,
         int remainingSessions,
+        int overusedSessions,
         int makeupAvailableSessions,
-        int totalAvailableSessions
+        int totalAvailableSessions,
+        LearningProgressWarningType warningType,
+        String warningMessage
 ) {
 }

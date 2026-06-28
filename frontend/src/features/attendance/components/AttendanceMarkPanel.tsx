@@ -6,6 +6,8 @@ import { StatusTag } from '../../../components/common/StatusTag'
 import type { ClassSession } from '../../classSessions/classSessionTypes'
 import type { ClassroomStatus } from '../../classrooms/classroomTypes'
 import type { Enrollment } from '../../enrollments/enrollmentTypes'
+import { LearningProgressStatusTag } from '../../studentPackages/components/LearningProgressWarning'
+import type { StudentPackageProgress } from '../../studentPackages/studentPackageTypes'
 import { pickDefaultSessionId } from '../attendanceSessionSelection'
 import { useAttendance, useMarkAttendance } from '../attendanceQueries'
 import type { Attendance, AttendanceStatus } from '../attendanceTypes'
@@ -13,6 +15,7 @@ import type { Attendance, AttendanceStatus } from '../attendanceTypes'
 interface AttendanceMarkPanelProps {
   sessions: ClassSession[]
   enrollments: Enrollment[]
+  studentPackages: StudentPackageProgress[]
   classroomStatus: ClassroomStatus
   loadingSessions: boolean
   loadingEnrollments: boolean
@@ -25,6 +28,12 @@ interface AttendanceMarkFormValues {
   statuses: Record<string, AttendanceStatus>
   notes: Record<string, string>
   correctionReason?: string
+}
+
+interface AttendanceRenewalWarning {
+  studentName: string
+  remainingSessions: number
+  overusedSessions: number
 }
 
 function isExcusedCorrection(
@@ -41,6 +50,7 @@ function formatTime(value: string) {
 export function AttendanceMarkPanel({
   sessions,
   enrollments,
+  studentPackages,
   classroomStatus,
   loadingSessions,
   loadingEnrollments,
@@ -50,6 +60,7 @@ export function AttendanceMarkPanel({
 }: AttendanceMarkPanelProps) {
   const [form] = Form.useForm<AttendanceMarkFormValues>()
   const [statuses, setStatuses] = useState<Record<string, AttendanceStatus>>({})
+  const [postSaveWarnings, setPostSaveWarnings] = useState<AttendanceRenewalWarning[]>([])
   const canMarkAttendance = classroomStatus === 'ONGOING'
   const selectedSession = sessions.find((session) => session.id === selectedSessionId)
   const attendanceQuery = useAttendance(selectedSessionId)
@@ -62,6 +73,16 @@ export function AttendanceMarkPanel({
           enrollment.status === 'ACTIVE' && enrollment.classroomId === selectedSession?.classroomId,
       ),
     [enrollments, selectedSession?.classroomId],
+  )
+
+  const progressByStudentId = useMemo(
+    () =>
+      new Map(
+        studentPackages
+          .filter((studentPackage) => studentPackage.status === 'ACTIVE')
+          .map((studentPackage) => [studentPackage.studentId, studentPackage]),
+      ),
+    [studentPackages],
   )
 
   const previousAttendanceByStudentId = useMemo(() => {
@@ -124,7 +145,65 @@ export function AttendanceMarkPanel({
       nextStatuses[String(enrollment.studentId)] = 'PRESENT'
     })
     setStatuses(nextStatuses)
+    setPostSaveWarnings([])
     form.setFieldsValue({ statuses: nextStatuses })
+  }
+
+  function getRowAttendanceWarning(enrollment: Enrollment) {
+    const selectedStatus = statuses[String(enrollment.studentId)]
+    if (selectedStatus !== 'PRESENT' && selectedStatus !== 'ABSENT') {
+      return undefined
+    }
+
+    const progress = progressByStudentId.get(enrollment.studentId)
+    if (!progress) {
+      return undefined
+    }
+
+    if (progress.overusedSessions > 0) {
+      return `Học viên đã vượt ${progress.overusedSessions} buổi. Vui lòng gia hạn gói.`
+    }
+
+    if (progress.remainingSessions <= 0) {
+      return 'Học viên đã hết buổi. Vui lòng gia hạn gói.'
+    }
+
+    if (progress.remainingSessions === 1) {
+      return 'Sẽ hết buổi sau buổi này'
+    }
+
+    return undefined
+  }
+
+  function buildPostSaveWarnings(values: AttendanceMarkFormValues): AttendanceRenewalWarning[] {
+    return activeEnrollments.flatMap((enrollment) => {
+      const progress = progressByStudentId.get(enrollment.studentId)
+      if (!progress) {
+        return []
+      }
+
+      const studentKey = String(enrollment.studentId)
+      const previousStatus = previousAttendanceByStudentId.get(enrollment.studentId)?.status
+      const nextStatus = values.statuses[studentKey]
+      const consumedBefore = previousStatus === 'PRESENT' || previousStatus === 'ABSENT'
+      const consumesAfter = nextStatus === 'PRESENT' || nextStatus === 'ABSENT'
+      const usedDelta = consumesAfter && !consumedBefore ? 1 : !consumesAfter && consumedBefore ? -1 : 0
+      const nextUsedSessions = Math.max(progress.usedSessions + usedDelta, 0)
+      const remainingSessions = Math.max(progress.totalSessions - nextUsedSessions, 0)
+      const overusedSessions = Math.max(nextUsedSessions - progress.totalSessions, 0)
+
+      if (remainingSessions > 0 && overusedSessions === 0) {
+        return []
+      }
+
+      return [
+        {
+          studentName: enrollment.studentName,
+          remainingSessions,
+          overusedSessions,
+        },
+      ]
+    })
   }
 
   function handleSave(values: AttendanceMarkFormValues) {
@@ -169,7 +248,12 @@ export function AttendanceMarkPanel({
       },
       {
         onSuccess: () => {
+          const renewalWarnings = buildPostSaveWarnings(values)
+          setPostSaveWarnings(renewalWarnings)
           message.success('Đã lưu điểm danh')
+          if (renewalWarnings.length > 0) {
+            message.warning('Có học viên đã hết/vượt buổi. Vui lòng gia hạn gói.')
+          }
           form.setFieldValue('correctionReason', undefined)
         },
         onError: showErrorMessage,
@@ -240,6 +324,7 @@ export function AttendanceMarkPanel({
           onValuesChange={(_, allValues) => {
             if (allValues.statuses) {
               setStatuses(allValues.statuses)
+              setPostSaveWarnings([])
             }
           }}
         >
@@ -262,6 +347,51 @@ export function AttendanceMarkPanel({
                 title: 'Học viên',
                 dataIndex: 'studentName',
                 key: 'studentName',
+              },
+              {
+                title: 'Tổng buổi',
+                key: 'totalSessions',
+                render: (_, enrollment) =>
+                  progressByStudentId.get(enrollment.studentId)?.totalSessions ?? '-',
+              },
+              {
+                title: 'Đã học',
+                key: 'usedSessions',
+                render: (_, enrollment) =>
+                  progressByStudentId.get(enrollment.studentId)?.usedSessions ?? '-',
+              },
+              {
+                title: 'Còn lại',
+                key: 'remainingSessions',
+                render: (_, enrollment) =>
+                  progressByStudentId.get(enrollment.studentId)?.remainingSessions ?? '-',
+              },
+              {
+                title: 'Vượt buổi',
+                key: 'overusedSessions',
+                render: (_, enrollment) => {
+                  const progress = progressByStudentId.get(enrollment.studentId)
+
+                  return progress?.overusedSessions ? progress.overusedSessions : '-'
+                },
+              },
+              {
+                title: 'Cảnh báo',
+                key: 'learningProgressWarning',
+                render: (_, enrollment) => (
+                  <Space direction="vertical" size={4}>
+                    <LearningProgressStatusTag
+                      progress={progressByStudentId.get(enrollment.studentId)}
+                    />
+                    {getRowAttendanceWarning(enrollment) ? (
+                      <Alert
+                        type="warning"
+                        showIcon
+                        message={getRowAttendanceWarning(enrollment)}
+                      />
+                    ) : null}
+                  </Space>
+                ),
               },
               {
                 title: 'Trạng thái',
@@ -296,6 +426,25 @@ export function AttendanceMarkPanel({
               },
             ]}
           />
+
+          {postSaveWarnings.length > 0 ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="Có học viên đã hết/vượt buổi. Vui lòng gia hạn gói."
+              description={
+                <Space direction="vertical" size={2}>
+                  {postSaveWarnings.map((warning) => (
+                    <span key={warning.studentName}>
+                      {warning.studentName}: còn lại {warning.remainingSessions}, vượt{' '}
+                      {warning.overusedSessions}
+                    </span>
+                  ))}
+                </Space>
+              }
+              style={{ marginTop: 16 }}
+            />
+          ) : null}
 
           {needsExcusedCorrection ? (
             <Alert
