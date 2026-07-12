@@ -2,7 +2,7 @@
 
 ## Database
 
-Use MySQL.
+Use PostgreSQL 16.
 
 Use Flyway for schema migration.
 
@@ -10,6 +10,13 @@ Do not use Hibernate ddl-auto update.
 
 Use:
 - ddl-auto validate
+
+Connection:
+- JDBC URL: `jdbc:postgresql://localhost:5432/school_management`
+- Driver: PostgreSQL JDBC
+- Local database via `docker compose up -d postgres`
+
+See also: `.cursor/rules/database.mdc` (always applied).
 
 ## Migration
 
@@ -26,6 +33,7 @@ Rules:
 - Do not modify old migration files after applied.
 - Create a new migration for schema changes.
 - Keep migration readable.
+- Write PostgreSQL syntax only.
 
 ## Naming
 
@@ -58,7 +66,7 @@ Examples:
 
 ## Money
 
-Use DECIMAL(15,2) for money columns.
+Use NUMERIC(19,2) for money columns.
 
 Java type must be BigDecimal.
 

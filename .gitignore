@@ -60,8 +60,6 @@ pnpm-debug.log*
 .env.test.local
 .env.production.local
 *.properties.local
-application-local.properties
-application-local.yml
 
 # =========================================================================
 # IDEs & SYSTEM FILES

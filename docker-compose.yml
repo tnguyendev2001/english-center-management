@@ -1,16 +1,21 @@
 services:
-  mysql:
-    image: mysql:8.4
-    container_name: english_center_mysql
+  postgres:
+    image: postgres:16
+    container_name: school-management-postgres
+    restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: english_center
-      MYSQL_USER: english_center
-      MYSQL_PASSWORD: english_center
+      POSTGRES_DB: school_management
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - school_management_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d school_management"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
-  mysql_data:
+  school_management_postgres_data:

@@ -14,7 +14,7 @@ Goal:
 Backend:
 - Spring Boot project.
 - application.yml.
-- MySQL connection.
+- PostgreSQL connection.
 - Flyway enabled.
 - Common ApiResponse.
 - PageResponse.

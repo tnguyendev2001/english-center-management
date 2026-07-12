@@ -351,7 +351,7 @@ Database:
 - Flyway migration exists.
 - No old migration is modified.
 - Table/column names use snake_case.
-- Money columns use DECIMAL(15,2).
+- Money columns use NUMERIC(19,2).
 - Important unique constraints exist.
 
 Business:
