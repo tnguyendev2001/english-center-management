@@ -36,7 +36,7 @@ public class TuitionPackage {
     @Column(name = "expected_months")
     private Integer expectedMonths;
 
-    @Column(name = "price", nullable = false, precision = 15, scale = 2)
+    @Column(name = "price", nullable = false, precision = 19, scale = 2)
     private BigDecimal price;
 
     @Enumerated(EnumType.STRING)

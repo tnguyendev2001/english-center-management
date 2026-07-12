@@ -65,13 +65,13 @@ public class Enrollment {
     @Column(name = "total_sessions_snapshot", nullable = false)
     private Integer totalSessionsSnapshot;
 
-    @Column(name = "package_price_snapshot", nullable = false, precision = 15, scale = 2)
+    @Column(name = "package_price_snapshot", nullable = false, precision = 19, scale = 2)
     private BigDecimal packagePriceSnapshot;
 
-    @Column(name = "discount_amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "discount_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal discountAmount;
 
-    @Column(name = "final_amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "final_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal finalAmount;
 
     @Column(name = "note", length = 1000)

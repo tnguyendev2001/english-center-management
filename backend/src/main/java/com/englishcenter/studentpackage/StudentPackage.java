@@ -54,16 +54,16 @@ public class StudentPackage {
     @Column(name = "total_sessions", nullable = false)
     private Integer totalSessions;
 
-    @Column(name = "price", nullable = false, precision = 15, scale = 2)
+    @Column(name = "price", nullable = false, precision = 19, scale = 2)
     private BigDecimal price;
 
-    @Column(name = "discount_amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "discount_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal discountAmount;
 
-    @Column(name = "adjustment_amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "adjustment_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal adjustmentAmount;
 
-    @Column(name = "final_amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "final_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal finalAmount;
 
     @Column(name = "start_date", nullable = false)
