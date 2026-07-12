@@ -57,22 +57,22 @@ public class Invoice {
     @Column(name = "total_sessions_snapshot", nullable = false)
     private Integer totalSessionsSnapshot;
 
-    @Column(name = "amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal amount;
 
-    @Column(name = "discount_amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "discount_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal discountAmount;
 
-    @Column(name = "adjustment_amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "adjustment_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal adjustmentAmount;
 
-    @Column(name = "final_amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "final_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal finalAmount;
 
-    @Column(name = "paid_amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "paid_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal paidAmount;
 
-    @Column(name = "remaining_amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "remaining_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal remainingAmount;
 
     @Column(name = "due_date", nullable = false)

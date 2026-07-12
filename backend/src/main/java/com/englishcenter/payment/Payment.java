@@ -45,7 +45,7 @@ public class Payment {
     @JoinColumn(name = "classroom_id", nullable = false)
     private Classroom classroom;
 
-    @Column(name = "amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal amount;
 
     @Column(name = "payment_date", nullable = false)

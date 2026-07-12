@@ -57,32 +57,32 @@ public class PackageChangeLog {
     @Column(name = "new_total_sessions", nullable = false)
     private Integer newTotalSessions;
 
-    @Column(name = "old_final_amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "old_final_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal oldFinalAmount;
 
-    @Column(name = "new_package_price", nullable = false, precision = 15, scale = 2)
+    @Column(name = "new_package_price", nullable = false, precision = 19, scale = 2)
     private BigDecimal newPackagePrice;
 
     @Column(name = "used_sessions", nullable = false)
     private Integer usedSessions;
 
-    @Column(name = "old_unit_price", nullable = false, precision = 15, scale = 2)
+    @Column(name = "old_unit_price", nullable = false, precision = 19, scale = 2)
     private BigDecimal oldUnitPrice;
 
-    @Column(name = "used_amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "used_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal usedAmount;
 
-    @Column(name = "paid_amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "paid_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal paidAmount;
 
-    @Column(name = "adjustment_amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "adjustment_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal adjustmentAmount;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "adjustment_type", nullable = false, length = 20)
     private PackageChangeAdjustmentType adjustmentType;
 
-    @Column(name = "new_invoice_final_amount", nullable = false, precision = 15, scale = 2)
+    @Column(name = "new_invoice_final_amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal newInvoiceFinalAmount;
 
     @Column(name = "reason", nullable = false, length = 1000)
