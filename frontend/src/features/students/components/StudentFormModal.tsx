@@ -1,11 +1,10 @@
-import { DatePicker, Form, Input, Modal, Select } from 'antd'
+import { DatePicker, Form, Input, Modal, Select, Typography } from 'antd'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import { useEffect } from 'react'
 import type { Student, StudentPayload, StudentStatus } from '../studentTypes'
 
 interface StudentFormValues {
-  studentCode: string
   fullName: string
   dateOfBirth?: Dayjs
   phone?: string
@@ -47,7 +46,6 @@ export function StudentFormModal({
 
     if (initialStudent) {
       form.setFieldsValue({
-        studentCode: initialStudent.studentCode,
         fullName: initialStudent.fullName,
         dateOfBirth: initialStudent.dateOfBirth ? dayjs(initialStudent.dateOfBirth) : undefined,
         phone: initialStudent.phone ?? undefined,
@@ -66,7 +64,6 @@ export function StudentFormModal({
 
   function handleFinish(values: StudentFormValues) {
     onSubmit({
-      studentCode: values.studentCode,
       fullName: values.fullName,
       dateOfBirth: values.dateOfBirth?.format('YYYY-MM-DD') ?? null,
       phone: values.phone ?? null,
@@ -90,12 +87,14 @@ export function StudentFormModal({
       destroyOnHidden
     >
       <Form form={form} layout="vertical" onFinish={handleFinish} initialValues={{ status: 'ACTIVE' }}>
-        <Form.Item
-          label="Mã học viên"
-          name="studentCode"
-          rules={[{ required: true, message: 'Vui lòng nhập mã học viên' }]}
-        >
-          <Input placeholder="VD: STU001" />
+        <Form.Item label="Mã học viên">
+          {isEdit ? (
+            <Input value={initialStudent?.studentCode} disabled />
+          ) : (
+            <Typography.Text type="secondary">
+              Mã học viên sẽ được tự động tạo sau khi lưu
+            </Typography.Text>
+          )}
         </Form.Item>
 
         <Form.Item

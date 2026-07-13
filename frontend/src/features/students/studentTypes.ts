@@ -22,7 +22,6 @@ export interface StudentSearchParams {
 }
 
 export interface StudentPayload {
-  studentCode: string
   fullName: string
   dateOfBirth?: string | null
   phone?: string | null

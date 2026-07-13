@@ -15,7 +15,6 @@ public class StudentMapper {
     }
 
     public void updateEntity(Student student, StudentCreateRequest request) {
-        student.setStudentCode(request.studentCode().trim());
         student.setFullName(request.fullName().trim());
         student.setDateOfBirth(request.dateOfBirth());
         student.setPhone(trimToNull(request.phone()));
@@ -27,7 +26,6 @@ public class StudentMapper {
     }
 
     public void updateEntity(Student student, StudentUpdateRequest request) {
-        student.setStudentCode(request.studentCode().trim());
         student.setFullName(request.fullName().trim());
         student.setDateOfBirth(request.dateOfBirth());
         student.setPhone(trimToNull(request.phone()));
