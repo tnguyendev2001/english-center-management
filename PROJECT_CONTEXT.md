@@ -49,7 +49,7 @@ Backend:
 * Spring Data JPA
 * Spring Validation
 * Spring Security simple login
-* MySQL
+* PostgreSQL 16
 * Flyway
 
 Frontend:

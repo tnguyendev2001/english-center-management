@@ -11,8 +11,8 @@ Columns:
 - parent_phone VARCHAR(30)
 - status VARCHAR(30) NOT NULL
 - note TEXT
-- created_at DATETIME
-- updated_at DATETIME
+- created_at TIMESTAMP
+- updated_at TIMESTAMP
 
 ## invoices
 
@@ -22,10 +22,10 @@ Columns:
 - student_id BIGINT NOT NULL
 - classroom_id BIGINT NOT NULL
 - student_package_id BIGINT NOT NULL
-- amount DECIMAL(15,2) NOT NULL
-- discount_amount DECIMAL(15,2) NOT NULL
-- adjustment_amount DECIMAL(15,2) NOT NULL
-- final_amount DECIMAL(15,2) NOT NULL
-- paid_amount DECIMAL(15,2) NOT NULL
-- remaining_amount DECIMAL(15,2) NOT NULL
+- amount NUMERIC(19,2) NOT NULL
+- discount_amount NUMERIC(19,2) NOT NULL
+- adjustment_amount NUMERIC(19,2) NOT NULL
+- final_amount NUMERIC(19,2) NOT NULL
+- paid_amount NUMERIC(19,2) NOT NULL
+- remaining_amount NUMERIC(19,2) NOT NULL
 - status VARCHAR(30) NOT NULL

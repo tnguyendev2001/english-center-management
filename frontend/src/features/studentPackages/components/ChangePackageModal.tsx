@@ -71,15 +71,10 @@ export function ChangePackageModal({
   const selectedPackageId = normalizePackageId(selectedPackageIdRaw)
   const onPreviewRef = useRef(onPreview)
   const lastPreviewKeyRef = useRef('')
-  const previewEffectCountRef = useRef(0)
-  const renderCountRef = useRef(0)
 
-  onPreviewRef.current = onPreview
-  renderCountRef.current += 1
-
-  // #region agent log
-  fetch('http://127.0.0.1:7793/ingest/f91818a1-f067-40d1-9bf9-406992aafe86',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'05630e'},body:JSON.stringify({sessionId:'05630e',runId:'post-fix',location:'ChangePackageModal.tsx:render',message:'modal render',data:{renderCount:renderCountRef.current,open,selectedPackageIdRaw,selectedPackageId,selectedPackageIdType:typeof selectedPackageIdRaw,selectedChangeMode,hasPreview:preview!=null,previewing,previewError:Boolean(previewError)},timestamp:Date.now(),hypothesisId:'B,C,D'})}).catch(()=>{});
-  // #endregion
+  useEffect(() => {
+    onPreviewRef.current = onPreview
+  }, [onPreview])
 
   useEffect(() => {
     if (open) {
@@ -149,9 +144,6 @@ export function ChangePackageModal({
 
   useEffect(() => {
     if (!canRequestPreview) {
-      // #region agent log
-      fetch('http://127.0.0.1:7793/ingest/f91818a1-f067-40d1-9bf9-406992aafe86',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'05630e'},body:JSON.stringify({sessionId:'05630e',runId:'post-fix',location:'ChangePackageModal.tsx:previewEffect:skip',message:'preview effect skipped',data:{open,selectedPackageId,selectedChangeMode,hasCurrentPackage:currentPackage!=null},timestamp:Date.now(),hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
       return
     }
 
@@ -161,11 +153,6 @@ export function ChangePackageModal({
     }
 
     lastPreviewKeyRef.current = previewKey
-    previewEffectCountRef.current += 1
-
-    // #region agent log
-    fetch('http://127.0.0.1:7793/ingest/f91818a1-f067-40d1-9bf9-406992aafe86',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'05630e'},body:JSON.stringify({sessionId:'05630e',runId:'post-fix',location:'ChangePackageModal.tsx:previewEffect:call',message:'preview effect calling onPreview',data:{effectCallCount:previewEffectCountRef.current,previewKey,selectedPackageId,selectedChangeMode},timestamp:Date.now(),hypothesisId:'B,E'})}).catch(()=>{});
-    // #endregion
 
     onPreviewRef.current({
       newTuitionPackageId: selectedPackageId,

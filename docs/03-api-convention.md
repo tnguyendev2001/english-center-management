@@ -120,7 +120,7 @@ Backend:
 - Use BigDecimal.
 
 Database:
-- Use DECIMAL(15,2).
+- Use NUMERIC(19,2).
 
 Frontend:
 - Receive money as number or string consistently.

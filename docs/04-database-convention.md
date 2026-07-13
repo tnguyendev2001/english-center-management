@@ -2,7 +2,7 @@
 
 ## 1. Database
 
-Use MySQL.
+Use PostgreSQL 16.
 
 Use Flyway for schema migrations.
 
@@ -97,9 +97,9 @@ Java:
 BigDecimal
 ```
 
-MySQL:
+PostgreSQL:
 ```sql
-DECIMAL(15,2)
+NUMERIC(19,2)
 ```
 
 Do not use:
@@ -122,10 +122,10 @@ Java:
 - LocalTime for times.
 - LocalDateTime for timestamps.
 
-MySQL:
+PostgreSQL:
 - DATE for dates.
 - TIME for times.
-- DATETIME for timestamps.
+- TIMESTAMP for timestamps.
 
 Common timestamp columns:
 - created_at

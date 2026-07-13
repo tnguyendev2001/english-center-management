@@ -1,6 +1,5 @@
 package com.englishcenter.student;
 
-import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
 import com.englishcenter.student.dto.StudentCreateRequest;
 import com.englishcenter.student.dto.StudentResponse;
@@ -47,26 +46,22 @@ public class StudentService {
 
     @Transactional
     public StudentResponse create(StudentCreateRequest request) {
-        String studentCode = request.studentCode().trim();
-        if (studentRepository.existsByStudentCode(studentCode)) {
-            throw new BusinessException("Student code already exists");
-        }
-
         Student student = studentMapper.toEntity(request);
-        return studentMapper.toResponse(studentRepository.save(student));
+        student = studentRepository.saveAndFlush(student);
+        student.setStudentCode(formatStudentCode(student.getId()));
+        student = studentRepository.save(student);
+        return studentMapper.toResponse(student);
     }
 
     @Transactional
     public StudentResponse update(Long id, StudentUpdateRequest request) {
         Student student = findStudent(id);
-        String studentCode = request.studentCode().trim();
-
-        if (studentRepository.existsByStudentCodeAndIdNot(studentCode, id)) {
-            throw new BusinessException("Student code already exists");
-        }
-
         studentMapper.updateEntity(student, request);
         return studentMapper.toResponse(studentRepository.save(student));
+    }
+
+    static String formatStudentCode(Long id) {
+        return "ST" + String.format("%05d", id);
     }
 
     private Student findStudent(Long id) {

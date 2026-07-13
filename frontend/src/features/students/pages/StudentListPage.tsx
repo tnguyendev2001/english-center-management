@@ -128,8 +128,8 @@ export function StudentListPage() {
     }
 
     createStudent.mutate(payload, {
-      onSuccess: () => {
-        message.success('Đã thêm học viên')
+      onSuccess: (student) => {
+        message.success(`Tạo học viên thành công. Mã học viên: ${student.studentCode}`)
         closeModal()
       },
       onError: showErrorMessage,
