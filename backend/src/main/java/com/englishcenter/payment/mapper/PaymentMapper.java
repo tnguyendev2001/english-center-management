@@ -13,6 +13,7 @@ public class PaymentMapper {
                 payment.getInvoice().getId(),
                 payment.getInvoice().getInvoiceCode(),
                 payment.getStudent().getId(),
+                payment.getStudent().getStudentCode(),
                 payment.getStudent().getFullName(),
                 payment.getClassroom().getId(),
                 payment.getClassroom().getClassName(),

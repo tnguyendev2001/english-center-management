@@ -4,6 +4,7 @@ public record ClassroomRenewalCandidateResponse(
         Long studentId,
         Long enrollmentId,
         Long studentPackageId,
+        String studentCode,
         String studentName,
         String currentPackageName,
         Integer currentPackageTotalSessions,

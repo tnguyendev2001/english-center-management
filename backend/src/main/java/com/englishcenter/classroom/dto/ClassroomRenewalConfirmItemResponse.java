@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 public record ClassroomRenewalConfirmItemResponse(
         Long studentId,
         Long enrollmentId,
+        String studentCode,
         String studentName,
         Long newStudentPackageId,
         Long newInvoiceId,

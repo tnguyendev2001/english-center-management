@@ -289,6 +289,7 @@ public class AttendanceService {
         return new AttendanceReadinessBlockedStudentResponse(
                 enrollment.getStudent().getId(),
                 enrollment.getId(),
+                enrollment.getStudent().getStudentCode(),
                 enrollment.getStudent().getFullName(),
                 remainingSessions,
                 reason

@@ -173,6 +173,7 @@ public class DashboardService {
     private DebtReportItemResponse toDebtAlert(Invoice invoice) {
         return new DebtReportItemResponse(
                 invoice.getStudent().getId(),
+                invoice.getStudent().getStudentCode(),
                 invoice.getStudent().getFullName(),
                 invoice.getClassroom().getClassName(),
                 invoice.getId(),
@@ -198,6 +199,7 @@ public class DashboardService {
 
         return new SessionWarningResponse(
                 enrollment.getStudent().getId(),
+                enrollment.getStudent().getStudentCode(),
                 enrollment.getStudent().getFullName(),
                 enrollment.getClassroom().getId(),
                 enrollment.getClassroom().getClassName(),

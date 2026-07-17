@@ -2,6 +2,7 @@ import { DatePicker, Descriptions, Form, Input, InputNumber, Modal, Select } fro
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import { useEffect, useMemo } from 'react'
+import { formatStudentLabel, STUDENT_SEARCH_PLACEHOLDER } from '../../../components/common/studentDisplay'
 import { MoneyText } from '../../../components/common/MoneyText'
 import type { ClassPackage } from '../../classPackages/classPackageTypes'
 import type { ClassDayOfWeek } from '../../classrooms/classroomTypes'
@@ -134,10 +135,10 @@ export function EnrollStudentModal({
             showSearch
             loading={loadingStudents}
             optionFilterProp="label"
-            placeholder="Chọn học viên"
+            placeholder={STUDENT_SEARCH_PLACEHOLDER}
             notFoundContent="Không có học viên đủ điều kiện ghi danh"
             options={students.map((student) => ({
-              label: `${student.fullName} (${student.studentCode})`,
+              label: formatStudentLabel(student.studentCode, student.fullName),
               value: student.id,
             }))}
           />

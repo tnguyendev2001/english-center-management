@@ -9,6 +9,7 @@ public record InvoiceResponse(
         Long id,
         String invoiceCode,
         Long studentId,
+        String studentCode,
         String studentName,
         Long classroomId,
         String classroomName,

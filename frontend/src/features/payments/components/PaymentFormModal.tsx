@@ -3,6 +3,7 @@ import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import { useEffect } from 'react'
 import { MoneyText } from '../../../components/common/MoneyText'
+import { formatStudentLabel } from '../../../components/common/studentDisplay'
 import type { Invoice } from '../../invoices/invoiceTypes'
 import type { CreatePaymentPayload, PaymentMethod } from '../paymentTypes'
 
@@ -69,7 +70,9 @@ export function PaymentFormModal({
     >
       {invoice ? (
         <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
-          <Descriptions.Item label="Học viên">{invoice.studentId} - {invoice.studentName}</Descriptions.Item>
+          <Descriptions.Item label="Học viên">
+            {formatStudentLabel(invoice.studentCode, invoice.studentName)}
+          </Descriptions.Item>
           <Descriptions.Item label="Lớp học">{invoice.classroomName}</Descriptions.Item>
           <Descriptions.Item label="Còn phải đóng">
             <MoneyText value={invoice.remainingAmount} />

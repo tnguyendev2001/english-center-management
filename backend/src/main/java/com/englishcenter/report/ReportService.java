@@ -405,6 +405,7 @@ public class ReportService {
     private DebtReportItemResponse toDebtReportItem(Invoice invoice) {
         return new DebtReportItemResponse(
                 invoice.getStudent().getId(),
+                invoice.getStudent().getStudentCode(),
                 invoice.getStudent().getFullName(),
                 invoice.getClassroom().getClassName(),
                 invoice.getId(),
@@ -425,6 +426,7 @@ public class ReportService {
                 attendance.getId(),
                 attendance.getSession().getSessionDate(),
                 attendance.getSession().getClassroom().getClassName(),
+                attendance.getStudent().getStudentCode(),
                 attendance.getStudent().getFullName(),
                 attendance.getStatus(),
                 attendance.getNote()

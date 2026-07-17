@@ -1,10 +1,13 @@
 package com.englishcenter.invoice;
 
 import com.englishcenter.common.exception.NotFoundException;
+import com.englishcenter.financial.StudentFinancialSummaryAggregator;
 import com.englishcenter.invoice.dto.InvoiceResponse;
+import com.englishcenter.invoice.dto.StudentTuitionSummaryResponse;
 import com.englishcenter.invoice.mapper.InvoiceMapper;
 import com.englishcenter.payment.PaymentRepository;
 import java.math.BigDecimal;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -47,6 +50,13 @@ public class InvoiceService {
 
         return invoiceRepository.search(status, studentId, classroomId, pageable)
                 .map(invoiceMapper::toResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public List<StudentTuitionSummaryResponse> getStudentSummaries(Long classroomId) {
+        return StudentFinancialSummaryAggregator.aggregateTuitionSummaries(
+                invoiceRepository.findAllForTuitionSummary(classroomId)
+        );
     }
 
     @Transactional(readOnly = true)

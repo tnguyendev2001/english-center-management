@@ -5,7 +5,9 @@ import com.englishcenter.common.api.PageMeta;
 import com.englishcenter.payment.dto.CancelPaymentRequest;
 import com.englishcenter.payment.dto.CreatePaymentRequest;
 import com.englishcenter.payment.dto.PaymentResponse;
+import com.englishcenter.payment.dto.StudentPaymentSummaryResponse;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -24,6 +26,14 @@ public class PaymentController {
 
     public PaymentController(PaymentService paymentService) {
         this.paymentService = paymentService;
+    }
+
+    @GetMapping("/api/payments/student-summaries")
+    public ApiResponse<List<StudentPaymentSummaryResponse>> getStudentSummaries(
+            @RequestParam(required = false) LocalDate fromDate,
+            @RequestParam(required = false) LocalDate toDate
+    ) {
+        return ApiResponse.success(paymentService.getStudentSummaries(fromDate, toDate));
     }
 
     @GetMapping("/api/payments")

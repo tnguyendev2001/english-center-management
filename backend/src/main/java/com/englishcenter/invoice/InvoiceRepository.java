@@ -73,7 +73,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
               AND (:toDate IS NULL OR CAST(invoice.createdAt AS localdate) <= :toDate)
               AND (
                   :keyword IS NULL OR :keyword = ''
+                  OR LOWER(invoice.student.studentCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(invoice.student.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(invoice.student.phone) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(invoice.invoiceCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
               )
             ORDER BY invoice.createdAt DESC
@@ -101,6 +103,31 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     @Query("""
             SELECT invoice
             FROM Invoice invoice
+            JOIN FETCH invoice.student student
+            JOIN FETCH invoice.classroom classroom
+            WHERE invoice.status <> com.englishcenter.invoice.InvoiceStatus.CANCELED
+              AND (:classroomId IS NULL OR invoice.classroom.id = :classroomId)
+            ORDER BY student.fullName ASC, classroom.className ASC, invoice.createdAt DESC
+            """)
+    java.util.List<Invoice> findAllForTuitionSummary(@Param("classroomId") Long classroomId);
+
+    @Query("""
+            SELECT invoice
+            FROM Invoice invoice
+            JOIN FETCH invoice.student student
+            JOIN FETCH invoice.classroom classroom
+            WHERE invoice.status IN (
+                com.englishcenter.invoice.InvoiceStatus.UNPAID,
+                com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
+            )
+              AND (:classroomId IS NULL OR invoice.classroom.id = :classroomId)
+            ORDER BY student.fullName ASC, classroom.className ASC, invoice.dueDate ASC
+            """)
+    java.util.List<Invoice> findAllForDebtSummary(@Param("classroomId") Long classroomId);
+
+    @Query("""
+            SELECT invoice
+            FROM Invoice invoice
             WHERE invoice.status IN (
                 com.englishcenter.invoice.InvoiceStatus.UNPAID,
                 com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
@@ -111,7 +138,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
               AND (:toDate IS NULL OR CAST(invoice.createdAt AS localdate) <= :toDate)
               AND (
                   :keyword IS NULL OR :keyword = ''
+                  OR LOWER(invoice.student.studentCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(invoice.student.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(invoice.student.phone) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(invoice.invoiceCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
               )
             ORDER BY invoice.createdAt DESC

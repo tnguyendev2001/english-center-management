@@ -4,6 +4,7 @@ export interface Invoice {
   id: number
   invoiceCode: string
   studentId: number
+  studentCode: string
   studentName: string
   classroomId: number
   classroomName: string

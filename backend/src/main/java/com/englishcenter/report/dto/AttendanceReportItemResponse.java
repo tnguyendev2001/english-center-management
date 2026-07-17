@@ -7,6 +7,7 @@ public record AttendanceReportItemResponse(
         Long id,
         LocalDate sessionDate,
         String classroomName,
+        String studentCode,
         String studentName,
         AttendanceStatus status,
         String note

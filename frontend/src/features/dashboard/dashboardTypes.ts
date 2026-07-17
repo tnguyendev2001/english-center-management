@@ -37,6 +37,7 @@ export interface DashboardTodaySession {
 
 export interface SessionWarning {
   studentId: number
+  studentCode: string
   studentName: string
   classroomId: number
   classroomName: string

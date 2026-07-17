@@ -7,6 +7,7 @@ public record AttendanceResponse(
         Long id,
         Long sessionId,
         Long studentId,
+        String studentCode,
         String studentName,
         AttendanceStatus status,
         String note,

@@ -1,0 +1,37 @@
+# Student Display Rules
+
+Student names are **not unique**. `studentCode` is the stable identifier.
+
+## Display
+
+- **Select / dropdown / autocomplete:** `ST00001 - Nguyễn Văn A` (`studentCode - studentName`)
+- **Tables:** prefer separate columns **Mã HV** and **Học viên**
+- **Limited space:** combined `ST00001 - Nguyễn Văn A`
+- **Drawer / modal headers:** include both code and name
+
+Use `formatStudentLabel(studentCode, studentName)` from `frontend/src/components/common/studentDisplay.ts`.
+
+## Search
+
+All student keyword searches must match:
+
+- `studentCode`
+- `studentName` (or `fullName` on Student entity)
+- `phone` when available
+
+Placeholders:
+
+- `Tìm theo mã hoặc tên học viên`
+- `Tìm học viên theo mã, tên, số điện thoại`
+
+## Backend
+
+Response DTOs that expose student identity should include both `studentCode` and `studentName`.
+
+Repository keyword filters should search `studentCode`, `fullName`, and `phone`.
+
+## Scope
+
+Apply on payment, invoice/tuition, debt, enrollment, attendance, renew, package change, reports, and dashboard screens.
+
+Do **not** use name alone where the user must distinguish between students.

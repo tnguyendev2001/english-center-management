@@ -1,5 +1,6 @@
 import type { ApiResponse } from '../../api/apiResponse'
 import { httpClient } from '../../api/httpClient'
+import type { StudentPaymentSummary, StudentSummarySearchParams } from '../financial/financialSummaryTypes'
 import type {
   CancelPaymentPayload,
   CreatePaymentPayload,
@@ -9,6 +10,14 @@ import type {
 
 export async function getPayments(params: PaymentSearchParams) {
   const response = await httpClient.get<ApiResponse<Payment[]>>('/payments', {
+    params,
+  })
+
+  return response.data
+}
+
+export async function getPaymentStudentSummaries(params?: StudentSummarySearchParams) {
+  const response = await httpClient.get<ApiResponse<StudentPaymentSummary[]>>('/payments/student-summaries', {
     params,
   })
 

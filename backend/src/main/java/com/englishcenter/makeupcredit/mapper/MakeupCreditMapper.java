@@ -10,6 +10,7 @@ public class MakeupCreditMapper {
         return new MakeupCreditResponse(
                 credit.getId(),
                 credit.getStudent().getId(),
+                credit.getStudent().getStudentCode(),
                 credit.getStudent().getFullName(),
                 credit.getClassroom().getId(),
                 credit.getClassroom().getClassName(),

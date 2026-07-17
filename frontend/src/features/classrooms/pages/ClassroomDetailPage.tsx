@@ -21,6 +21,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { MoneyText } from '../../../components/common/MoneyText'
+import { formatStudentLabel } from '../../../components/common/studentDisplay'
 import { StatusTag } from '../../../components/common/StatusTag'
 import { AddClassPackageModal } from '../../classPackages/components/AddClassPackageModal'
 import { RenewAllPackagesModal } from '../components/RenewAllPackagesModal'
@@ -418,7 +419,9 @@ export function ClassroomDetailPage() {
           title: 'Hóa đơn đầu tiên đã được tạo',
           content: (
             <Descriptions column={1} size="small">
-              <Descriptions.Item label="Học viên">{enrollment.studentName}</Descriptions.Item>
+              <Descriptions.Item label="Học viên">
+                {formatStudentLabel(enrollment.studentCode, enrollment.studentName)}
+              </Descriptions.Item>
               <Descriptions.Item label="Gói học phí">
                 {enrollment.invoice?.packageNameSnapshot}
               </Descriptions.Item>

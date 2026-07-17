@@ -1,5 +1,6 @@
 import { Form, Modal, Radio, Table } from 'antd'
 import { useEffect } from 'react'
+import { studentCodeColumn, studentNameColumn } from '../../../components/common/studentDisplay'
 import type { Enrollment } from '../../enrollments/enrollmentTypes'
 import type { Attendance, AttendanceStatus, MarkAttendancePayload } from '../attendanceTypes'
 
@@ -69,11 +70,8 @@ export function AttendanceMarkModal({
           pagination={false}
           dataSource={enrollments}
           columns={[
-            {
-              title: 'Học viên',
-              dataIndex: 'studentName',
-              key: 'studentName',
-            },
+            studentCodeColumn(),
+            studentNameColumn(),
             {
               title: 'Trạng thái',
               key: 'status',

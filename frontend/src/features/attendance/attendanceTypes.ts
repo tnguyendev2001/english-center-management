@@ -4,6 +4,7 @@ export interface Attendance {
   id: number
   sessionId: number
   studentId: number
+  studentCode: string
   studentName: string
   status: AttendanceStatus
   note?: string | null
@@ -28,6 +29,7 @@ export interface MarkAttendancePayload {
 export interface AttendanceReadinessBlockedStudent {
   studentId: number
   enrollmentId: number
+  studentCode: string
   studentName: string
   remainingSessions: number
   reason: string
@@ -36,6 +38,7 @@ export interface AttendanceReadinessBlockedStudent {
 export interface AttendanceReadinessActivatedPackage {
   studentId: number
   enrollmentId: number
+  studentCode: string
   studentName: string
   activatedStudentPackageId: number
   packageName: string

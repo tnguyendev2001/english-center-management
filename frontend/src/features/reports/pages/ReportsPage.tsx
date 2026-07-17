@@ -22,6 +22,11 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
+import {
+  STUDENT_SEARCH_PLACEHOLDER,
+  studentCodeColumn,
+  studentNameColumn,
+} from '../../../components/common/studentDisplay'
 import type { Invoice, InvoiceStatus } from '../../invoices/invoiceTypes'
 import { PaymentFormModal } from '../../payments/components/PaymentFormModal'
 import { useCreatePayment } from '../../payments/paymentQueries'
@@ -137,7 +142,8 @@ function PaymentReportTab() {
       render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
     },
     { title: 'Mã thanh toán', dataIndex: 'paymentCode', key: 'paymentCode' },
-    { title: 'Học viên', dataIndex: 'studentName', key: 'studentName' },
+    studentCodeColumn(),
+    studentNameColumn(),
     { title: 'Lớp', dataIndex: 'classroomName', key: 'classroomName' },
     {
       title: 'Số tiền',
@@ -172,7 +178,7 @@ function PaymentReportTab() {
         <RangePicker value={dateRange} onChange={(values) => setDateRange(values as [Dayjs, Dayjs] | null)} />
         <Input.Search
           allowClear
-          placeholder="Tìm học viên hoặc mã"
+          placeholder={STUDENT_SEARCH_PLACEHOLDER}
           style={{ width: 240 }}
           onSearch={setKeyword}
         />
@@ -262,7 +268,8 @@ function DebtReportTab() {
   const debtsQuery = useDebtReport({ keyword: keyword || undefined, status, page: 0, size: 200 })
 
   const columns: ColumnsType<DebtReportItem> = [
-    { title: 'Học viên', dataIndex: 'studentName', key: 'studentName' },
+    studentCodeColumn(),
+    studentNameColumn(),
     { title: 'Lớp', dataIndex: 'classroomName', key: 'classroomName' },
     {
       title: 'Gói học',
@@ -342,7 +349,7 @@ function DebtReportTab() {
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Space wrap>
-        <Input.Search allowClear placeholder="Tìm học viên" style={{ width: 240 }} onSearch={setKeyword} />
+        <Input.Search allowClear placeholder={STUDENT_SEARCH_PLACEHOLDER} style={{ width: 240 }} onSearch={setKeyword} />
         <Select
           allowClear
           placeholder="Trạng thái học phí"
@@ -423,7 +430,8 @@ function InvoiceReportTab() {
 
   const columns: ColumnsType<Invoice> = [
     { title: 'Mã học phí', dataIndex: 'invoiceCode', key: 'invoiceCode' },
-    { title: 'Học viên', dataIndex: 'studentName', key: 'studentName' },
+    studentCodeColumn(),
+    studentNameColumn(),
     { title: 'Lớp', dataIndex: 'classroomName', key: 'classroomName' },
     { title: 'Gói học', dataIndex: 'packageNameSnapshot', key: 'packageNameSnapshot' },
     { title: 'Số buổi', dataIndex: 'totalSessionsSnapshot', key: 'totalSessionsSnapshot' },
@@ -474,7 +482,7 @@ function InvoiceReportTab() {
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Space wrap>
-        <Input.Search allowClear placeholder="Tìm học viên hoặc mã học phí" style={{ width: 280 }} onSearch={setKeyword} />
+        <Input.Search allowClear placeholder="Tìm theo mã hoặc tên học viên, mã học phí" style={{ width: 280 }} onSearch={setKeyword} />
         <Select
           allowClear
           placeholder="Trạng thái"
@@ -524,7 +532,8 @@ function AttendanceReportTab() {
       render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
     },
     { title: 'Lớp', dataIndex: 'classroomName', key: 'classroomName' },
-    { title: 'Học viên', dataIndex: 'studentName', key: 'studentName' },
+    studentCodeColumn(),
+    studentNameColumn(),
     {
       title: 'Trạng thái',
       dataIndex: 'status',
@@ -546,7 +555,7 @@ function AttendanceReportTab() {
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Space wrap>
-        <Input.Search allowClear placeholder="Tìm học viên" style={{ width: 240 }} onSearch={setKeyword} />
+        <Input.Search allowClear placeholder={STUDENT_SEARCH_PLACEHOLDER} style={{ width: 240 }} onSearch={setKeyword} />
         <DatePicker
           placeholder="Ngày học"
           value={sessionDate}
@@ -616,6 +625,7 @@ function EnrollmentProgressReportTab() {
     return (progressQuery.data ?? []).filter((item) => {
       const matchesKeyword =
         !keyword ||
+        item.studentCode.toLowerCase().includes(keyword.toLowerCase()) ||
         item.studentName.toLowerCase().includes(keyword.toLowerCase()) ||
         item.classroomName.toLowerCase().includes(keyword.toLowerCase())
 
@@ -630,7 +640,8 @@ function EnrollmentProgressReportTab() {
   }, [progressQuery.data, keyword, warningFilter])
 
   const columns: ColumnsType<EnrollmentProgressReportItem> = [
-    { title: 'Học viên', dataIndex: 'studentName', key: 'studentName' },
+    studentCodeColumn(),
+    studentNameColumn(),
     { title: 'Lớp', dataIndex: 'classroomName', key: 'classroomName' },
     { title: 'Tổng buổi', dataIndex: 'totalSessions', key: 'totalSessions' },
     { title: 'Đã dùng', dataIndex: 'usedSessions', key: 'usedSessions' },
@@ -676,7 +687,7 @@ function EnrollmentProgressReportTab() {
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Space wrap>
-        <Input.Search allowClear placeholder="Tìm học viên hoặc lớp" style={{ width: 260 }} onSearch={setKeyword} />
+        <Input.Search allowClear placeholder={STUDENT_SEARCH_PLACEHOLDER} style={{ width: 260 }} onSearch={setKeyword} />
         <Select
           style={{ width: 180 }}
           value={warningFilter}

@@ -4,6 +4,7 @@ import com.englishcenter.studentpackage.LearningProgressWarningType;
 
 public record SessionWarningResponse(
         Long studentId,
+        String studentCode,
         String studentName,
         Long classroomId,
         String classroomName,

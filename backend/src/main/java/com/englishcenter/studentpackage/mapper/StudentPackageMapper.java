@@ -12,6 +12,7 @@ public class StudentPackageMapper {
         return new StudentPackageResponse(
                 studentPackage.getId(),
                 studentPackage.getStudent().getId(),
+                studentPackage.getStudent().getStudentCode(),
                 studentPackage.getStudent().getFullName(),
                 studentPackage.getClassroom().getId(),
                 studentPackage.getClassroom().getClassName(),
@@ -47,6 +48,7 @@ public class StudentPackageMapper {
         return new StudentPackageProgressResponse(
                 studentPackage.getId(),
                 studentPackage.getStudent().getId(),
+                studentPackage.getStudent().getStudentCode(),
                 studentPackage.getStudent().getFullName(),
                 studentPackage.getClassroom().getId(),
                 studentPackage.getClassroom().getClassName(),

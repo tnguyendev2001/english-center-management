@@ -2,6 +2,7 @@ import { Descriptions, Modal } from 'antd'
 import dayjs from 'dayjs'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
+import { formatStudentLabel } from '../../../components/common/studentDisplay'
 import type { Invoice } from '../invoiceTypes'
 
 const invoiceStatusLabels = {
@@ -23,7 +24,9 @@ export function InvoiceDetailModal({ open, invoice, onClose }: InvoiceDetailModa
       {invoice ? (
         <Descriptions column={1} bordered size="small">
           <Descriptions.Item label="Mã học phí">{invoice.invoiceCode}</Descriptions.Item>
-          <Descriptions.Item label="Học viên">{invoice.studentName}</Descriptions.Item>
+          <Descriptions.Item label="Học viên">
+            {formatStudentLabel(invoice.studentCode, invoice.studentName)}
+          </Descriptions.Item>
           <Descriptions.Item label="Lớp học">{invoice.classroomName}</Descriptions.Item>
           <Descriptions.Item label="Gói học phí">{invoice.packageNameSnapshot}</Descriptions.Item>
           <Descriptions.Item label="Số buổi">{invoice.totalSessionsSnapshot}</Descriptions.Item>

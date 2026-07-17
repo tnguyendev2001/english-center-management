@@ -14,7 +14,7 @@ import {
   Typography,
   message,
 } from 'antd'
-import type { TablePaginationConfig } from 'antd'
+import type { TablePaginationConfig } from 'antd/es/table'
 import type { ColumnsType } from 'antd/es/table'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
@@ -22,10 +22,17 @@ import { isAxiosError } from 'axios'
 import { useMemo, useState } from 'react'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
+import {
+  STUDENT_SEARCH_PLACEHOLDER,
+  studentCodeColumn,
+  studentKeywordFields,
+  studentNameColumn,
+} from '../../../components/common/studentDisplay'
 import { matchesKeyword, paginateItems } from '../../../utils/clientPagination'
-import { useRevenueSummary } from '../../revenue/revenueQueries'
+import { StudentPaymentHistoryDrawer } from '../../financial/components/StudentPaymentHistoryDrawer'
+import type { StudentPaymentSummary } from '../../financial/financialSummaryTypes'
 import { CancelPaymentModal } from '../components/CancelPaymentModal'
-import { useCancelPayment, usePayments } from '../paymentQueries'
+import { useCancelPayment, usePayments, usePaymentStudentSummaries } from '../paymentQueries'
 import type {
   CancelPaymentPayload,
   Payment,
@@ -37,7 +44,7 @@ import type {
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
 
-type PaymentTab = 'valid' | 'canceled' | 'all'
+type PaymentTab = 'valid' | 'by-student' | 'canceled' | 'all'
 
 const paymentMethodLabels: Record<PaymentMethod, string> = {
   CASH: 'Tiền mặt',
@@ -57,6 +64,10 @@ function defaultMonthRange(): [Dayjs, Dayjs] {
   return [today.startOf('month'), today]
 }
 
+function summaryRowKey(summary: StudentPaymentSummary) {
+  return `${summary.studentId}-${summary.classroomId}`
+}
+
 export function PaymentListPage() {
   const [tab, setTab] = useState<PaymentTab>('valid')
   const [page, setPage] = useState(0)
@@ -66,6 +77,7 @@ export function PaymentListPage() {
   const [statusFilter, setStatusFilter] = useState<PaymentStatus>()
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>(defaultMonthRange)
   const [cancelingPayment, setCancelingPayment] = useState<Payment>()
+  const [historySummary, setHistorySummary] = useState<StudentPaymentSummary>()
 
   const params: PaymentSearchParams = useMemo(
     () => ({
@@ -75,8 +87,17 @@ export function PaymentListPage() {
     [],
   )
 
+  const summaryParams = useMemo(
+    () => ({
+      fromDate: dateRange[0].format('YYYY-MM-DD'),
+      toDate: dateRange[1].format('YYYY-MM-DD'),
+    }),
+    [dateRange],
+  )
+
+  const isStudentTab = tab === 'by-student'
   const paymentsQuery = usePayments(params)
-  const revenueQuery = useRevenueSummary()
+  const studentSummariesQuery = usePaymentStudentSummaries(summaryParams, isStudentTab)
   const cancelPayment = useCancelPayment()
 
   const filteredPayments = useMemo(() => {
@@ -97,7 +118,7 @@ export function PaymentListPage() {
         return false
       }
 
-      if (!matchesKeyword(keyword, payment.studentName, payment.invoiceCode)) {
+      if (!matchesKeyword(keyword, ...studentKeywordFields(payment), payment.invoiceCode)) {
         return false
       }
 
@@ -115,19 +136,23 @@ export function PaymentListPage() {
     [filteredPayments, page, size],
   )
 
-  const methodSummary = useMemo(() => {
-    const monthStart = dayjs().startOf('month')
-    const today = dayjs()
-    const validPayments = (paymentsQuery.data?.data ?? []).filter((payment) => {
-      if (payment.status !== 'VALID') {
-        return false
-      }
+  const filteredStudentSummaries = useMemo(() => {
+    return (studentSummariesQuery.data?.data ?? []).filter((summary) =>
+      matchesKeyword(keyword, ...studentKeywordFields(summary), summary.classroomName),
+    )
+  }, [keyword, studentSummariesQuery.data?.data])
 
-      const paymentDate = dayjs(payment.paymentDate)
-      return !paymentDate.isBefore(monthStart, 'day') && !paymentDate.isAfter(today, 'day')
-    })
+  const pagedStudentSummaries = useMemo(
+    () => paginateItems(filteredStudentSummaries, page, size),
+    [filteredStudentSummaries, page, size],
+  )
+
+  const rangeSummary = useMemo(() => {
+    const validPayments = filteredPayments.filter((payment) => payment.status === 'VALID')
 
     return {
+      totalCollected: validPayments.reduce((sum, payment) => sum + payment.amount, 0),
+      paymentCount: validPayments.length,
       cash: validPayments
         .filter((payment) => payment.method === 'CASH')
         .reduce((sum, payment) => sum + payment.amount, 0),
@@ -135,7 +160,49 @@ export function PaymentListPage() {
         .filter((payment) => payment.method === 'BANK_TRANSFER')
         .reduce((sum, payment) => sum + payment.amount, 0),
     }
-  }, [paymentsQuery.data?.data])
+  }, [filteredPayments])
+
+  const studentSummaryColumns: ColumnsType<StudentPaymentSummary> = [
+    studentCodeColumn(),
+    studentNameColumn(),
+    {
+      title: 'Lớp',
+      dataIndex: 'classroomName',
+      key: 'classroomName',
+    },
+    {
+      title: 'Tổng đã đóng',
+      dataIndex: 'totalPaidAmount',
+      key: 'totalPaidAmount',
+      render: (value: number) => <MoneyText value={value} />,
+    },
+    {
+      title: 'Số lần thanh toán',
+      dataIndex: 'paymentCount',
+      key: 'paymentCount',
+    },
+    {
+      title: 'Lần thanh toán gần nhất',
+      dataIndex: 'lastPaymentDate',
+      key: 'lastPaymentDate',
+      render: (value?: string | null) => (value ? dayjs(value).format('DD/MM/YYYY') : '-'),
+    },
+    {
+      title: 'Phương thức gần nhất',
+      dataIndex: 'lastPaymentMethod',
+      key: 'lastPaymentMethod',
+      render: (method?: PaymentMethod | null) => (method ? paymentMethodLabels[method] : '-'),
+    },
+    {
+      title: 'Thao tác',
+      key: 'actions',
+      render: (_, summary) => (
+        <Button type="link" onClick={() => setHistorySummary(summary)}>
+          Xem lịch sử thanh toán
+        </Button>
+      ),
+    },
+  ]
 
   const columns: ColumnsType<Payment> = [
     {
@@ -144,11 +211,8 @@ export function PaymentListPage() {
       key: 'paymentDate',
       render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
     },
-    {
-      title: 'Học viên',
-      dataIndex: 'studentName',
-      key: 'studentName',
-    },
+    studentCodeColumn(),
+    studentNameColumn(),
     {
       title: 'Lớp học',
       dataIndex: 'classroomName',
@@ -278,33 +342,29 @@ export function PaymentListPage() {
         <Title level={2} style={{ margin: 0 }}>
           Thanh toán
         </Title>
-        <Text type="secondary">Lịch sử thu tiền và đối soát thanh toán.</Text>
+        <Text type="secondary">Lịch sử thu tiền và đối soát thanh toán theo phiếu thu hoặc học viên.</Text>
       </Space>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
-          <Card loading={revenueQuery.isLoading}>
+          <Card loading={paymentsQuery.isLoading}>
             <Statistic
-              title="Thu hôm nay"
-              value={revenueQuery.data?.todayRevenue ?? 0}
-              formatter={(value) => `${Number(value).toLocaleString('en-US')} VND`}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card loading={revenueQuery.isLoading}>
-            <Statistic
-              title="Thu tháng này"
-              value={revenueQuery.data?.monthRevenue ?? 0}
+              title="Tổng đã thu"
+              value={rangeSummary.totalCollected}
               formatter={(value) => `${Number(value).toLocaleString('en-US')} VND`}
             />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card loading={paymentsQuery.isLoading}>
+            <Statistic title="Số phiếu thu" value={rangeSummary.paymentCount} />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Card loading={paymentsQuery.isLoading}>
             <Statistic
               title="Tiền mặt"
-              value={methodSummary.cash}
+              value={rangeSummary.cash}
               formatter={(value) => `${Number(value).toLocaleString('en-US')} VND`}
             />
           </Card>
@@ -313,7 +373,7 @@ export function PaymentListPage() {
           <Card loading={paymentsQuery.isLoading}>
             <Statistic
               title="Chuyển khoản"
-              value={methodSummary.bankTransfer}
+              value={rangeSummary.bankTransfer}
               formatter={(value) => `${Number(value).toLocaleString('en-US')} VND`}
             />
           </Card>
@@ -326,7 +386,8 @@ export function PaymentListPage() {
             activeKey={tab}
             onChange={handleTabChange}
             items={[
-              { key: 'valid', label: 'Hợp lệ' },
+              { key: 'valid', label: 'Phiếu thu hợp lệ' },
+              { key: 'by-student', label: 'Theo học viên' },
               { key: 'canceled', label: 'Đã hủy' },
               { key: 'all', label: 'Tất cả' },
             ]}
@@ -342,23 +403,25 @@ export function PaymentListPage() {
             />
             <Input.Search
               allowClear
-              placeholder="Tìm học viên hoặc mã học phí"
+              placeholder={isStudentTab ? STUDENT_SEARCH_PLACEHOLDER : 'Tìm theo mã hoặc tên học viên, mã học phí'}
               style={{ width: 280 }}
               value={keyword}
               onChange={(event) => handleKeywordChange(event.target.value)}
             />
-            <Select
-              allowClear
-              placeholder="Phương thức"
-              style={{ width: 180 }}
-              value={methodFilter}
-              onChange={handleMethodChange}
-              options={[
-                { label: 'Tiền mặt', value: 'CASH' },
-                { label: 'Chuyển khoản', value: 'BANK_TRANSFER' },
-                { label: 'Khác', value: 'OTHER' },
-              ]}
-            />
+            {!isStudentTab && (
+              <Select
+                allowClear
+                placeholder="Phương thức"
+                style={{ width: 180 }}
+                value={methodFilter}
+                onChange={handleMethodChange}
+                options={[
+                  { label: 'Tiền mặt', value: 'CASH' },
+                  { label: 'Chuyển khoản', value: 'BANK_TRANSFER' },
+                  { label: 'Khác', value: 'OTHER' },
+                ]}
+              />
+            )}
             {tab === 'all' && (
               <Select
                 allowClear
@@ -374,19 +437,38 @@ export function PaymentListPage() {
             )}
           </Space>
 
-          <Table
-            rowKey="id"
-            columns={columns}
-            dataSource={pagedPayments}
-            loading={paymentsQuery.isLoading}
-            pagination={{
-              current: page + 1,
-              pageSize: size,
-              total: filteredPayments.length,
-              showSizeChanger: true,
-            }}
-            onChange={handleTableChange}
-          />
+          {isStudentTab ? (
+            <Table
+              rowKey={summaryRowKey}
+              columns={studentSummaryColumns}
+              dataSource={pagedStudentSummaries}
+              loading={studentSummariesQuery.isLoading}
+              pagination={{
+                current: page + 1,
+                pageSize: size,
+                total: filteredStudentSummaries.length,
+                showSizeChanger: true,
+              }}
+              onChange={handleTableChange}
+              locale={{ emptyText: 'Chưa có thanh toán' }}
+              scroll={{ x: 900 }}
+            />
+          ) : (
+            <Table
+              rowKey="id"
+              columns={columns}
+              dataSource={pagedPayments}
+              loading={paymentsQuery.isLoading}
+              pagination={{
+                current: page + 1,
+                pageSize: size,
+                total: filteredPayments.length,
+                showSizeChanger: true,
+              }}
+              onChange={handleTableChange}
+              locale={{ emptyText: 'Chưa có thanh toán' }}
+            />
+          )}
         </Space>
       </Card>
 
@@ -396,6 +478,18 @@ export function PaymentListPage() {
         submitting={cancelPayment.isPending}
         onCancel={() => setCancelingPayment(undefined)}
         onSubmit={handleCancelPayment}
+      />
+
+      <StudentPaymentHistoryDrawer
+        open={Boolean(historySummary)}
+        studentId={historySummary?.studentId}
+        classroomId={historySummary?.classroomId}
+        studentCode={historySummary?.studentCode}
+        studentName={historySummary?.studentName}
+        classroomName={historySummary?.classroomName}
+        fromDate={summaryParams.fromDate}
+        toDate={summaryParams.toDate}
+        onClose={() => setHistorySummary(undefined)}
       />
     </Space>
   )

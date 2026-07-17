@@ -1,8 +1,11 @@
 package com.englishcenter.debt;
 
+import com.englishcenter.debt.dto.StudentDebtSummaryResponse;
+import com.englishcenter.financial.StudentFinancialSummaryAggregator;
 import com.englishcenter.invoice.InvoiceRepository;
 import com.englishcenter.invoice.dto.InvoiceResponse;
 import com.englishcenter.invoice.mapper.InvoiceMapper;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -20,6 +23,13 @@ public class DebtService {
     public DebtService(InvoiceRepository invoiceRepository, InvoiceMapper invoiceMapper) {
         this.invoiceRepository = invoiceRepository;
         this.invoiceMapper = invoiceMapper;
+    }
+
+    @Transactional(readOnly = true)
+    public List<StudentDebtSummaryResponse> getStudentSummaries(Long classroomId) {
+        return StudentFinancialSummaryAggregator.aggregateDebtSummaries(
+                invoiceRepository.findAllForDebtSummary(classroomId)
+        );
     }
 
     @Transactional(readOnly = true)

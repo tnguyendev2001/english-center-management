@@ -14,6 +14,7 @@ export type AttendanceReportStatus = 'PRESENT' | 'ABSENT' | 'EXCUSED'
 
 export interface DebtReportItem {
   studentId: number
+  studentCode: string
   studentName: string
   classroomName: string
   invoiceId: number
@@ -100,6 +101,7 @@ export interface AttendanceReportItem {
   id: number
   sessionDate: string
   classroomName: string
+  studentCode: string
   studentName: string
   status: AttendanceReportStatus
   note?: string | null
@@ -134,6 +136,7 @@ export function debtItemToInvoice(item: DebtReportItem): Invoice {
     id: item.invoiceId,
     invoiceCode: item.invoiceCode,
     studentId: item.studentId,
+    studentCode: item.studentCode,
     studentName: item.studentName,
     classroomId: 0,
     classroomName: item.classroomName,

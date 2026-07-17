@@ -7,6 +7,7 @@ export interface Payment {
   invoiceId: number
   invoiceCode: string
   studentId: number
+  studentCode: string
   studentName: string
   classroomId: number
   classroomName: string

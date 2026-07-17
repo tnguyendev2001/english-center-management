@@ -7,6 +7,7 @@ public record ClassroomRenewalPreviewItemResponse(
         Long studentId,
         Long enrollmentId,
         Long currentStudentPackageId,
+        String studentCode,
         String studentName,
         String currentPackageName,
         int usedSessions,

@@ -5,6 +5,7 @@ import dayjs from 'dayjs'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MoneyText } from '../../../components/common/MoneyText'
+import { studentCodeColumn, studentNameColumn } from '../../../components/common/studentDisplay'
 import { StatusTag } from '../../../components/common/StatusTag'
 import { PaymentFormModal } from '../../payments/components/PaymentFormModal'
 import { useCreatePayment } from '../../payments/paymentQueries'
@@ -91,7 +92,8 @@ export function DashboardPage() {
   ]
 
   const debtColumns: ColumnsType<DebtReportItem> = [
-    { title: 'Học viên', dataIndex: 'studentName', key: 'studentName' },
+    studentCodeColumn(),
+    studentNameColumn(),
     { title: 'Lớp', dataIndex: 'classroomName', key: 'classroomName' },
     {
       title: 'Gói học',
@@ -143,7 +145,8 @@ export function DashboardPage() {
   ]
 
   const warningColumns: ColumnsType<SessionWarning> = [
-    { title: 'Học viên', dataIndex: 'studentName', key: 'studentName' },
+    studentCodeColumn(),
+    studentNameColumn(),
     { title: 'Lớp', dataIndex: 'classroomName', key: 'classroomName' },
     { title: 'Tổng buổi', dataIndex: 'totalSessions', key: 'totalSessions' },
     { title: 'Đã dùng', dataIndex: 'usedSessions', key: 'usedSessions' },
@@ -179,7 +182,8 @@ export function DashboardPage() {
       key: 'paymentDate',
       render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
     },
-    { title: 'Học viên', dataIndex: 'studentName', key: 'studentName' },
+    studentCodeColumn(),
+    studentNameColumn(),
     { title: 'Lớp', dataIndex: 'classroomName', key: 'classroomName' },
     {
       title: 'Số tiền',

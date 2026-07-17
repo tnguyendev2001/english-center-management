@@ -4,6 +4,7 @@ export type MakeupCreditReason = 'EXCUSED_ABSENCE' | 'CLASS_CANCELED' | 'MANUAL_
 export interface MakeupCredit {
   id: number
   studentId: number
+  studentCode: string
   studentName: string
   classroomId: number
   classroomName: string

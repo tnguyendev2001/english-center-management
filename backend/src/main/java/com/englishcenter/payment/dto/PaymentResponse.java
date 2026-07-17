@@ -12,6 +12,7 @@ public record PaymentResponse(
         Long invoiceId,
         String invoiceCode,
         Long studentId,
+        String studentCode,
         String studentName,
         Long classroomId,
         String classroomName,

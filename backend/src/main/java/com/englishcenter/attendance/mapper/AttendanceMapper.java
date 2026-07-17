@@ -11,6 +11,7 @@ public class AttendanceMapper {
                 attendance.getId(),
                 attendance.getSession().getId(),
                 attendance.getStudent().getId(),
+                attendance.getStudent().getStudentCode(),
                 attendance.getStudent().getFullName(),
                 attendance.getStatus(),
                 attendance.getNote(),

@@ -1,6 +1,7 @@
 import { Alert, Button, Descriptions, Form, Input, Modal, Select, Space, Typography } from 'antd'
 import { useEffect, useMemo, useRef } from 'react'
 import { MoneyText } from '../../../components/common/MoneyText'
+import { formatStudentLabel } from '../../../components/common/studentDisplay'
 import type { ClassPackage } from '../../classPackages/classPackageTypes'
 import type {
   ChangePackagePayload,
@@ -203,7 +204,9 @@ export function ChangePackageModal({
       <Form form={form} layout="vertical" onFinish={handleFinish}>
         {currentPackage ? (
           <Descriptions title="Gói cũ" column={1} bordered size="small" style={{ marginBottom: 16 }}>
-            <Descriptions.Item label="Học viên">{currentPackage.studentName}</Descriptions.Item>
+            <Descriptions.Item label="Học viên">
+              {formatStudentLabel(currentPackage.studentCode, currentPackage.studentName)}
+            </Descriptions.Item>
             <Descriptions.Item label="Lớp học">{currentPackage.classroomName}</Descriptions.Item>
             <Descriptions.Item label="Gói gần nhất">{currentPackage.latestPackageName}</Descriptions.Item>
             <Descriptions.Item label="Tổng buổi">{currentPackage.totalSessions}</Descriptions.Item>

@@ -23,7 +23,9 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
               AND (:method IS NULL OR payment.method = :method)
               AND (
                   :keyword IS NULL OR :keyword = ''
+                  OR LOWER(payment.student.studentCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(payment.student.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(payment.student.phone) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(payment.paymentCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(payment.invoice.invoiceCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
               )
@@ -49,7 +51,9 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
               AND (:method IS NULL OR payment.method = :method)
               AND (
                   :keyword IS NULL OR :keyword = ''
+                  OR LOWER(payment.student.studentCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(payment.student.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(payment.student.phone) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(payment.paymentCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(payment.invoice.invoiceCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
               )
@@ -72,7 +76,9 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
               AND (:classroomId IS NULL OR payment.classroom.id = :classroomId)
               AND (
                   :keyword IS NULL OR :keyword = ''
+                  OR LOWER(payment.student.studentCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(payment.student.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(payment.student.phone) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(payment.paymentCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(payment.invoice.invoiceCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
               )
@@ -157,7 +163,9 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
               AND (:method IS NULL OR payment.method = :method)
               AND (
                   :keyword IS NULL OR :keyword = ''
+                  OR LOWER(payment.student.studentCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(payment.student.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(payment.student.phone) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(payment.paymentCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(payment.invoice.invoiceCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
               )
@@ -220,4 +228,13 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             WHERE payment.status = com.englishcenter.payment.PaymentStatus.VALID
             """)
     BigDecimal sumAllValidAmount();
+
+    @Query("""
+            SELECT payment
+            FROM Payment payment
+            JOIN FETCH payment.student student
+            JOIN FETCH payment.classroom classroom
+            ORDER BY payment.paymentDate DESC, payment.createdAt DESC
+            """)
+    java.util.List<Payment> findAllForPaymentSummary();
 }

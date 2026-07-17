@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 
 public record DebtReportItemResponse(
         Long studentId,
+        String studentCode,
         String studentName,
         String classroomName,
         Long invoiceId,

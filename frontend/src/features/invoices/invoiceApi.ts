@@ -1,9 +1,18 @@
 import type { ApiResponse } from '../../api/apiResponse'
 import { httpClient } from '../../api/httpClient'
+import type { StudentTuitionSummary, StudentSummarySearchParams } from '../financial/financialSummaryTypes'
 import type { Invoice, InvoiceSearchParams } from './invoiceTypes'
 
 export async function getInvoices(params: InvoiceSearchParams) {
   const response = await httpClient.get<ApiResponse<Invoice[]>>('/invoices', {
+    params,
+  })
+
+  return response.data
+}
+
+export async function getTuitionStudentSummaries(params?: StudentSummarySearchParams) {
+  const response = await httpClient.get<ApiResponse<StudentTuitionSummary[]>>('/invoices/student-summaries', {
     params,
   })
 

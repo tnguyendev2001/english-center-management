@@ -3,6 +3,7 @@ import type { ColumnsType } from 'antd/es/table'
 import { isAxiosError } from 'axios'
 import { useEffect, useMemo, useState } from 'react'
 import { MoneyText } from '../../../components/common/MoneyText'
+import { studentCodeColumn, studentNameColumn } from '../../../components/common/studentDisplay'
 import type { ClassPackage } from '../../classPackages/classPackageTypes'
 import {
   useConfirmClassroomRenewals,
@@ -154,7 +155,8 @@ export function RenewAllPackagesModal({
   }
 
   const columns: ColumnsType<ClassroomRenewalCandidate> = [
-    { title: 'Học viên', dataIndex: 'studentName', key: 'studentName' },
+    studentCodeColumn(),
+    studentNameColumn(),
     { title: 'Gói hiện tại', dataIndex: 'currentPackageName', key: 'currentPackageName' },
     { title: 'Đã học', dataIndex: 'usedSessions', key: 'usedSessions' },
     { title: 'Còn lại', dataIndex: 'remainingSessions', key: 'remainingSessions' },

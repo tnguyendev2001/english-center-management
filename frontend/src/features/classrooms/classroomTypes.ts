@@ -95,6 +95,7 @@ export interface ClassroomRenewalCandidate {
   studentId: number
   enrollmentId: number
   studentPackageId?: number | null
+  studentCode: string
   studentName: string
   currentPackageName: string
   currentPackageTotalSessions: number
@@ -120,6 +121,7 @@ export interface ClassroomRenewalPreviewItem {
   studentId: number
   enrollmentId: number
   currentStudentPackageId: number
+  studentCode: string
   studentName: string
   currentPackageName: string
   usedSessions: number
@@ -142,6 +144,7 @@ export interface ClassroomRenewalPreview {
 export interface ClassroomRenewalConfirmItem {
   studentId: number
   enrollmentId: number
+  studentCode: string
   studentName: string
   newStudentPackageId: number
   newInvoiceId: number

@@ -154,6 +154,7 @@ public class ClassroomRenewalService {
                 enrollment.getStudent().getId(),
                 enrollment.getId(),
                 latestPackage == null ? null : latestPackage.getId(),
+                enrollment.getStudent().getStudentCode(),
                 enrollment.getStudent().getFullName(),
                 packageName,
                 packageTotalSessions,
@@ -173,6 +174,7 @@ public class ClassroomRenewalService {
                 context.enrollment().getStudent().getId(),
                 context.enrollment().getId(),
                 latestPackage == null ? null : latestPackage.getId(),
+                context.enrollment().getStudent().getStudentCode(),
                 context.enrollment().getStudent().getFullName(),
                 latestPackage == null
                         ? context.enrollment().getPackageNameSnapshot()
@@ -206,6 +208,7 @@ public class ClassroomRenewalService {
         return new ClassroomRenewalConfirmItemResponse(
                 enrollment.getStudent().getId(),
                 enrollment.getId(),
+                enrollment.getStudent().getStudentCode(),
                 enrollment.getStudent().getFullName(),
                 newStudentPackage.getId(),
                 invoice.getId(),

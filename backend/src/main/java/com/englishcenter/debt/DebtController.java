@@ -2,6 +2,7 @@ package com.englishcenter.debt;
 
 import com.englishcenter.common.api.ApiResponse;
 import com.englishcenter.common.api.PageMeta;
+import com.englishcenter.debt.dto.StudentDebtSummaryResponse;
 import com.englishcenter.invoice.dto.InvoiceResponse;
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -15,6 +16,13 @@ public class DebtController {
 
     public DebtController(DebtService debtService) {
         this.debtService = debtService;
+    }
+
+    @GetMapping("/api/debts/student-summaries")
+    public ApiResponse<List<StudentDebtSummaryResponse>> getStudentSummaries(
+            @RequestParam(required = false) Long classroomId
+    ) {
+        return ApiResponse.success(debtService.getStudentSummaries(classroomId));
     }
 
     @GetMapping("/api/debts")

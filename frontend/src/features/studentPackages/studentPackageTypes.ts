@@ -8,6 +8,7 @@ export type PackageChangeMode = 'REPLACEMENT_CHANGE' | 'NEW_CYCLE_CHANGE'
 export interface StudentPackage {
   id: number
   studentId: number
+  studentCode: string
   studentName: string
   classroomId: number
   classroomName: string
@@ -31,6 +32,7 @@ export interface StudentPackage {
 export interface EnrollmentLearningProgress {
   enrollmentId: number
   studentId: number
+  studentCode: string
   studentName: string
   classroomId: number
   classroomName: string

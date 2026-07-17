@@ -1,6 +1,7 @@
 import { Card, Space, Table, Typography } from 'antd'
 import dayjs from 'dayjs'
 import { StatusTag } from '../../../components/common/StatusTag'
+import { studentCodeColumn, studentNameColumn } from '../../../components/common/studentDisplay'
 import { useMakeupCredits } from '../makeupCreditQueries'
 import type { MakeupCredit, MakeupCreditReason } from '../makeupCreditTypes'
 
@@ -30,7 +31,8 @@ export function MakeupCreditPage() {
           loading={makeupCreditsQuery.isLoading}
           dataSource={makeupCreditsQuery.data ?? []}
           columns={[
-            { title: 'Học viên', dataIndex: 'studentName', key: 'studentName' },
+            studentCodeColumn(),
+            studentNameColumn(),
             { title: 'Lớp học', dataIndex: 'classroomName', key: 'classroomName' },
             {
               title: 'Buổi nguồn',

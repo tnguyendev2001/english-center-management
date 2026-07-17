@@ -3,6 +3,7 @@ import { isAxiosError } from 'axios'
 import dayjs from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
 import { StatusTag } from '../../../components/common/StatusTag'
+import { formatStudentLabel, studentCodeColumn, studentNameColumn } from '../../../components/common/studentDisplay'
 import type { ClassSession } from '../../classSessions/classSessionTypes'
 import type { ClassroomStatus } from '../../classrooms/classroomTypes'
 import type { Enrollment } from '../../enrollments/enrollmentTypes'
@@ -279,7 +280,7 @@ export function AttendanceMarkPanel({
           <span>Vui lòng gia hạn gói trước khi điểm danh.</span>
           {blockedStudents.map((student) => (
             <span key={student.studentId}>
-              {student.studentName}: {student.reason}
+              {formatStudentLabel(student.studentCode, student.studentName)}: {student.reason}
             </span>
           ))}
         </Space>
@@ -294,7 +295,7 @@ export function AttendanceMarkPanel({
             <Space direction="vertical" size={2}>
               {blockedStudents.map((student) => (
                 <span key={student.studentId}>
-                  {student.studentName}: {student.reason}
+                  {formatStudentLabel(student.studentCode, student.studentName)}: {student.reason}
                 </span>
               ))}
               <Button type="primary" onClick={onRenewNow}>
@@ -331,11 +332,8 @@ export function AttendanceMarkPanel({
             pagination={false}
             dataSource={activeEnrollments}
             columns={[
-              {
-                title: 'Học viên',
-                dataIndex: 'studentName',
-                key: 'studentName',
-              },
+              studentCodeColumn(),
+              studentNameColumn(),
               {
                 title: 'Tổng buổi',
                 key: 'totalSessions',

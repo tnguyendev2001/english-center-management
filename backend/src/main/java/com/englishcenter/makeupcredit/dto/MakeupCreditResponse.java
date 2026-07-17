@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 public record MakeupCreditResponse(
         Long id,
         Long studentId,
+        String studentCode,
         String studentName,
         Long classroomId,
         String classroomName,

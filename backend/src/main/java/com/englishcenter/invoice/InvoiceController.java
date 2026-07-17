@@ -3,6 +3,7 @@ package com.englishcenter.invoice;
 import com.englishcenter.common.api.ApiResponse;
 import com.englishcenter.common.api.PageMeta;
 import com.englishcenter.invoice.dto.InvoiceResponse;
+import com.englishcenter.invoice.dto.StudentTuitionSummaryResponse;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,6 +38,13 @@ public class InvoiceController {
         );
 
         return ApiResponse.success(invoices.getContent(), meta);
+    }
+
+    @GetMapping("/student-summaries")
+    public ApiResponse<List<StudentTuitionSummaryResponse>> getStudentSummaries(
+            @RequestParam(required = false) Long classroomId
+    ) {
+        return ApiResponse.success(invoiceService.getStudentSummaries(classroomId));
     }
 
     @GetMapping("/{id}")

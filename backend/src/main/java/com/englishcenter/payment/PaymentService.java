@@ -6,12 +6,16 @@ import com.englishcenter.invoice.Invoice;
 import com.englishcenter.invoice.InvoiceRepository;
 import com.englishcenter.invoice.InvoiceService;
 import com.englishcenter.invoice.InvoiceStatus;
+import com.englishcenter.financial.StudentFinancialSummaryAggregator;
 import com.englishcenter.payment.dto.CancelPaymentRequest;
 import com.englishcenter.payment.dto.CreatePaymentRequest;
 import com.englishcenter.payment.dto.PaymentResponse;
+import com.englishcenter.payment.dto.StudentPaymentSummaryResponse;
 import com.englishcenter.payment.mapper.PaymentMapper;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -40,6 +44,15 @@ public class PaymentService {
         this.invoiceRepository = invoiceRepository;
         this.invoiceService = invoiceService;
         this.paymentMapper = paymentMapper;
+    }
+
+    @Transactional(readOnly = true)
+    public List<StudentPaymentSummaryResponse> getStudentSummaries(LocalDate fromDate, LocalDate toDate) {
+        return StudentFinancialSummaryAggregator.aggregatePaymentSummaries(
+                paymentRepository.findAllForPaymentSummary(),
+                fromDate,
+                toDate
+        );
     }
 
     @Transactional(readOnly = true)

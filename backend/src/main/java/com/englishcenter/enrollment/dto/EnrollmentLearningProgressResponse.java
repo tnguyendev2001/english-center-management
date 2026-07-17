@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 public record EnrollmentLearningProgressResponse(
         Long enrollmentId,
         Long studentId,
+        String studentCode,
         String studentName,
         Long classroomId,
         String classroomName,

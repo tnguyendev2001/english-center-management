@@ -54,7 +54,9 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
               AND (:status IS NULL OR attendance.status = :status)
               AND (
                   :keyword IS NULL OR :keyword = ''
+                  OR LOWER(student.studentCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(student.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(student.phone) LIKE LOWER(CONCAT('%', :keyword, '%'))
               )
             ORDER BY session.sessionDate DESC, student.fullName ASC
             """)
@@ -78,7 +80,9 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
               AND (:status IS NULL OR attendance.status = :status)
               AND (
                   :keyword IS NULL OR :keyword = ''
+                  OR LOWER(student.studentCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(student.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(student.phone) LIKE LOWER(CONCAT('%', :keyword, '%'))
               )
             """)
     long countReportFiltered(
@@ -100,7 +104,9 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
               AND (:sessionDate IS NULL OR session.sessionDate = :sessionDate)
               AND (
                   :keyword IS NULL OR :keyword = ''
+                  OR LOWER(student.studentCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
                   OR LOWER(student.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(student.phone) LIKE LOWER(CONCAT('%', :keyword, '%'))
               )
             """)
     long countReportByStatus(
