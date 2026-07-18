@@ -73,7 +73,7 @@ public class EnrollmentProgressService {
         StudentPackage latestStudentPackage = studentPackageRepository
                 .findTopByEnrollmentIdOrderByCycleNoDescIdDesc(enrollment.getId())
                 .orElse(null);
-        int makeupAvailableSessions = makeupCreditRepository.sumAvailableMakeupSessions(
+        int makeupAvailableSessions = makeupCreditRepository.countAvailableMakeupCredits(
                 enrollment.getStudent().getId(),
                 enrollment.getClassroom().getId(),
                 MakeupCreditStatus.AVAILABLE

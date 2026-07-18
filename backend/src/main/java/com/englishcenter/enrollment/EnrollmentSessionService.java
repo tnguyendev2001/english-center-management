@@ -17,8 +17,8 @@ public class EnrollmentSessionService {
         return Math.max(enrollment.getUsedSessions() - enrollment.getTotalSessions(), 0);
     }
 
-    public boolean consumesSession(Attendance attendance, ClassSession session) {
-        if (attendance == null || session == null) {
+    public boolean consumesSession(Attendance attendance, ClassSession session, Enrollment enrollment) {
+        if (attendance == null || session == null || enrollment == null) {
             return false;
         }
 
@@ -27,6 +27,10 @@ public class EnrollmentSessionService {
         }
 
         if (session.getStatus() == ClassSessionStatus.CANCELED) {
+            return false;
+        }
+
+        if (!EnrollmentLearningDateHelper.isEligibleForSession(enrollment, session.getSessionDate())) {
             return false;
         }
 
@@ -43,7 +47,7 @@ public class EnrollmentSessionService {
             ClassSession session,
             AttendanceStatus newStatus
     ) {
-        boolean oldConsumes = consumesSession(existingAttendance, session);
+        boolean oldConsumes = consumesSession(existingAttendance, session, enrollment);
         boolean newConsumes = consumesStatus(newStatus);
 
         if (!oldConsumes && newConsumes) {

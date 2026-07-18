@@ -17,8 +17,6 @@ public class MakeupCreditMapper {
                 credit.getSourceSession() == null ? null : credit.getSourceSession().getId(),
                 credit.getSourceSession() == null ? null : credit.getSourceSession().getSessionDate(),
                 credit.getReason(),
-                credit.getCreditSessions(),
-                credit.getUsedSessions(),
                 credit.getStatus(),
                 credit.getNote(),
                 credit.getCreatedAt(),

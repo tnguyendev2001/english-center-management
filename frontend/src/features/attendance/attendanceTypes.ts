@@ -51,3 +51,15 @@ export interface AttendanceReadiness {
   blockedStudents: AttendanceReadinessBlockedStudent[]
   activatedPackages: AttendanceReadinessActivatedPackage[]
 }
+
+export interface AttendanceRosterStudent {
+  studentId: number
+  studentCode: string
+  studentName: string
+  enrollmentId: number
+}
+
+export interface AttendanceRoster {
+  sessionId: number
+  students: AttendanceRosterStudent[]
+}

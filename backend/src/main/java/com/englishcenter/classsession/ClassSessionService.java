@@ -165,15 +165,6 @@ public class ClassSessionService {
         }
 
         List<MakeupCredit> linkedCredits = makeupCreditRepository.findBySourceSessionId(id);
-        boolean hasUsedMakeupCredit = linkedCredits.stream()
-                .anyMatch(credit -> credit.getStatus() == MakeupCreditStatus.USED
-                        || credit.getUsedSessions() > 0);
-        if (hasUsedMakeupCredit) {
-            throw new BusinessException(
-                    "Cannot correction-cancel session: makeup credit from this session has already been used"
-            );
-        }
-
         for (MakeupCredit credit : linkedCredits) {
             if (credit.getStatus() == MakeupCreditStatus.AVAILABLE) {
                 credit.setStatus(MakeupCreditStatus.CANCELED);

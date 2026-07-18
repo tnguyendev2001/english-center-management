@@ -88,7 +88,7 @@ public class DashboardService {
                 paymentRepository.sumValidAmountBetween(today, today),
                 paymentRepository.sumValidAmountBetween(firstDayOfMonth, today),
                 paymentRepository.sumValidAmountBetween(firstDayOfYear, today),
-                makeupCreditRepository.sumAllAvailableMakeupSessions(MakeupCreditStatus.AVAILABLE),
+                makeupCreditRepository.countAllAvailableMakeupCredits(MakeupCreditStatus.AVAILABLE),
                 classSessionRepository.countBySessionDateAndStatusNot(today, ClassSessionStatus.CANCELED),
                 classSessionRepository.countBySessionDateBetweenAndStatus(
                         firstDayOfMonth,

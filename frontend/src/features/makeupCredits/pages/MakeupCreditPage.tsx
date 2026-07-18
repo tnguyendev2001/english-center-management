@@ -13,6 +13,11 @@ const reasonLabels: Record<MakeupCreditReason, string> = {
   MANUAL_ADJUSTMENT: 'Điều chỉnh thủ công',
 }
 
+const makeupStatusLabels = {
+  AVAILABLE: 'Còn buổi bù',
+  CANCELED: 'Đã hủy',
+}
+
 export function MakeupCreditPage() {
   const makeupCreditsQuery = useMakeupCredits()
 
@@ -22,7 +27,7 @@ export function MakeupCreditPage() {
         <Title level={2} style={{ margin: 0 }}>
           Buổi bù
         </Title>
-        <Text type="secondary">Theo dõi các buổi bù được tạo từ xin nghỉ hoặc điều chỉnh.</Text>
+        <Text type="secondary">Theo dõi các buổi bù được tạo từ xin nghỉ hợp lệ.</Text>
       </Space>
 
       <Card>
@@ -46,13 +51,11 @@ export function MakeupCreditPage() {
               key: 'reason',
               render: (reason: MakeupCreditReason) => reasonLabels[reason],
             },
-            { title: 'Số buổi bù', dataIndex: 'creditSessions', key: 'creditSessions' },
-            { title: 'Đã dùng', dataIndex: 'usedSessions', key: 'usedSessions' },
             {
               title: 'Trạng thái',
               dataIndex: 'status',
               key: 'status',
-              render: (status: string) => <StatusTag status={status} />,
+              render: (status: string) => <StatusTag status={status} labels={makeupStatusLabels} />,
             },
             {
               title: 'Ghi chú',

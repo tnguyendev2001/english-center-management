@@ -15,8 +15,6 @@ public record MakeupCreditResponse(
         Long sourceSessionId,
         LocalDate sourceSessionDate,
         MakeupCreditReason reason,
-        Integer creditSessions,
-        Integer usedSessions,
         MakeupCreditStatus status,
         String note,
         LocalDateTime createdAt,

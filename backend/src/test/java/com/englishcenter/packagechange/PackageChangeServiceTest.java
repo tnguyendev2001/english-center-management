@@ -469,7 +469,7 @@ class PackageChangeServiceTest {
         when(tuitionPackageRepository.findById(newPackage.getId())).thenReturn(Optional.of(newPackage));
         when(classPackageRepository.existsByClassroomIdAndTuitionPackageIdAndActiveTrue(2L, newPackage.getId()))
                 .thenReturn(true);
-        when(makeupCreditRepository.sumAvailableMakeupSessions(1L, 2L, MakeupCreditStatus.AVAILABLE))
+        when(makeupCreditRepository.countAvailableMakeupCredits(1L, 2L, MakeupCreditStatus.AVAILABLE))
                 .thenReturn(1);
         when(paymentRepository.sumValidAmountByStudentPackageId(20L)).thenReturn(paidAmount);
         when(studentPackageRepository.findMaxCycleNoByEnrollmentId(10L)).thenReturn(1);
@@ -494,7 +494,7 @@ class PackageChangeServiceTest {
         when(tuitionPackageRepository.findById(newPackage.getId())).thenReturn(Optional.of(newPackage));
         when(classPackageRepository.existsByClassroomIdAndTuitionPackageIdAndActiveTrue(2L, newPackage.getId()))
                 .thenReturn(true);
-        when(makeupCreditRepository.sumAvailableMakeupSessions(1L, 2L, MakeupCreditStatus.AVAILABLE))
+        when(makeupCreditRepository.countAvailableMakeupCredits(1L, 2L, MakeupCreditStatus.AVAILABLE))
                 .thenReturn(1);
         when(paymentRepository.sumValidAmountByStudentPackageId(20L)).thenReturn(paidAmount);
     }

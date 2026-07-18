@@ -69,7 +69,7 @@ class DashboardServiceTest {
         when(paymentRepository.sumValidAmountBetween(today, today)).thenReturn(new BigDecimal("40000"));
         when(paymentRepository.sumValidAmountBetween(firstDayOfMonth, today)).thenReturn(new BigDecimal("40000"));
         when(paymentRepository.sumValidAmountBetween(firstDayOfYear, today)).thenReturn(new BigDecimal("40000"));
-        when(makeupCreditRepository.sumAllAvailableMakeupSessions(MakeupCreditStatus.AVAILABLE)).thenReturn(3);
+        when(makeupCreditRepository.countAllAvailableMakeupCredits(MakeupCreditStatus.AVAILABLE)).thenReturn(3);
         when(classSessionRepository.countBySessionDateAndStatusNot(today, ClassSessionStatus.CANCELED)).thenReturn(2);
         when(classSessionRepository.countBySessionDateBetweenAndStatus(
                 firstDayOfMonth,

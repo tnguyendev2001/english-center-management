@@ -376,11 +376,9 @@ export function ClassroomDetailPage() {
   const attendanceTab = (
     <AttendanceMarkPanel
       sessions={sessionsQuery.data?.data ?? []}
-      enrollments={activeEnrollments}
       studentPackages={studentPackagesQuery.data ?? []}
       classroomStatus={classroom.status}
       loadingSessions={sessionsQuery.isLoading}
-      loadingEnrollments={enrollmentsQuery.isLoading}
       selectedSessionId={attendanceSessionId}
       onSelectedSessionIdChange={setAttendanceSessionId}
       onRenewNow={() => setRenewalModalOpen(true)}

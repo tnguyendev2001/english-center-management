@@ -163,7 +163,7 @@ public class PackageChangeService {
         int usedSessions = enrollment.getUsedSessions();
         validateModeAllowed(changeMode, usedSessions, newTuitionPackage);
         int remainingSessions = Math.max(enrollment.getTotalSessions() - usedSessions, 0);
-        int makeupAvailableSessions = makeupCreditRepository.sumAvailableMakeupSessions(
+        int makeupAvailableSessions = makeupCreditRepository.countAvailableMakeupCredits(
                 oldStudentPackage.getStudent().getId(),
                 oldStudentPackage.getClassroom().getId(),
                 MakeupCreditStatus.AVAILABLE

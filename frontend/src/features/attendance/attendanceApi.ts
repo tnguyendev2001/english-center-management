@@ -1,6 +1,19 @@
 import type { ApiResponse } from '../../api/apiResponse'
 import { httpClient } from '../../api/httpClient'
-import type { Attendance, AttendanceReadiness, MarkAttendancePayload } from './attendanceTypes'
+import type {
+  Attendance,
+  AttendanceReadiness,
+  AttendanceRoster,
+  MarkAttendancePayload,
+} from './attendanceTypes'
+
+export async function getAttendanceRoster(sessionId: number) {
+  const response = await httpClient.get<ApiResponse<AttendanceRoster>>('/attendance/roster', {
+    params: { sessionId },
+  })
+
+  return response.data.data
+}
 
 export async function getAttendance(sessionId?: number) {
   const response = await httpClient.get<ApiResponse<Attendance[]>>('/attendance', {

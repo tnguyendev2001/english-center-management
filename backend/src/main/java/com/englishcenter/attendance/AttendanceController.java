@@ -3,6 +3,7 @@ package com.englishcenter.attendance;
 import com.englishcenter.attendance.dto.AttendanceResponse;
 import com.englishcenter.attendance.dto.AttendanceReadinessRequest;
 import com.englishcenter.attendance.dto.AttendanceReadinessResponse;
+import com.englishcenter.attendance.dto.AttendanceRosterResponse;
 import com.englishcenter.attendance.dto.MarkAttendanceRequest;
 import com.englishcenter.common.api.ApiResponse;
 import com.englishcenter.common.api.PageMeta;
@@ -33,6 +34,11 @@ public class AttendanceController {
             @Valid @RequestBody AttendanceReadinessRequest request
     ) {
         return ApiResponse.success(attendanceService.checkReadiness(request.sessionId()));
+    }
+
+    @GetMapping("/api/attendance/roster")
+    public ApiResponse<AttendanceRosterResponse> getRoster(@RequestParam Long sessionId) {
+        return ApiResponse.success(attendanceService.getRoster(sessionId));
     }
 
     @GetMapping("/api/attendance")

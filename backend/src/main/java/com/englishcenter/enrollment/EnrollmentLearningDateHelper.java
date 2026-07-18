@@ -13,6 +13,10 @@ public final class EnrollmentLearningDateHelper {
             "Ngày bắt đầu học phải trùng với lịch học của lớp.";
     public static final String LEARNING_START_MUST_MATCH_SESSION_MESSAGE =
             "Ngày bắt đầu học phải trùng với một buổi học đã tạo của lớp.";
+    public static final String NOT_STARTED_FOR_SESSION_MESSAGE =
+            "Học viên chưa bắt đầu học tại thời điểm của buổi học này.";
+    public static final String ENDED_FOR_SESSION_MESSAGE =
+            "Học viên đã kết thúc học tại thời điểm của buổi học này.";
 
     private static final int MAX_SCAN_DAYS = 366;
 
@@ -29,6 +33,40 @@ public final class EnrollmentLearningDateHelper {
         }
 
         return ClassDayOfWeek.isDateMatchingDaysOfWeek(date, classroom.getDaysOfWeek());
+    }
+
+    public static boolean isEligibleForSession(Enrollment enrollment, LocalDate sessionDate) {
+        if (enrollment == null || sessionDate == null) {
+            return false;
+        }
+
+        if (enrollment.getStatus() != EnrollmentStatus.ACTIVE) {
+            return false;
+        }
+
+        if (sessionDate.isBefore(enrollment.getStartDate())) {
+            return false;
+        }
+
+        return enrollment.getEndDate() == null || !sessionDate.isAfter(enrollment.getEndDate());
+    }
+
+    public static void validateEligibleForSession(Enrollment enrollment, LocalDate sessionDate) {
+        if (enrollment == null) {
+            throw new BusinessException("Student is not actively enrolled in this classroom");
+        }
+
+        if (enrollment.getStatus() != EnrollmentStatus.ACTIVE) {
+            throw new BusinessException("Student is not actively enrolled in this classroom");
+        }
+
+        if (sessionDate.isBefore(enrollment.getStartDate())) {
+            throw new BusinessException(NOT_STARTED_FOR_SESSION_MESSAGE);
+        }
+
+        if (enrollment.getEndDate() != null && sessionDate.isAfter(enrollment.getEndDate())) {
+            throw new BusinessException(ENDED_FOR_SESSION_MESSAGE);
+        }
     }
 
     public static void validateLearningStartDate(Classroom classroom, LocalDate learningStartDate) {

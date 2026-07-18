@@ -41,7 +41,6 @@ public class StudentPackageMapper {
         int totalSessions = studentPackage.getTotalSessions();
         int remainingSessions = Math.max(totalSessions - usedSessions, 0);
         int overusedSessions = Math.max(usedSessions - totalSessions, 0);
-        int totalAvailableSessions = remainingSessions + makeupAvailableSessions;
         LearningProgressWarningType warningType = resolveWarningType(remainingSessions, overusedSessions);
         String warningMessage = buildWarningMessage(remainingSessions, overusedSessions);
 
@@ -70,7 +69,6 @@ public class StudentPackageMapper {
                 remainingSessions,
                 overusedSessions,
                 makeupAvailableSessions,
-                totalAvailableSessions,
                 warningType,
                 warningMessage
         );

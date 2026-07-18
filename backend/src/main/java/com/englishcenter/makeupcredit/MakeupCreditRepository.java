@@ -20,22 +20,22 @@ public interface MakeupCreditRepository extends JpaRepository<MakeupCredit, Long
     Page<MakeupCredit> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     @Query("""
-            SELECT COALESCE(SUM(c.creditSessions - c.usedSessions), 0)
+            SELECT COUNT(c)
             FROM MakeupCredit c
             WHERE c.student.id = :studentId
               AND c.classroom.id = :classroomId
               AND c.status = :availableStatus
             """)
-    int sumAvailableMakeupSessions(
+    int countAvailableMakeupCredits(
             @Param("studentId") Long studentId,
             @Param("classroomId") Long classroomId,
             @Param("availableStatus") MakeupCreditStatus availableStatus
     );
 
     @Query("""
-            SELECT COALESCE(SUM(c.creditSessions - c.usedSessions), 0)
+            SELECT COUNT(c)
             FROM MakeupCredit c
             WHERE c.status = :availableStatus
             """)
-    int sumAllAvailableMakeupSessions(@Param("availableStatus") MakeupCreditStatus availableStatus);
+    int countAllAvailableMakeupCredits(@Param("availableStatus") MakeupCreditStatus availableStatus);
 }

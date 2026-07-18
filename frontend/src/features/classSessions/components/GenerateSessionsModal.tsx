@@ -1,4 +1,5 @@
 import { DatePicker, Form, InputNumber, Modal } from 'antd'
+import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import { useEffect } from 'react'
 import type { GenerateClassSessionsPayload } from '../classSessionTypes'
@@ -29,7 +30,10 @@ export function GenerateSessionsModal({
   useEffect(() => {
     if (open) {
       form.resetFields()
-      form.setFieldValue('numberOfSessions', 8)
+      form.setFieldsValue({
+        numberOfSessions: 1,
+        fromDate: dayjs(),
+      })
     }
   }, [form, open])
 

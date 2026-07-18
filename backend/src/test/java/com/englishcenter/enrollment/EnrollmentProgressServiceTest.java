@@ -54,7 +54,7 @@ class EnrollmentProgressServiceTest {
                 .thenReturn(List.of(enrollment));
         when(studentPackageRepository.findTopByEnrollmentIdOrderByCycleNoDescIdDesc(10L))
                 .thenReturn(java.util.Optional.of(latestPackage));
-        when(makeupCreditRepository.sumAvailableMakeupSessions(1L, 2L, MakeupCreditStatus.AVAILABLE))
+        when(makeupCreditRepository.countAvailableMakeupCredits(1L, 2L, MakeupCreditStatus.AVAILABLE))
                 .thenReturn(0);
 
         List<EnrollmentLearningProgressResponse> progress = service.getByClassroomId(2L);
@@ -80,7 +80,7 @@ class EnrollmentProgressServiceTest {
                 .thenReturn(List.of(enrollment));
         when(studentPackageRepository.findTopByEnrollmentIdOrderByCycleNoDescIdDesc(10L))
                 .thenReturn(java.util.Optional.of(latestPackage));
-        when(makeupCreditRepository.sumAvailableMakeupSessions(1L, 2L, MakeupCreditStatus.AVAILABLE))
+        when(makeupCreditRepository.countAvailableMakeupCredits(1L, 2L, MakeupCreditStatus.AVAILABLE))
                 .thenReturn(0);
 
         List<EnrollmentLearningProgressResponse> progress = service.getByClassroomId(2L);

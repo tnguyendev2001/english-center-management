@@ -31,7 +31,6 @@ public record StudentPackageProgressResponse(
         int remainingSessions,
         int overusedSessions,
         int makeupAvailableSessions,
-        int totalAvailableSessions,
         LearningProgressWarningType warningType,
         String warningMessage
 ) {

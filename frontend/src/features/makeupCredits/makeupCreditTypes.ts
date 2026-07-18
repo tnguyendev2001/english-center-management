@@ -1,4 +1,4 @@
-export type MakeupCreditStatus = 'AVAILABLE' | 'USED' | 'CANCELED'
+export type MakeupCreditStatus = 'AVAILABLE' | 'CANCELED'
 export type MakeupCreditReason = 'EXCUSED_ABSENCE' | 'CLASS_CANCELED' | 'MANUAL_ADJUSTMENT'
 
 export interface MakeupCredit {
@@ -11,8 +11,6 @@ export interface MakeupCredit {
   sourceSessionId?: number | null
   sourceSessionDate?: string | null
   reason: MakeupCreditReason
-  creditSessions: number
-  usedSessions: number
   status: MakeupCreditStatus
   note?: string | null
   createdAt: string

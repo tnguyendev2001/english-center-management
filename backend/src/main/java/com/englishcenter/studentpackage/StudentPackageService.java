@@ -85,7 +85,7 @@ public class StudentPackageService {
                 studentPackage.getEndDate(),
                 ClassSessionStatus.CANCELED
         ));
-        int makeupAvailableSessions = makeupCreditRepository.sumAvailableMakeupSessions(
+        int makeupAvailableSessions = makeupCreditRepository.countAvailableMakeupCredits(
                 studentId,
                 classroomId,
                 MakeupCreditStatus.AVAILABLE

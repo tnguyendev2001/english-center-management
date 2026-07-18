@@ -1,5 +1,6 @@
 package com.englishcenter.enrollment;
 
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -100,6 +101,22 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     @EntityGraph(attributePaths = {"student", "classroom", "selectedPackage"})
     List<Enrollment> findByClassroomIdAndStatus(Long classroomId, EnrollmentStatus status);
+
+    @EntityGraph(attributePaths = {"student", "classroom", "selectedPackage"})
+    @Query("""
+            SELECT enrollment
+            FROM Enrollment enrollment
+            WHERE enrollment.classroom.id = :classroomId
+              AND enrollment.status = :status
+              AND enrollment.startDate <= :sessionDate
+              AND (enrollment.endDate IS NULL OR enrollment.endDate >= :sessionDate)
+            ORDER BY enrollment.student.fullName ASC
+            """)
+    List<Enrollment> findEligibleForAttendanceBySessionDate(
+            @Param("classroomId") Long classroomId,
+            @Param("status") EnrollmentStatus status,
+            @Param("sessionDate") LocalDate sessionDate
+    );
 
     @EntityGraph(attributePaths = {"student", "classroom", "selectedPackage"})
     List<Enrollment> findByStudentIdAndStatus(Long studentId, EnrollmentStatus status);

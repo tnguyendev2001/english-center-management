@@ -4,6 +4,8 @@ import com.englishcenter.attendance.dto.AttendanceItemRequest;
 import com.englishcenter.attendance.dto.AttendanceReadinessBlockedStudentResponse;
 import com.englishcenter.attendance.dto.AttendanceReadinessResponse;
 import com.englishcenter.attendance.dto.AttendanceResponse;
+import com.englishcenter.attendance.dto.AttendanceRosterResponse;
+import com.englishcenter.attendance.dto.AttendanceRosterStudentResponse;
 import com.englishcenter.attendance.dto.MarkAttendanceRequest;
 import com.englishcenter.attendance.mapper.AttendanceMapper;
 import com.englishcenter.classroom.ClassroomStatus;
@@ -13,6 +15,7 @@ import com.englishcenter.classsession.ClassSessionStatus;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
 import com.englishcenter.enrollment.Enrollment;
+import com.englishcenter.enrollment.EnrollmentLearningDateHelper;
 import com.englishcenter.enrollment.EnrollmentRepository;
 import com.englishcenter.enrollment.EnrollmentSessionService;
 import com.englishcenter.enrollment.EnrollmentStatus;
@@ -22,6 +25,7 @@ import com.englishcenter.makeupcredit.MakeupCreditRepository;
 import com.englishcenter.makeupcredit.MakeupCreditStatus;
 import com.englishcenter.student.Student;
 import com.englishcenter.student.StudentRepository;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +34,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -38,6 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AttendanceService {
+    private static final Logger log = LoggerFactory.getLogger(AttendanceService.class);
     private static final int MAX_PAGE_SIZE = 100;
 
     private final AttendanceRepository attendanceRepository;
@@ -77,16 +84,41 @@ public class AttendanceService {
             throw new BusinessException("Một số học viên đã hết buổi. Vui lòng gia hạn gói trước khi điểm danh.");
         }
 
-        Map<Long, Student> activeStudents = activeStudentsById(session.getClassroom().getId());
-        Map<Long, Enrollment> enrollmentsByStudentId = activeEnrollmentsByStudentId(session.getClassroom().getId());
+        Map<Long, Enrollment> enrollmentsByStudentId = eligibleEnrollmentsByStudentId(
+                session.getClassroom().getId(),
+                session.getSessionDate()
+        );
         List<Attendance> saved = request.items().stream()
-                .map(item -> markOne(session, activeStudents, enrollmentsByStudentId, item))
+                .map(item -> markOne(session, enrollmentsByStudentId, item))
                 .toList();
 
         session.setStatus(ClassSessionStatus.COMPLETED);
         classSessionRepository.save(session);
         // TODO: Save ActivityLog for MARK_ATTENDANCE when ActivityLog exists.
         return saved.stream().map(attendanceMapper::toResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public AttendanceRosterResponse getRoster(Long sessionId) {
+        ClassSession session = classSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new NotFoundException("Class session not found"));
+
+        List<Enrollment> enrollments = findEligibleEnrollments(
+                session.getClassroom().getId(),
+                session.getSessionDate()
+        );
+        logIneligibleAttendanceWarnings(session, enrollments);
+
+        List<AttendanceRosterStudentResponse> students = enrollments.stream()
+                .map(enrollment -> new AttendanceRosterStudentResponse(
+                        enrollment.getStudent().getId(),
+                        enrollment.getStudent().getStudentCode(),
+                        enrollment.getStudent().getFullName(),
+                        enrollment.getId()
+                ))
+                .toList();
+
+        return new AttendanceRosterResponse(sessionId, students);
     }
 
     @Transactional(readOnly = true)
@@ -114,19 +146,16 @@ public class AttendanceService {
 
     private Attendance markOne(
             ClassSession session,
-            Map<Long, Student> activeStudents,
             Map<Long, Enrollment> enrollmentsByStudentId,
             AttendanceItemRequest item
     ) {
-        Student student = activeStudents.get(item.studentId());
-        if (student == null) {
+        Enrollment enrollment = enrollmentsByStudentId.get(item.studentId());
+        if (enrollment == null) {
+            rejectIfNotEligibleForAttendance(session, item.studentId());
             throw new BusinessException("Student is not actively enrolled in this classroom");
         }
 
-        Enrollment enrollment = enrollmentsByStudentId.get(student.getId());
-        if (enrollment == null) {
-            throw new BusinessException("Student is not actively enrolled in this classroom");
-        }
+        Student student = enrollment.getStudent();
 
         Optional<Attendance> existingOptional = attendanceRepository.findBySessionIdAndStudentId(
                 session.getId(),
@@ -197,13 +226,7 @@ public class AttendanceService {
         }
 
         MakeupCredit credit = creditOptional.get();
-        if (credit.getStatus() == MakeupCreditStatus.USED || credit.getUsedSessions() > 0) {
-            throw new BusinessException(
-                    "Cannot change excused attendance: makeup credit from this session has already been used"
-            );
-        }
-
-        if (credit.getStatus() == MakeupCreditStatus.AVAILABLE) {
+        if (credit.getStatus() != MakeupCreditStatus.CANCELED) {
             credit.setStatus(MakeupCreditStatus.CANCELED);
             credit.setNote("Canceled: attendance corrected (" + correctionReason + ")");
             makeupCreditRepository.save(credit);
@@ -236,7 +259,7 @@ public class AttendanceService {
             return;
         }
 
-        if (credit.getStatus() == MakeupCreditStatus.CANCELED && credit.getUsedSessions() == 0) {
+        if (credit.getStatus() == MakeupCreditStatus.CANCELED) {
             credit.setStatus(MakeupCreditStatus.AVAILABLE);
             credit.setNote("Reactivated from excused absence");
             makeupCreditRepository.save(credit);
@@ -244,9 +267,9 @@ public class AttendanceService {
     }
 
     private AttendanceReadinessResponse ensureAttendanceReady(ClassSession session) {
-        List<Enrollment> enrollments = enrollmentRepository.findByClassroomIdAndStatus(
+        List<Enrollment> enrollments = findEligibleEnrollments(
                 session.getClassroom().getId(),
-                EnrollmentStatus.ACTIVE
+                session.getSessionDate()
         );
         List<AttendanceReadinessBlockedStudentResponse> blockedStudents = new ArrayList<>();
 
@@ -261,7 +284,11 @@ public class AttendanceService {
                     enrollment.getStudent().getId()
             );
             if (existingOptional.isPresent()
-                    && enrollmentSessionService.consumesSession(existingOptional.get(), session)) {
+                    && enrollmentSessionService.consumesSession(
+                            existingOptional.get(),
+                            session,
+                            enrollment
+                    )) {
                 continue;
             }
 
@@ -313,23 +340,71 @@ public class AttendanceService {
         }
     }
 
-    private Map<Long, Student> activeStudentsById(Long classroomId) {
-        List<Enrollment> enrollments = enrollmentRepository.findByClassroomIdAndStatus(
+    private List<Enrollment> findEligibleEnrollments(Long classroomId, LocalDate sessionDate) {
+        return enrollmentRepository.findEligibleForAttendanceBySessionDate(
                 classroomId,
-                EnrollmentStatus.ACTIVE
+                EnrollmentStatus.ACTIVE,
+                sessionDate
         );
-        Set<Long> studentIds = enrollments.stream()
-                .map(enrollment -> enrollment.getStudent().getId())
-                .collect(Collectors.toSet());
-        return studentRepository.findAllById(studentIds)
-                .stream()
-                .collect(Collectors.toMap(Student::getId, Function.identity()));
     }
 
-    private Map<Long, Enrollment> activeEnrollmentsByStudentId(Long classroomId) {
-        return enrollmentRepository.findByClassroomIdAndStatus(classroomId, EnrollmentStatus.ACTIVE)
+    private Map<Long, Enrollment> eligibleEnrollmentsByStudentId(Long classroomId, LocalDate sessionDate) {
+        return findEligibleEnrollments(classroomId, sessionDate)
                 .stream()
                 .collect(Collectors.toMap(enrollment -> enrollment.getStudent().getId(), Function.identity()));
+    }
+
+    private void rejectIfNotEligibleForAttendance(ClassSession session, Long studentId) {
+        Enrollment enrollment = enrollmentRepository.findByClassroomIdAndStatus(
+                        session.getClassroom().getId(),
+                        EnrollmentStatus.ACTIVE
+                ).stream()
+                .filter(activeEnrollment -> activeEnrollment.getStudent().getId().equals(studentId))
+                .findFirst()
+                .orElse(null);
+
+        if (enrollment == null) {
+            return;
+        }
+
+        EnrollmentLearningDateHelper.validateEligibleForSession(enrollment, session.getSessionDate());
+    }
+
+    private void logIneligibleAttendanceWarnings(ClassSession session, List<Enrollment> eligibleEnrollments) {
+        Set<Long> eligibleStudentIds = eligibleEnrollments.stream()
+                .map(enrollment -> enrollment.getStudent().getId())
+                .collect(Collectors.toSet());
+
+        Map<Long, Enrollment> activeEnrollmentsByStudentId = enrollmentRepository
+                .findByClassroomIdAndStatus(session.getClassroom().getId(), EnrollmentStatus.ACTIVE)
+                .stream()
+                .collect(Collectors.toMap(enrollment -> enrollment.getStudent().getId(), Function.identity()));
+
+        for (Attendance attendance : attendanceRepository.findBySessionId(session.getId())) {
+            if (!Boolean.TRUE.equals(attendance.getValid())) {
+                continue;
+            }
+
+            Long studentId = attendance.getStudent().getId();
+            if (eligibleStudentIds.contains(studentId)) {
+                continue;
+            }
+
+            Enrollment enrollment = activeEnrollmentsByStudentId.get(studentId);
+            if (enrollment == null
+                    || EnrollmentLearningDateHelper.isEligibleForSession(enrollment, session.getSessionDate())) {
+                continue;
+            }
+
+            String warning = String.format(
+                    "Student %s (%s) has attendance on session %s outside enrollment learning period; "
+                            + "record is excluded from usedSessions.",
+                    enrollment.getStudent().getFullName(),
+                    enrollment.getStudent().getStudentCode(),
+                    session.getSessionDate()
+            );
+            log.warn(warning);
+        }
     }
 
     private String trimToNull(String value) {

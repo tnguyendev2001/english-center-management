@@ -6,20 +6,22 @@ import { StatusTag } from '../../../components/common/StatusTag'
 import { formatStudentLabel, studentCodeColumn, studentNameColumn } from '../../../components/common/studentDisplay'
 import type { ClassSession } from '../../classSessions/classSessionTypes'
 import type { ClassroomStatus } from '../../classrooms/classroomTypes'
-import type { Enrollment } from '../../enrollments/enrollmentTypes'
 import type { EnrollmentLearningProgress } from '../../studentPackages/studentPackageTypes'
 import { buildProgressByStudentId } from '../../studentPackages/studentPackageUtils'
 import { pickDefaultSessionId } from '../attendanceSessionSelection'
-import { useAttendance, useAttendanceReadiness, useMarkAttendance } from '../attendanceQueries'
+import {
+  useAttendance,
+  useAttendanceReadiness,
+  useAttendanceRoster,
+  useMarkAttendance,
+} from '../attendanceQueries'
 import type { Attendance, AttendanceStatus } from '../attendanceTypes'
 
 interface AttendanceMarkPanelProps {
   sessions: ClassSession[]
-  enrollments: Enrollment[]
   studentPackages: EnrollmentLearningProgress[]
   classroomStatus: ClassroomStatus
   loadingSessions: boolean
-  loadingEnrollments: boolean
   selectedSessionId?: number
   onSelectedSessionIdChange?: (sessionId: number | undefined) => void
   onRenewNow?: () => void
@@ -45,11 +47,9 @@ function formatTime(value: string) {
 
 export function AttendanceMarkPanel({
   sessions,
-  enrollments,
   studentPackages,
   classroomStatus,
   loadingSessions,
-  loadingEnrollments,
   selectedSessionId,
   onSelectedSessionIdChange,
   onRenewNow,
@@ -60,6 +60,7 @@ export function AttendanceMarkPanel({
   const [blockedModalOpen, setBlockedModalOpen] = useState(false)
   const canMarkAttendance = classroomStatus === 'ONGOING'
   const selectedSession = sessions.find((session) => session.id === selectedSessionId)
+  const rosterQuery = useAttendanceRoster(selectedSessionId)
   const attendanceQuery = useAttendance(selectedSessionId)
   const readinessQuery = useAttendanceReadiness(
     selectedSessionId,
@@ -69,13 +70,9 @@ export function AttendanceMarkPanel({
   const blockedStudents = readinessQuery.data?.blockedStudents ?? []
   const isAttendanceBlocked = blockedStudents.length > 0
 
-  const activeEnrollments = useMemo(
-    () =>
-      enrollments.filter(
-        (enrollment) =>
-          enrollment.status === 'ACTIVE' && enrollment.classroomId === selectedSession?.classroomId,
-      ),
-    [enrollments, selectedSession?.classroomId],
+  const rosterStudents = useMemo(
+    () => rosterQuery.data?.students ?? [],
+    [rosterQuery.data?.students],
   )
 
   const progressByStudentId = useMemo(
@@ -93,12 +90,12 @@ export function AttendanceMarkPanel({
 
   const needsExcusedCorrection = useMemo(
     () =>
-      activeEnrollments.some((enrollment) => {
-        const previousStatus = previousAttendanceByStudentId.get(enrollment.studentId)?.status
-        const nextStatus = statuses[String(enrollment.studentId)]
+      rosterStudents.some((student) => {
+        const previousStatus = previousAttendanceByStudentId.get(student.studentId)?.status
+        const nextStatus = statuses[String(student.studentId)]
         return nextStatus != null && isExcusedCorrection(previousStatus, nextStatus)
       }),
-    [activeEnrollments, previousAttendanceByStudentId, statuses],
+    [previousAttendanceByStudentId, rosterStudents, statuses],
   )
 
   useEffect(() => {
@@ -128,9 +125,9 @@ export function AttendanceMarkPanel({
 
     const nextStatuses: Record<string, AttendanceStatus> = {}
     const nextNotes: Record<string, string> = {}
-    activeEnrollments.forEach((enrollment) => {
-      const existing = attendanceQuery.data?.find((item) => item.studentId === enrollment.studentId)
-      const studentKey = String(enrollment.studentId)
+    rosterStudents.forEach((student) => {
+      const existing = attendanceQuery.data?.find((item) => item.studentId === student.studentId)
+      const studentKey = String(student.studentId)
       nextStatuses[studentKey] = existing?.status ?? 'PRESENT'
       nextNotes[studentKey] = existing?.note ?? ''
     })
@@ -140,7 +137,7 @@ export function AttendanceMarkPanel({
       notes: nextNotes,
       correctionReason: undefined,
     })
-  }, [activeEnrollments, attendanceQuery.data, form, selectedSessionId])
+  }, [attendanceQuery.data, form, rosterStudents, selectedSessionId])
 
   function handleMarkAllPresent() {
     if (!selectedSession || !canMarkAttendance || selectedSession.status === 'CANCELED') {
@@ -148,8 +145,8 @@ export function AttendanceMarkPanel({
     }
 
     const nextStatuses: Record<string, AttendanceStatus> = {}
-    activeEnrollments.forEach((enrollment) => {
-      nextStatuses[String(enrollment.studentId)] = 'PRESENT'
+    rosterStudents.forEach((student) => {
+      nextStatuses[String(student.studentId)] = 'PRESENT'
     })
     setStatuses(nextStatuses)
     form.setFieldsValue({ statuses: nextStatuses })
@@ -185,15 +182,15 @@ export function AttendanceMarkPanel({
     markAttendance.mutate(
       {
         sessionId: selectedSession.id,
-        items: activeEnrollments.map((enrollment) => {
-          const studentKey = String(enrollment.studentId)
-          const previousStatus = previousAttendanceByStudentId.get(enrollment.studentId)?.status
+        items: rosterStudents.map((student) => {
+          const studentKey = String(student.studentId)
+          const previousStatus = previousAttendanceByStudentId.get(student.studentId)?.status
           const nextStatus = values.statuses[studentKey]
           const changedFromExcused = isExcusedCorrection(previousStatus, nextStatus)
           const note = values.notes[studentKey]?.trim() || null
 
           return {
-            studentId: enrollment.studentId,
+            studentId: student.studentId,
             status: nextStatus,
             note,
             correctionReason: changedFromExcused ? correctionReason : null,
@@ -328,36 +325,34 @@ export function AttendanceMarkPanel({
 
           <Table
             rowKey="studentId"
-            loading={loadingEnrollments || attendanceQuery.isLoading || readinessQuery.isLoading}
+            loading={rosterQuery.isLoading || attendanceQuery.isLoading || readinessQuery.isLoading}
             pagination={false}
-            dataSource={activeEnrollments}
+            dataSource={rosterStudents}
             columns={[
               studentCodeColumn(),
               studentNameColumn(),
               {
                 title: 'Tổng buổi',
                 key: 'totalSessions',
-                render: (_, enrollment) =>
-                  progressByStudentId.get(enrollment.studentId)?.totalSessions ?? '-',
+                render: (_, student) => progressByStudentId.get(student.studentId)?.totalSessions ?? '-',
               },
               {
                 title: 'Đã học',
                 key: 'usedSessions',
-                render: (_, enrollment) =>
-                  progressByStudentId.get(enrollment.studentId)?.usedSessions ?? '-',
+                render: (_, student) => progressByStudentId.get(student.studentId)?.usedSessions ?? '-',
               },
               {
                 title: 'Còn lại',
                 key: 'remainingSessions',
-                render: (_, enrollment) =>
-                  progressByStudentId.get(enrollment.studentId)?.remainingSessions ?? '-',
+                render: (_, student) =>
+                  progressByStudentId.get(student.studentId)?.remainingSessions ?? '-',
               },
               {
                 title: 'Trạng thái',
                 key: 'status',
-                render: (_, enrollment) => (
+                render: (_, student) => (
                   <Form.Item
-                    name={['statuses', String(enrollment.studentId)]}
+                    name={['statuses', String(student.studentId)]}
                     style={{ margin: 0 }}
                   >
                     <Radio.Group
@@ -374,8 +369,8 @@ export function AttendanceMarkPanel({
               {
                 title: 'Ghi chú',
                 key: 'note',
-                render: (_, enrollment) => (
-                  <Form.Item name={['notes', String(enrollment.studentId)]} style={{ margin: 0 }}>
+                render: (_, student) => (
+                  <Form.Item name={['notes', String(student.studentId)]} style={{ margin: 0 }}>
                     <Input
                       placeholder="Ghi chú"
                       disabled={!canMarkAttendance || selectedSession.status === 'CANCELED'}

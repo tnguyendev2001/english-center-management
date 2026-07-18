@@ -4,12 +4,27 @@ import { dashboardKeys } from '../dashboard/dashboardQueries'
 import { makeupCreditKeys } from '../makeupCredits/makeupCreditQueries'
 import { reportKeys } from '../reports/reportQueries'
 import { studentPackageKeys } from '../studentPackages/studentPackageQueries'
-import { checkAttendanceReadiness, getAttendance, markAttendance } from './attendanceApi'
+import { checkAttendanceReadiness, getAttendance, getAttendanceRoster, markAttendance } from './attendanceApi'
 
 export const attendanceKeys = {
   all: ['attendance'] as const,
   bySession: (sessionId?: number) => ['attendance', 'session', sessionId] as const,
+  roster: (sessionId?: number) => ['attendance', 'roster', sessionId] as const,
   readiness: (sessionId?: number) => ['attendance', 'readiness', sessionId] as const,
+}
+
+export function useAttendanceRoster(sessionId?: number) {
+  return useQuery({
+    queryKey: attendanceKeys.roster(sessionId),
+    queryFn: () => {
+      if (!sessionId) {
+        throw new Error('Buổi học là bắt buộc')
+      }
+
+      return getAttendanceRoster(sessionId)
+    },
+    enabled: Number.isFinite(sessionId),
+  })
 }
 
 export function useAttendance(sessionId?: number) {
@@ -47,6 +62,7 @@ export function useMarkAttendance() {
     mutationFn: markAttendance,
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: attendanceKeys.bySession(variables.sessionId) })
+      queryClient.invalidateQueries({ queryKey: attendanceKeys.roster(variables.sessionId) })
       queryClient.invalidateQueries({ queryKey: attendanceKeys.readiness(variables.sessionId) })
       queryClient.invalidateQueries({ queryKey: makeupCreditKeys.all })
       queryClient.invalidateQueries({ queryKey: classSessionKeys.all })

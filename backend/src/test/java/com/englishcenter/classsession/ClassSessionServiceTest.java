@@ -73,22 +73,21 @@ class ClassSessionServiceTest {
     }
 
     @Test
-    void correctionCancelRejectsUsedMakeupCredit() {
+    void correctionCancelCancelsAvailableMakeupCredit() {
         ClassSessionService service = newService();
         ClassSession session = completedSession();
-        MakeupCredit usedCredit = new MakeupCredit();
-        usedCredit.setStatus(MakeupCreditStatus.USED);
-        usedCredit.setUsedSessions(1);
+        MakeupCredit availableCredit = new MakeupCredit();
+        availableCredit.setStatus(MakeupCreditStatus.AVAILABLE);
 
         when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
         when(attendanceRepository.existsBySessionId(1L)).thenReturn(true);
-        when(makeupCreditRepository.findBySourceSessionId(1L)).thenReturn(List.of(usedCredit));
+        when(makeupCreditRepository.findBySourceSessionId(1L)).thenReturn(List.of(availableCredit));
+        when(attendanceRepository.findBySessionId(1L)).thenReturn(List.of());
+        when(classSessionRepository.save(session)).thenReturn(session);
 
-        assertThatThrownBy(() -> service.correctionCancel(1L, new CancelClassSessionRequest("Too late")))
-                .isInstanceOf(BusinessException.class)
-                .hasMessage("Cannot correction-cancel session: makeup credit from this session has already been used");
+        service.correctionCancel(1L, new CancelClassSessionRequest("Marked wrong session"));
 
-        verify(attendanceRepository, never()).save(any(Attendance.class));
+        assertThat(availableCredit.getStatus()).isEqualTo(MakeupCreditStatus.CANCELED);
     }
 
     @Test
