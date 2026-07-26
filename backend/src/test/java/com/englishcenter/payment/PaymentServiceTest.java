@@ -10,6 +10,10 @@ import static org.mockito.Mockito.when;
 
 import com.englishcenter.classroom.Classroom;
 import com.englishcenter.common.exception.BusinessException;
+import com.englishcenter.finance.FinancePeriodRangeService;
+import com.englishcenter.finance.FinancePostingService;
+import com.englishcenter.finance.FinancialAccount;
+import com.englishcenter.finance.FinancialAccountType;
 import com.englishcenter.invoice.Invoice;
 import com.englishcenter.invoice.InvoiceRepository;
 import com.englishcenter.invoice.InvoiceService;
@@ -39,6 +43,12 @@ class PaymentServiceTest {
     @Mock
     private InvoiceService invoiceService;
 
+    @Mock
+    private FinancePostingService financePostingService;
+
+    @Mock
+    private FinancePeriodRangeService financePeriodRangeService;
+
     private final PaymentMapper paymentMapper = new PaymentMapper();
 
     @Test
@@ -46,9 +56,11 @@ class PaymentServiceTest {
         PaymentService paymentService = newService();
         Invoice invoice = invoice(InvoiceStatus.UNPAID, new BigDecimal("500000"));
         CreatePaymentRequest request = createRequest(new BigDecimal("200000"));
+        FinancialAccount cashAccount = cashAccount();
 
         when(invoiceRepository.findById(1L)).thenReturn(Optional.of(invoice));
         when(invoiceService.recalculateAndSave(invoice)).thenReturn(invoice);
+        when(financePostingService.resolvePaymentAccount(PaymentMethod.CASH, null)).thenReturn(cashAccount);
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> {
             Payment payment = invocation.getArgument(0);
             payment.setId(10L);
@@ -62,6 +74,7 @@ class PaymentServiceTest {
         assertThat(response.amount()).isEqualByComparingTo("200000");
         assertThat(response.status()).isEqualTo(PaymentStatus.VALID);
         verify(paymentRepository).save(any(Payment.class));
+        verify(financePostingService).postPaymentIncome(any(Payment.class));
         verify(invoiceService, times(2)).recalculateAndSave(invoice);
     }
 
@@ -125,12 +138,20 @@ class PaymentServiceTest {
         assertThat(response.cancelReason()).isEqualTo("Wrong amount");
         assertThat(response.canceledAt()).isNotNull();
         verify(paymentRepository).save(payment);
+        verify(financePostingService).cancelPaymentIncome(payment, "Wrong amount");
         verify(invoiceService).recalculateAndSave(invoice);
         verify(paymentRepository, never()).delete(any(Payment.class));
     }
 
     private PaymentService newService() {
-        return new PaymentService(paymentRepository, invoiceRepository, invoiceService, paymentMapper);
+        return new PaymentService(
+                paymentRepository,
+                invoiceRepository,
+                invoiceService,
+                paymentMapper,
+                financePostingService,
+                financePeriodRangeService
+        );
     }
 
     private CreatePaymentRequest createRequest(BigDecimal amount) {
@@ -138,8 +159,19 @@ class PaymentServiceTest {
                 amount,
                 LocalDate.of(2026, 7, 1),
                 PaymentMethod.CASH,
+                null,
                 "Cash payment"
         );
+    }
+
+    private FinancialAccount cashAccount() {
+        FinancialAccount account = new FinancialAccount();
+        account.setId(1L);
+        account.setCode("CASH_CENTER");
+        account.setName("Tiền mặt tại trung tâm");
+        account.setType(FinancialAccountType.CASH);
+        account.setActive(true);
+        return account;
     }
 
     private Invoice invoice(InvoiceStatus status, BigDecimal remainingAmount) {

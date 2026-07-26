@@ -213,6 +213,18 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     @Query("""
             SELECT COALESCE(SUM(payment.amount), 0)
             FROM Payment payment
+            WHERE payment.invoice.id = :invoiceId
+              AND payment.status = com.englishcenter.payment.PaymentStatus.VALID
+              AND payment.paymentDate <= :asOfDate
+            """)
+    BigDecimal sumValidAmountByInvoiceIdUpTo(
+            @Param("invoiceId") Long invoiceId,
+            @Param("asOfDate") LocalDate asOfDate
+    );
+
+    @Query("""
+            SELECT COALESCE(SUM(payment.amount), 0)
+            FROM Payment payment
             WHERE payment.status = com.englishcenter.payment.PaymentStatus.VALID
               AND payment.invoice.id IN (
                   SELECT invoice.id
@@ -248,4 +260,31 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
             ORDER BY payment.paymentDate DESC, payment.createdAt DESC
             """)
     java.util.List<Payment> findAllForPaymentSummary();
+
+    @Query("""
+            SELECT MAX(payment.paymentDate)
+            FROM Payment payment
+            WHERE payment.status = com.englishcenter.payment.PaymentStatus.VALID
+            """)
+    java.time.LocalDate findLatestValidPaymentDate();
+
+    @Query(value = """
+            SELECT DISTINCT TO_CHAR(payment_date, 'YYYY-MM')
+            FROM payments
+            WHERE status = 'VALID'
+            ORDER BY 1
+            """, nativeQuery = true)
+    java.util.List<String> findValidPaymentYearMonths();
+
+    @Query("""
+            SELECT COUNT(payment)
+            FROM Payment payment
+            WHERE payment.status = com.englishcenter.payment.PaymentStatus.VALID
+              AND payment.paymentDate >= :fromDate
+              AND payment.paymentDate <= :toDate
+            """)
+    long countValidInRange(
+            @org.springframework.data.repository.query.Param("fromDate") java.time.LocalDate fromDate,
+            @org.springframework.data.repository.query.Param("toDate") java.time.LocalDate toDate
+    );
 }

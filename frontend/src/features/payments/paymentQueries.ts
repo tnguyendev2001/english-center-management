@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { StudentSummarySearchParams } from '../financial/financialSummaryTypes'
 import { dashboardKeys } from '../dashboard/dashboardQueries'
 import { debtKeys } from '../debts/debtQueries'
+import { financeKeys } from '../finance/financeQueries'
 import { invoiceKeys } from '../invoices/invoiceQueries'
 import { reportKeys } from '../reports/reportQueries'
 import { revenueKeys } from '../revenue/revenueQueries'
@@ -60,4 +61,5 @@ function invalidateMoneyQueries(queryClient: ReturnType<typeof useQueryClient>) 
   queryClient.invalidateQueries({ queryKey: revenueKeys.all })
   queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
   queryClient.invalidateQueries({ queryKey: reportKeys.all })
+  queryClient.invalidateQueries({ queryKey: financeKeys.all })
 }

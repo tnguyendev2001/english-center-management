@@ -14,6 +14,9 @@ export interface Payment {
   amount: number
   paymentDate: string
   method: PaymentMethod
+  financialAccountId?: number | null
+  financialAccountCode?: string | null
+  financialAccountName?: string | null
   status: PaymentStatus
   note?: string | null
   cancelReason?: string | null
@@ -25,6 +28,7 @@ export interface CreatePaymentPayload {
   amount: number
   paymentDate: string
   method: PaymentMethod
+  financialAccountId?: number | null
   note?: string | null
 }
 

@@ -1,10 +1,16 @@
 spring:
   profiles:
     default: local
+  jackson:
+    time-zone: Asia/Ho_Chi_Minh
   servlet:
     multipart:
       max-file-size: 20MB
       max-request-size: 20MB
+
+app:
+  time:
+    zone-id: Asia/Ho_Chi_Minh
 
 management:
   endpoints:

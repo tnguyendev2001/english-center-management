@@ -18,6 +18,8 @@ public record CreatePaymentRequest(
         @NotNull(message = "Payment method is required")
         PaymentMethod method,
 
+        Long financialAccountId,
+
         @Size(max = 1000, message = "Note must not exceed 1000 characters")
         String note
 ) {

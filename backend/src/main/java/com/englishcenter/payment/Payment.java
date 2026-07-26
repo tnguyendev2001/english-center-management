@@ -1,6 +1,7 @@
 package com.englishcenter.payment;
 
 import com.englishcenter.classroom.Classroom;
+import com.englishcenter.finance.FinancialAccount;
 import com.englishcenter.invoice.Invoice;
 import com.englishcenter.student.Student;
 import jakarta.persistence.Column;
@@ -54,6 +55,10 @@ public class Payment {
     @Enumerated(EnumType.STRING)
     @Column(name = "method", nullable = false, length = 30)
     private PaymentMethod method;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "financial_account_id")
+    private FinancialAccount financialAccount;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)

@@ -2,6 +2,9 @@ package com.englishcenter.payment;
 
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
+import com.englishcenter.finance.FinancePeriodRangeService;
+import com.englishcenter.finance.FinancePostingService;
+import com.englishcenter.finance.FinancialAccount;
 import com.englishcenter.invoice.Invoice;
 import com.englishcenter.invoice.InvoiceRepository;
 import com.englishcenter.invoice.InvoiceService;
@@ -33,17 +36,23 @@ public class PaymentService {
     private final InvoiceRepository invoiceRepository;
     private final InvoiceService invoiceService;
     private final PaymentMapper paymentMapper;
+    private final FinancePostingService financePostingService;
+    private final FinancePeriodRangeService financePeriodRangeService;
 
     public PaymentService(
             PaymentRepository paymentRepository,
             InvoiceRepository invoiceRepository,
             InvoiceService invoiceService,
-            PaymentMapper paymentMapper
+            PaymentMapper paymentMapper,
+            FinancePostingService financePostingService,
+            FinancePeriodRangeService financePeriodRangeService
     ) {
         this.paymentRepository = paymentRepository;
         this.invoiceRepository = invoiceRepository;
         this.invoiceService = invoiceService;
         this.paymentMapper = paymentMapper;
+        this.financePostingService = financePostingService;
+        this.financePeriodRangeService = financePeriodRangeService;
     }
 
     @Transactional(readOnly = true)
@@ -74,6 +83,12 @@ public class PaymentService {
 
         validateInvoiceCanReceivePayment(invoice);
         validatePaymentAmount(request.amount(), invoice.getRemainingAmount());
+        financePeriodRangeService.validatePaymentNotAfterBusinessDate(request.paymentDate());
+
+        FinancialAccount account = financePostingService.resolvePaymentAccount(
+                request.method(),
+                request.financialAccountId()
+        );
 
         Payment payment = new Payment();
         payment.setPaymentCode(generatePaymentCode());
@@ -83,13 +98,14 @@ public class PaymentService {
         payment.setAmount(request.amount());
         payment.setPaymentDate(request.paymentDate());
         payment.setMethod(request.method());
+        payment.setFinancialAccount(account);
         payment.setStatus(PaymentStatus.VALID);
         payment.setNote(trimToNull(request.note()));
 
         payment = paymentRepository.save(payment);
+        financePostingService.postPaymentIncome(payment);
         invoiceService.recalculateAndSave(invoice);
 
-        // TODO: Save ActivityLog for CREATE_PAYMENT when the ActivityLog module exists.
         return paymentMapper.toResponse(payment);
     }
 
@@ -107,9 +123,9 @@ public class PaymentService {
         payment.setCanceledAt(LocalDateTime.now());
 
         payment = paymentRepository.save(payment);
+        financePostingService.cancelPaymentIncome(payment, request.reason().trim());
         invoiceService.recalculateAndSave(payment.getInvoice());
 
-        // TODO: Save ActivityLog for CANCEL_PAYMENT when the ActivityLog module exists.
         return paymentMapper.toResponse(payment);
     }
 

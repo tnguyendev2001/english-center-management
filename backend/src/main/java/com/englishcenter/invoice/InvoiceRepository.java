@@ -28,6 +28,19 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     BigDecimal sumDebtAmount();
 
     @Query("""
+            SELECT invoice
+            FROM Invoice invoice
+            JOIN FETCH invoice.student
+            JOIN FETCH invoice.classroom
+            WHERE CAST(invoice.createdAt AS localdate) <= :asOfDate
+              AND (
+                  invoice.canceledAt IS NULL
+                  OR CAST(invoice.canceledAt AS localdate) > :asOfDate
+              )
+            """)
+    java.util.List<Invoice> findInvoicesEffectiveAsOf(@Param("asOfDate") LocalDate asOfDate);
+
+    @Query("""
             SELECT COALESCE(SUM(invoice.remainingAmount), 0)
             FROM Invoice invoice
             WHERE invoice.classroom.id = :classroomId

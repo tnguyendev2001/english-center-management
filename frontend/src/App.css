@@ -182,3 +182,11 @@
     border-right-color: var(--border);
   }
 }
+
+.finance-tx-canceled td {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.finance-tx-canceled td:not(:last-child) {
+  text-decoration: line-through;
+}

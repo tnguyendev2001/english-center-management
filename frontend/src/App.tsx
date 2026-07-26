@@ -6,6 +6,7 @@ import { DashboardPage } from './features/dashboard/pages/DashboardPage'
 import { DebtPage } from './features/debts/pages/DebtPage'
 import { InvoiceListPage } from './features/invoices/pages/InvoiceListPage'
 import { MakeupCreditPage } from './features/makeupCredits/pages/MakeupCreditPage'
+import { FinancePage } from './features/finance/pages/FinancePage'
 import { PaymentListPage } from './features/payments/pages/PaymentListPage'
 import { ReportsPage } from './features/reports/pages/ReportsPage'
 import { StudentDetailPage } from './features/students/pages/StudentDetailPage'
@@ -24,6 +25,8 @@ function App() {
     ? '/imports/legacy-students'
     : location.pathname.startsWith('/payments')
       ? '/payments'
+    : location.pathname.startsWith('/finance')
+      ? '/finance'
     : location.pathname.startsWith('/debts')
       ? '/debts'
     : location.pathname.startsWith('/invoices')
@@ -56,6 +59,7 @@ function App() {
             { key: '/classrooms', label: 'Lớp học' },
             { key: '/invoices', label: 'Học phí' },
             { key: '/payments', label: 'Thanh toán' },
+            { key: '/finance', label: 'Quản lý thu chi' },
             { key: '/makeup-credits', label: 'Buổi bù' },
             { key: '/reports', label: 'Báo cáo' },
             { key: '/debts', label: 'Công nợ' },
@@ -79,6 +83,7 @@ function App() {
             <Route path="/imports/legacy-students" element={<LegacyStudentImportPage />} />
             <Route path="/invoices" element={<InvoiceListPage />} />
             <Route path="/payments" element={<PaymentListPage />} />
+            <Route path="/finance" element={<FinancePage />} />
             <Route path="/debts" element={<DebtPage />} />
             <Route path="/makeup-credits" element={<MakeupCreditPage />} />
             <Route path="/reports" element={<ReportsPage />} />
