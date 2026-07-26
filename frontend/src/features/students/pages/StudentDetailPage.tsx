@@ -1,10 +1,14 @@
 import { Button, Card, Descriptions, Empty, Space, Spin, Table, Typography } from 'antd'
 import dayjs from 'dayjs'
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
+import { useClassPackages } from '../../classPackages/classPackageQueries'
+import { RenewAllPackagesModal } from '../../classrooms/components/RenewAllPackagesModal'
+import { classroomDetailPath } from '../../classrooms/classroomRoutes'
 import { useMakeupCredits } from '../../makeupCredits/makeupCreditQueries'
+import type { MakeupCredit } from '../../makeupCredits/makeupCreditTypes'
 import {
   EnrollmentLifecycleModal,
   type EnrollmentLifecycleAction,
@@ -27,6 +31,8 @@ export function StudentDetailPage() {
     enrollment: EnrollmentLearningProgress
   }>()
   const [historyEnrollment, setHistoryEnrollment] = useState<EnrollmentLearningProgress>()
+  const [renewingProgress, setRenewingProgress] = useState<EnrollmentLearningProgress>()
+  const classPackagesQuery = useClassPackages(renewingProgress?.classroomId ?? Number.NaN)
 
   if (!Number.isFinite(studentId)) {
     return <Empty description="Không tìm thấy học viên" />
@@ -74,7 +80,14 @@ export function StudentDetailPage() {
           loading={studentPackagesQuery.isLoading}
           pagination={false}
           columns={[
-            { title: 'Lớp học', dataIndex: 'classroomName', key: 'classroomName' },
+            {
+              title: 'Lớp học',
+              dataIndex: 'classroomName',
+              key: 'classroomName',
+              render: (classroomName: string, record: EnrollmentLearningProgress) => (
+                <Link to={classroomDetailPath(record.classroomId)}>{classroomName}</Link>
+              ),
+            },
             {
               title: 'Gói gần nhất',
               dataIndex: 'latestPackageName',
@@ -139,6 +152,9 @@ export function StudentDetailPage() {
                       >
                         Chuyển lớp
                       </Button>
+                      <Button type="link" onClick={() => setRenewingProgress(record)}>
+                        Gia hạn học
+                      </Button>
                       <Button
                         type="link"
                         danger
@@ -193,7 +209,14 @@ export function StudentDetailPage() {
           loading={makeupCreditsQuery.isLoading}
           pagination={false}
           columns={[
-            { title: 'Lớp học', dataIndex: 'classroomName', key: 'classroomName' },
+            {
+              title: 'Lớp học',
+              dataIndex: 'classroomName',
+              key: 'classroomName',
+              render: (classroomName: string, record: MakeupCredit) => (
+                <Link to={classroomDetailPath(record.classroomId)}>{classroomName}</Link>
+              ),
+            },
             {
               title: 'Nguồn',
               dataIndex: 'reason',
@@ -241,6 +264,20 @@ export function StudentDetailPage() {
         title={historyEnrollment?.classroomName}
         onClose={() => setHistoryEnrollment(undefined)}
       />
+
+      {renewingProgress ? (
+        <RenewAllPackagesModal
+          open
+          classroomId={renewingProgress.classroomId}
+          classPackages={classPackagesQuery.data ?? []}
+          initialEnrollmentIds={[renewingProgress.enrollmentId]}
+          onCancel={() => setRenewingProgress(undefined)}
+          onSuccess={() => {
+            void studentPackagesQuery.refetch()
+            setRenewingProgress(undefined)
+          }}
+        />
+      ) : null}
     </Space>
   )
 }

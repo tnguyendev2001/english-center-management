@@ -111,6 +111,8 @@ export interface ClassroomRenewalCandidate {
 export interface ClassroomRenewalItemPayload {
   enrollmentId: number
   tuitionPackageId: number
+  /** ISO date (YYYY-MM-DD). Defaults to today on the server when omitted. */
+  effectiveDate?: string
 }
 
 export interface ClassroomRenewalPayload {

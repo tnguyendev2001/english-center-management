@@ -1,6 +1,7 @@
-import { Alert, Button, message, Modal, Select, Space, Table, Typography } from 'antd'
+import { Alert, Button, DatePicker, message, Modal, Select, Space, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { isAxiosError } from 'axios'
+import dayjs, { type Dayjs } from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { studentCodeColumn, studentNameColumn } from '../../../components/common/studentDisplay'
@@ -24,6 +25,11 @@ interface RenewAllPackagesModalProps {
   classPackages: ClassPackage[]
   onCancel: () => void
   onSuccess: () => void
+  /**
+   * When provided, renew only these enrollments (e.g. single student from student detail).
+   * Uses the same preview/confirm APIs as bulk renewal.
+   */
+  initialEnrollmentIds?: number[]
 }
 
 const THRESHOLD_OPTIONS = [
@@ -39,11 +45,14 @@ export function RenewAllPackagesModal({
   classPackages,
   onCancel,
   onSuccess,
+  initialEnrollmentIds,
 }: RenewAllPackagesModalProps) {
-  const [remainingThreshold, setRemainingThreshold] = useState(2)
+  const singleStudentMode = Boolean(initialEnrollmentIds && initialEnrollmentIds.length > 0)
+  const [remainingThreshold, setRemainingThreshold] = useState(singleStudentMode ? -1 : 2)
   const [selectedEnrollmentIds, setSelectedEnrollmentIds] = useState<number[]>([])
   const [packageByEnrollmentId, setPackageByEnrollmentId] = useState<Record<number, number>>({})
   const [bulkPackageId, setBulkPackageId] = useState<number>()
+  const [effectiveDate, setEffectiveDate] = useState<Dayjs>(() => dayjs())
   const candidatesQuery = useRenewalCandidates(classroomId, remainingThreshold, open)
   const previewRenewals = usePreviewClassroomRenewals(classroomId)
   const confirmRenewals = useConfirmClassroomRenewals(classroomId)
@@ -63,6 +72,25 @@ export function RenewAllPackagesModal({
     (previewRenewals.data?.items ?? []).map((item) => [item.enrollmentId, item]),
   )
 
+  const candidates = useMemo(() => {
+    const all = candidatesQuery.data ?? []
+    if (!singleStudentMode || !initialEnrollmentIds?.length) {
+      return all
+    }
+
+    const allowed = new Set(initialEnrollmentIds)
+    return all.filter((candidate) => allowed.has(candidate.enrollmentId))
+  }, [candidatesQuery.data, initialEnrollmentIds, singleStudentMode])
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    setRemainingThreshold(singleStudentMode ? -1 : 2)
+    setEffectiveDate(dayjs())
+  }, [open, singleStudentMode])
+
   useEffect(() => {
     if (!open) {
       return
@@ -70,24 +98,44 @@ export function RenewAllPackagesModal({
 
     const nextPackageByEnrollmentId: Record<number, number> = {}
     const nextSelectedEnrollmentIds: number[] = []
-    for (const candidate of candidatesQuery.data ?? []) {
+
+    for (const candidate of candidates) {
       if (candidate.suggestedRenewalPackageId) {
         nextPackageByEnrollmentId[candidate.enrollmentId] = candidate.suggestedRenewalPackageId
       }
-      if (candidate.eligibleForRenewal) {
+
+      if (singleStudentMode) {
+        if (candidate.eligibleForRenewal) {
+          nextSelectedEnrollmentIds.push(candidate.enrollmentId)
+        }
+      } else if (candidate.eligibleForRenewal) {
         nextSelectedEnrollmentIds.push(candidate.enrollmentId)
       }
     }
+
+    if (singleStudentMode && initialEnrollmentIds?.length) {
+      // Keep locked selection even if candidate temporarily missing while loading.
+      const locked = initialEnrollmentIds.filter((enrollmentId) =>
+        candidates.some(
+          (candidate) => candidate.enrollmentId === enrollmentId && candidate.eligibleForRenewal,
+        ),
+      )
+      setSelectedEnrollmentIds(locked.length > 0 ? locked : initialEnrollmentIds)
+    } else {
+      setSelectedEnrollmentIds(nextSelectedEnrollmentIds)
+    }
+
     setPackageByEnrollmentId(nextPackageByEnrollmentId)
-    setSelectedEnrollmentIds(nextSelectedEnrollmentIds)
     previewRenewals.reset()
-  }, [candidatesQuery.data, open])
+  }, [candidates, initialEnrollmentIds, open, singleStudentMode])
 
   function buildPayload(): ClassroomRenewalPayload {
+    const dateValue = effectiveDate.format('YYYY-MM-DD')
     return {
       items: selectedEnrollmentIds.map((enrollmentId) => ({
         enrollmentId,
         tuitionPackageId: packageByEnrollmentId[enrollmentId],
+        effectiveDate: dateValue,
       })),
     }
   }
@@ -111,7 +159,11 @@ export function RenewAllPackagesModal({
   function handlePreview() {
     const payload = buildPayload()
     if (payload.items.length === 0) {
-      message.warning('Vui lòng chọn ít nhất một học viên')
+      message.warning(
+        singleStudentMode
+          ? 'Học viên hiện không đủ điều kiện gia hạn'
+          : 'Vui lòng chọn ít nhất một học viên',
+      )
       return
     }
     if (payload.items.some((item) => !item.tuitionPackageId)) {
@@ -140,6 +192,7 @@ export function RenewAllPackagesModal({
     setSelectedEnrollmentIds([])
     setPackageByEnrollmentId({})
     setBulkPackageId(undefined)
+    setEffectiveDate(dayjs())
     previewRenewals.reset()
     confirmRenewals.reset()
     onCancel()
@@ -210,12 +263,16 @@ export function RenewAllPackagesModal({
     },
   ]
 
+  const previewItem = singleStudentMode
+    ? previewRenewals.data?.items?.[0]
+    : undefined
+
   return (
     <Modal
-      title="Gia hạn hàng loạt"
+      title={singleStudentMode ? 'Gia hạn học' : 'Gia hạn hàng loạt'}
       open={open}
       onCancel={handleClose}
-      width={1180}
+      width={singleStudentMode ? 920 : 1180}
       footer={[
         <Button key="cancel" onClick={handleClose}>
           Đóng
@@ -236,27 +293,69 @@ export function RenewAllPackagesModal({
     >
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
         <Space wrap>
-          <Select
-            value={remainingThreshold}
-            options={THRESHOLD_OPTIONS}
-            style={{ width: 180 }}
-            onChange={(value) => {
-              setRemainingThreshold(value)
-              previewRenewals.reset()
-            }}
-          />
-          <Select
-            allowClear
-            placeholder="Áp dụng một gói cho các học viên đã chọn"
-            style={{ width: 320 }}
-            options={packageOptions}
-            value={bulkPackageId}
-            onChange={setBulkPackageId}
-          />
-          <Button onClick={handleApplyBulkPackage}>Áp dụng gói</Button>
+          {!singleStudentMode ? (
+            <>
+              <Select
+                value={remainingThreshold}
+                options={THRESHOLD_OPTIONS}
+                style={{ width: 180 }}
+                onChange={(value) => {
+                  setRemainingThreshold(value)
+                  previewRenewals.reset()
+                }}
+              />
+              <Select
+                allowClear
+                placeholder="Áp dụng một gói cho các học viên đã chọn"
+                style={{ width: 320 }}
+                options={packageOptions}
+                value={bulkPackageId}
+                onChange={setBulkPackageId}
+              />
+              <Button onClick={handleApplyBulkPackage}>Áp dụng gói</Button>
+            </>
+          ) : (
+            <Space wrap>
+              <Text>Ngày bắt đầu áp dụng:</Text>
+              <DatePicker
+                format="DD/MM/YYYY"
+                value={effectiveDate}
+                allowClear={false}
+                onChange={(value) => {
+                  if (value) {
+                    setEffectiveDate(value)
+                    previewRenewals.reset()
+                  }
+                }}
+              />
+            </Space>
+          )}
         </Space>
 
-        {previewRenewals.data ? (
+        {singleStudentMode && previewItem ? (
+          <Alert
+            type="info"
+            showIcon
+            message="Xem trước gia hạn"
+            description={
+              <Space direction="vertical" size={2}>
+                <Text>
+                  Gói hiện tại: {previewItem.currentPackageName} (đã học {previewItem.usedSessions},
+                  còn {previewItem.remainingSessions})
+                </Text>
+                <Text>
+                  Gói mới: {previewItem.newPackageName} — {previewItem.newPackageTotalSessions} buổi
+                </Text>
+                <Text>
+                  Hóa đơn mới: <MoneyText value={previewItem.newInvoiceAmount} />
+                </Text>
+                <Text type="secondary">
+                  Ngày bắt đầu: {effectiveDate.format('DD/MM/YYYY')}
+                </Text>
+              </Space>
+            }
+          />
+        ) : previewRenewals.data ? (
           <Alert
             type="info"
             showIcon
@@ -267,22 +366,42 @@ export function RenewAllPackagesModal({
           <Text type="secondary">Xem trước không tạo gói học hoặc hóa đơn.</Text>
         )}
 
+        {singleStudentMode && candidates.length === 0 && !candidatesQuery.isLoading ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="Không tìm thấy ghi danh đang hoạt động để gia hạn trong lớp này."
+          />
+        ) : null}
+
+        {activeClassPackages.length === 0 ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="Lớp chưa có gói học phí đang áp dụng. Vui lòng thêm gói học phí cho lớp trước."
+          />
+        ) : null}
+
         <Table
           rowKey="enrollmentId"
           loading={candidatesQuery.isLoading}
-          dataSource={candidatesQuery.data ?? []}
+          dataSource={candidates}
           columns={columns}
           pagination={false}
-          rowSelection={{
-            selectedRowKeys: selectedEnrollmentIds,
-            getCheckboxProps: (candidate) => ({
-              disabled: !candidate.eligibleForRenewal,
-            }),
-            onChange: (keys) => {
-              setSelectedEnrollmentIds(keys.map(Number))
-              previewRenewals.reset()
-            },
-          }}
+          rowSelection={
+            singleStudentMode
+              ? undefined
+              : {
+                  selectedRowKeys: selectedEnrollmentIds,
+                  getCheckboxProps: (candidate) => ({
+                    disabled: !candidate.eligibleForRenewal,
+                  }),
+                  onChange: (keys) => {
+                    setSelectedEnrollmentIds(keys.map(Number))
+                    previewRenewals.reset()
+                  },
+                }
+          }
         />
       </Space>
     </Modal>

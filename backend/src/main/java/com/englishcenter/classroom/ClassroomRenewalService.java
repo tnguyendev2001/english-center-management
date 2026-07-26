@@ -197,7 +197,7 @@ public class ClassroomRenewalService {
         PackageRenewalResult result = renewPackage(new PackageRenewalCommand(
                 context.enrollment().getId(),
                 context.tuitionPackage().getId(),
-                LocalDate.now(),
+                context.effectiveDate() != null ? context.effectiveDate() : LocalDate.now(),
                 StudentPackageSourceType.RENEWAL,
                 "Gia hạn gói học phí",
                 true
@@ -324,7 +324,7 @@ public class ClassroomRenewalService {
                 .findTopByEnrollmentIdOrderByCycleNoDescIdDesc(enrollment.getId())
                 .orElse(null);
 
-        return new RenewalContext(enrollment, latestPackage, tuitionPackage);
+        return new RenewalContext(enrollment, latestPackage, tuitionPackage, item.effectiveDate());
     }
 
     private Map<Long, StudentPackage> latestPackagesByEnrollment(Long classroomId) {
@@ -377,7 +377,8 @@ public class ClassroomRenewalService {
     private record RenewalContext(
             Enrollment enrollment,
             StudentPackage latestPackage,
-            TuitionPackage tuitionPackage
+            TuitionPackage tuitionPackage,
+            LocalDate effectiveDate
     ) {
     }
 }
