@@ -10,6 +10,7 @@ import com.englishcenter.classsession.dto.CancelClassSessionRequest;
 import com.englishcenter.classsession.dto.ClassSessionResponse;
 import com.englishcenter.classsession.dto.GenerateClassSessionsRequest;
 import com.englishcenter.classsession.dto.GenerateClassSessionsResponse;
+import com.englishcenter.classsession.dto.SessionGenerationPlan;
 import com.englishcenter.classsession.mapper.ClassSessionMapper;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
@@ -62,6 +63,10 @@ public class ClassSessionService {
         this.classSessionMapper = classSessionMapper;
     }
 
+    /**
+     * Shared session generation used by the class-session API and legacy Excel import.
+     * Existing sessions for the same classroom/date/time slot are reused (skipped), never overwritten.
+     */
     @Transactional
     public GenerateClassSessionsResponse generate(GenerateClassSessionsRequest request) {
         Classroom classroom = classroomRepository.findById(request.classroomId())
@@ -114,6 +119,93 @@ public class ClassSessionService {
                 .map(classSessionMapper::toResponse)
                 .toList();
         return new GenerateClassSessionsResponse(created.size(), skippedCount, sessionResponses);
+    }
+
+    /**
+     * Convenience entry point for legacy import: generate sessions from classroom start through today.
+     */
+    @Transactional
+    public GenerateClassSessionsResponse generateUpToDate(Long classroomId, LocalDate fromDate, LocalDate toDate) {
+        return generate(new GenerateClassSessionsRequest(classroomId, null, fromDate, toDate));
+    }
+
+    @Transactional(readOnly = true)
+    public SessionGenerationPlan planGeneration(Long classroomId, LocalDate fromDate, LocalDate toDate) {
+        Classroom classroom = classroomRepository.findById(classroomId)
+                .orElseThrow(() -> new NotFoundException("Classroom not found"));
+        return planGeneration(classroom, fromDate, toDate);
+    }
+
+    @Transactional(readOnly = true)
+    public SessionGenerationPlan planGeneration(Classroom classroom, LocalDate fromDate, LocalDate toDate) {
+        List<LocalDate> plannedDates = plannedSessionDates(classroom, fromDate, toDate);
+        int existingInRange = fromDate == null || toDate == null
+                ? 0
+                : classSessionRepository.countByClassroomIdAndSessionDateBetween(
+                        classroom.getId(),
+                        fromDate,
+                        toDate
+                );
+        int toCreate = 0;
+        int toReuse = 0;
+        for (LocalDate date : plannedDates) {
+            if (classSessionRepository.existsByClassroomIdAndSessionDateAndStartTimeAndEndTime(
+                    classroom.getId(),
+                    date,
+                    classroom.getStartTime(),
+                    classroom.getEndTime()
+            )) {
+                toReuse++;
+            } else {
+                toCreate++;
+            }
+        }
+        return new SessionGenerationPlan(
+                classroom.getId(),
+                existingInRange,
+                toCreate,
+                toReuse,
+                plannedDates.isEmpty() ? null : plannedDates.getFirst(),
+                plannedDates.isEmpty() ? null : plannedDates.getLast(),
+                plannedDates
+        );
+    }
+
+    /**
+     * Computes study dates using the same weekday rules as {@link #generate}.
+     * Used by legacy import preview before any classroom is persisted.
+     */
+    public List<LocalDate> plannedSessionDates(
+            LocalDate classroomStartDate,
+            Set<ClassDayOfWeek> daysOfWeek,
+            LocalDate fromDate,
+            LocalDate toDate
+    ) {
+        Set<DayOfWeek> javaDays = ClassDayOfWeek.toJavaDayOfWeekSet(daysOfWeek);
+        if (javaDays.isEmpty()) {
+            throw new BusinessException("Classroom days of week is not configured");
+        }
+        LocalDate cursor = fromDate == null ? classroomStartDate : fromDate;
+        if (cursor == null || toDate == null) {
+            throw new BusinessException("Number of sessions or date range is required");
+        }
+        List<LocalDate> dates = new ArrayList<>();
+        while (!cursor.isAfter(toDate)) {
+            if (javaDays.contains(cursor.getDayOfWeek())) {
+                dates.add(cursor);
+            }
+            cursor = cursor.plusDays(1);
+        }
+        return dates;
+    }
+
+    private List<LocalDate> plannedSessionDates(Classroom classroom, LocalDate fromDate, LocalDate toDate) {
+        return plannedSessionDates(
+                classroom.getStartDate(),
+                classroom.getDaysOfWeek(),
+                fromDate == null ? classroom.getStartDate() : fromDate,
+                toDate
+        );
     }
 
     @Transactional(readOnly = true)

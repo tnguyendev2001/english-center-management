@@ -60,7 +60,7 @@ public class StudentService {
         return studentMapper.toResponse(studentRepository.save(student));
     }
 
-    static String formatStudentCode(Long id) {
+    public static String formatStudentCode(Long id) {
         return "ST" + String.format("%05d", id);
     }
 

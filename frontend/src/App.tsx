@@ -10,6 +10,7 @@ import { PaymentListPage } from './features/payments/pages/PaymentListPage'
 import { ReportsPage } from './features/reports/pages/ReportsPage'
 import { StudentDetailPage } from './features/students/pages/StudentDetailPage'
 import { StudentListPage } from './features/students/pages/StudentListPage'
+import { LegacyStudentImportPage } from './features/imports/pages/LegacyStudentImportPage'
 import { TuitionPackageListPage } from './features/tuitionPackages/pages/TuitionPackageListPage'
 
 function App() {
@@ -19,6 +20,8 @@ function App() {
     ? '/dashboard'
     : location.pathname.startsWith('/tuition-packages')
     ? '/tuition-packages'
+    : location.pathname.startsWith('/imports')
+    ? '/imports/legacy-students'
     : location.pathname.startsWith('/payments')
       ? '/payments'
     : location.pathname.startsWith('/debts')
@@ -57,6 +60,7 @@ function App() {
             { key: '/reports', label: 'Báo cáo' },
             { key: '/debts', label: 'Công nợ' },
             { key: '/tuition-packages', label: 'Gói học phí' },
+            { key: '/imports/legacy-students', label: 'Nhập liệu Excel' },
           ]}
           onClick={(event) => navigate(event.key)}
         />
@@ -72,6 +76,7 @@ function App() {
             <Route path="/classrooms" element={<ClassroomListPage />} />
             <Route path="/classrooms/:id" element={<ClassroomDetailPage />} />
             <Route path="/tuition-packages" element={<TuitionPackageListPage />} />
+            <Route path="/imports/legacy-students" element={<LegacyStudentImportPage />} />
             <Route path="/invoices" element={<InvoiceListPage />} />
             <Route path="/payments" element={<PaymentListPage />} />
             <Route path="/debts" element={<DebtPage />} />

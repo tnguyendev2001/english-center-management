@@ -96,6 +96,8 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
             ORDER BY enrollment.classroom.className ASC, enrollment.student.fullName ASC
             """)
     List<Enrollment> findAllActiveWithRelations();
+    boolean existsByStudentIdAndClassroomId(Long studentId, Long classroomId);
+
     boolean existsByStudentIdAndClassroomIdAndStatus(Long studentId, Long classroomId, EnrollmentStatus status);
 
     boolean existsByStudentIdAndClassroomIdAndStatusIn(

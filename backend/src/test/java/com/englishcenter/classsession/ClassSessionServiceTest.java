@@ -133,7 +133,7 @@ class ClassSessionServiceTest {
                 attendanceRepository,
                 makeupCreditRepository,
                 enrollmentRepository,
-                new EnrollmentSessionService(statusHistoryRepository),
+                new EnrollmentSessionService(statusHistoryRepository, enrollmentRepository, attendanceRepository),
                 classSessionMapper
         );
     }

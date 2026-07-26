@@ -1,18 +1,30 @@
 package com.englishcenter.enrollment;
 
 import com.englishcenter.attendance.Attendance;
+import com.englishcenter.attendance.AttendanceRepository;
 import com.englishcenter.attendance.AttendanceStatus;
 import com.englishcenter.classsession.ClassSession;
 import com.englishcenter.classsession.ClassSessionStatus;
 import com.englishcenter.common.exception.BusinessException;
+import com.englishcenter.common.exception.NotFoundException;
+import java.util.List;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class EnrollmentSessionService {
     private final EnrollmentStatusHistoryRepository statusHistoryRepository;
+    private final EnrollmentRepository enrollmentRepository;
+    private final AttendanceRepository attendanceRepository;
 
-    public EnrollmentSessionService(EnrollmentStatusHistoryRepository statusHistoryRepository) {
+    public EnrollmentSessionService(
+            EnrollmentStatusHistoryRepository statusHistoryRepository,
+            EnrollmentRepository enrollmentRepository,
+            AttendanceRepository attendanceRepository
+    ) {
         this.statusHistoryRepository = statusHistoryRepository;
+        this.enrollmentRepository = enrollmentRepository;
+        this.attendanceRepository = attendanceRepository;
     }
 
     public int remainingSessions(Enrollment enrollment) {
@@ -78,5 +90,30 @@ public class EnrollmentSessionService {
 
     public void reverseConsumedSession(Enrollment enrollment) {
         enrollment.setUsedSessions(Math.max(enrollment.getUsedSessions() - 1, 0));
+    }
+
+    /**
+     * Authoritative progress sync from consuming attendance records.
+     * Shared by legacy import and usable for attendance repair.
+     */
+    @Transactional
+    public Enrollment recalculateEnrollmentProgress(Long enrollmentId) {
+        Enrollment enrollment = enrollmentRepository.findById(enrollmentId)
+                .orElseThrow(() -> new NotFoundException("Enrollment not found"));
+
+        List<Attendance> attendances = attendanceRepository.findValidByStudentIdAndClassroomId(
+                enrollment.getStudent().getId(),
+                enrollment.getClassroom().getId()
+        );
+
+        int used = 0;
+        for (Attendance attendance : attendances) {
+            if (consumesSession(attendance, attendance.getSession(), enrollment)) {
+                used++;
+            }
+        }
+
+        enrollment.setUsedSessions(used);
+        return enrollmentRepository.save(enrollment);
     }
 }

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.englishcenter.attendance.AttendanceRepository;
 import com.englishcenter.enrollment.EnrollmentRepository;
 import com.englishcenter.enrollment.EnrollmentSessionService;
 import com.englishcenter.enrollment.EnrollmentStatusHistoryRepository;
@@ -34,6 +35,9 @@ class ClassroomServiceTest {
 
     @Mock
     private EnrollmentStatusHistoryRepository statusHistoryRepository;
+
+    @Mock
+    private AttendanceRepository attendanceRepository;
 
     @Mock
     private ClassroomScheduleUpdateService classroomScheduleUpdateService;
@@ -195,7 +199,7 @@ class ClassroomServiceTest {
                 classroomRepository,
                 classroomMapper,
                 enrollmentRepository,
-                new EnrollmentSessionService(statusHistoryRepository),
+                new EnrollmentSessionService(statusHistoryRepository, enrollmentRepository, attendanceRepository),
                 classroomScheduleUpdateService
         );
     }

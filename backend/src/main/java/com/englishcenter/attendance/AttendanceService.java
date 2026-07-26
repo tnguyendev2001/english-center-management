@@ -95,6 +95,62 @@ public class AttendanceService {
         return saved.stream().map(attendanceMapper::toResponse).toList();
     }
 
+    /**
+     * Shared attendance consumption path for legacy Excel import.
+     * Marks PRESENT for eligible sessions using {@link EnrollmentSessionService#applyAttendanceDelta}.
+     * Existing attendance rows are preserved (not overwritten).
+     */
+    @Transactional
+    public int markLegacyAttendancePresent(Long enrollmentId, List<Long> sessionIds) {
+        Enrollment enrollment = enrollmentRepository.findById(enrollmentId)
+                .orElseThrow(() -> new NotFoundException("Enrollment not found"));
+        LocalDate today = LocalDate.now();
+        int created = 0;
+
+        for (Long sessionId : sessionIds) {
+            ClassSession session = classSessionRepository.findById(sessionId)
+                    .orElseThrow(() -> new NotFoundException("Class session not found"));
+            if (session.getStatus() == ClassSessionStatus.CANCELED) {
+                continue;
+            }
+            if (!session.getClassroom().getId().equals(enrollment.getClassroom().getId())) {
+                throw new BusinessException("Session does not belong to enrollment classroom");
+            }
+            if (session.getSessionDate().isBefore(enrollment.getStartDate())
+                    || session.getSessionDate().isAfter(today)) {
+                continue;
+            }
+
+            Optional<Attendance> existing = attendanceRepository.findBySessionIdAndStudentId(
+                    session.getId(),
+                    enrollment.getStudent().getId()
+            );
+            if (existing.isPresent()) {
+                continue;
+            }
+
+            AttendanceItemRequest item = new AttendanceItemRequest(
+                    enrollment.getStudent().getId(),
+                    AttendanceStatus.PRESENT,
+                    "Nhập liệu legacy Excel",
+                    null
+            );
+            Map<Long, Enrollment> enrollmentsByStudentId = Map.of(
+                    enrollment.getStudent().getId(),
+                    enrollment
+            );
+            markOne(session, enrollmentsByStudentId, item);
+
+            if (session.getStatus() == ClassSessionStatus.SCHEDULED) {
+                session.setStatus(ClassSessionStatus.COMPLETED);
+                classSessionRepository.save(session);
+            }
+            created++;
+        }
+
+        return created;
+    }
+
     @Transactional(readOnly = true)
     public AttendanceRosterResponse getRoster(Long sessionId) {
         ClassSession session = classSessionRepository.findById(sessionId)

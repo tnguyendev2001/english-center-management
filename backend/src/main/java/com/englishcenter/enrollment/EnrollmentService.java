@@ -130,7 +130,8 @@ public class EnrollmentService {
                 tuitionPackage,
                 discountAmount,
                 finalAmount,
-                learningStartDate
+                learningStartDate,
+                EnrollmentCreationSource.ENROLLMENT
         );
         enrollment = enrollmentRepository.save(enrollment);
         createHistory(enrollment, EnrollmentStatus.ACTIVE, learningStartDate, null, "Ghi danh ban đầu");
@@ -142,7 +143,8 @@ public class EnrollmentService {
                 tuitionPackage,
                 discountAmount,
                 adjustmentAmount,
-                finalAmount
+                finalAmount,
+                StudentPackageSourceType.ENROLLMENT
         );
         studentPackage = studentPackageRepository.save(studentPackage);
 
@@ -161,6 +163,95 @@ public class EnrollmentService {
 
         // TODO: Save ActivityLog for ENROLL_STUDENT when the ActivityLog module exists.
         return enrollmentMapper.toResponse(enrollment, studentPackage, invoice);
+    }
+
+    /**
+     * Shared enrollment creation for legacy Excel import.
+     * Creates Enrollment + ACTIVE history + first StudentPackage + first UNPAID Invoice.
+     * Does not create Payment, ClassSession, or Attendance.
+     * Idempotent: returns existing enrollment when student+classroom already enrolled.
+     */
+    @Transactional
+    public Enrollment enrollFromLegacyImport(
+            Student student,
+            Classroom classroom,
+            TuitionPackage tuitionPackage,
+            LocalDate learningStartDate
+    ) {
+        validateStudentEligible(student);
+        validateClassroomOpenForEnrollment(classroom);
+        validateTuitionPackageActive(tuitionPackage);
+        validateTuitionPackageBelongsToClassroom(classroom.getId(), tuitionPackage.getId());
+
+        List<Enrollment> existing = enrollmentRepository
+                .findByStudentIdAndClassroomIdOrderByStartDateAscIdAsc(student.getId(), classroom.getId());
+        if (!existing.isEmpty()) {
+            return existing.getFirst();
+        }
+
+        BigDecimal discountAmount = ZERO;
+        BigDecimal adjustmentAmount = ZERO;
+        BigDecimal finalAmount = tuitionPackage.getPrice();
+
+        Enrollment enrollment = new Enrollment();
+        enrollment.setStudent(student);
+        enrollment.setClassroom(classroom);
+        enrollment.setStartDate(learningStartDate);
+        enrollment.setStatus(EnrollmentStatus.ACTIVE);
+        enrollment.setCreationSource(EnrollmentCreationSource.LEGACY_IMPORT);
+        enrollment.setSelectedPackage(tuitionPackage);
+        enrollment.setPackageNameSnapshot(tuitionPackage.getName());
+        enrollment.setTotalSessions(tuitionPackage.getTotalSessions());
+        enrollment.setUsedSessions(0);
+        enrollment.setTotalSessionsSnapshot(tuitionPackage.getTotalSessions());
+        enrollment.setPackagePriceSnapshot(tuitionPackage.getPrice());
+        enrollment.setDiscountAmount(discountAmount);
+        enrollment.setFinalAmount(finalAmount);
+        enrollment.setNote("Nhập liệu legacy Excel");
+        enrollment = enrollmentRepository.save(enrollment);
+
+        createHistory(enrollment, EnrollmentStatus.ACTIVE, learningStartDate, null, "Nhập liệu legacy");
+
+        StudentPackage studentPackage = createStudentPackage(
+                enrollment,
+                student,
+                classroom,
+                tuitionPackage,
+                discountAmount,
+                adjustmentAmount,
+                finalAmount,
+                StudentPackageSourceType.LEGACY_IMPORT
+        );
+        studentPackage = studentPackageRepository.save(studentPackage);
+
+        Invoice invoice = createInvoice(
+                enrollment,
+                studentPackage,
+                student,
+                classroom,
+                tuitionPackage,
+                discountAmount,
+                adjustmentAmount,
+                finalAmount,
+                learningStartDate
+        );
+        invoice.setNote("Nhập liệu legacy Excel");
+        invoiceRepository.save(invoice);
+
+        return enrollment;
+    }
+
+    /**
+     * @deprecated use {@link #enrollFromLegacyImport}
+     */
+    @Transactional
+    public Enrollment createFromLegacyImport(
+            Student student,
+            Classroom classroom,
+            TuitionPackage tuitionPackage,
+            LocalDate learningStartDate
+    ) {
+        return enrollFromLegacyImport(student, classroom, tuitionPackage, learningStartDate);
     }
 
     @Transactional(readOnly = true)
@@ -369,6 +460,11 @@ public class EnrollmentService {
         target.setClassroom(targetClassroom);
         target.setStartDate(request.targetLearningStartDate());
         target.setStatus(EnrollmentStatus.ACTIVE);
+        target.setCreationSource(
+                source.getCreationSource() != null
+                        ? source.getCreationSource()
+                        : EnrollmentCreationSource.ENROLLMENT
+        );
         target.setSelectedPackage(source.getSelectedPackage());
         target.setPackageNameSnapshot(source.getPackageNameSnapshot());
         target.setTotalSessions(transferredSessions);
@@ -464,13 +560,15 @@ public class EnrollmentService {
             TuitionPackage tuitionPackage,
             BigDecimal discountAmount,
             BigDecimal finalAmount,
-            LocalDate learningStartDate
+            LocalDate learningStartDate,
+            EnrollmentCreationSource creationSource
     ) {
         Enrollment enrollment = new Enrollment();
         enrollment.setStudent(student);
         enrollment.setClassroom(classroom);
         enrollment.setStartDate(learningStartDate);
         enrollment.setStatus(EnrollmentStatus.ACTIVE);
+        enrollment.setCreationSource(creationSource);
         enrollment.setSelectedPackage(tuitionPackage);
         enrollment.setPackageNameSnapshot(tuitionPackage.getName());
         enrollment.setTotalSessions(tuitionPackage.getTotalSessions());
@@ -490,7 +588,8 @@ public class EnrollmentService {
             TuitionPackage tuitionPackage,
             BigDecimal discountAmount,
             BigDecimal adjustmentAmount,
-            BigDecimal finalAmount
+            BigDecimal finalAmount,
+            StudentPackageSourceType sourceType
     ) {
         StudentPackage studentPackage = new StudentPackage();
         studentPackage.setStudent(student);
@@ -505,7 +604,7 @@ public class EnrollmentService {
         studentPackage.setFinalAmount(finalAmount);
         studentPackage.setStartDate(enrollment.getStartDate());
         studentPackage.setStatus(StudentPackageStatus.CONFIRMED);
-        studentPackage.setSourceType(StudentPackageSourceType.ENROLLMENT);
+        studentPackage.setSourceType(sourceType);
         studentPackage.setCycleNo(1);
         return studentPackage;
     }

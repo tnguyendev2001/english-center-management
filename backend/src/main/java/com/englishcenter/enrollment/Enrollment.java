@@ -49,6 +49,10 @@ public class Enrollment {
     @Column(name = "status", nullable = false, length = 20)
     private EnrollmentStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "creation_source", nullable = false, length = 40)
+    private EnrollmentCreationSource creationSource = EnrollmentCreationSource.ENROLLMENT;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "selected_package_id", nullable = false)
     private TuitionPackage selectedPackage;

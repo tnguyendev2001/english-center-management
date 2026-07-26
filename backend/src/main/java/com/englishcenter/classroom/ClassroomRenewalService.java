@@ -9,6 +9,8 @@ import com.englishcenter.classroom.dto.ClassroomRenewalItemRequest;
 import com.englishcenter.classroom.dto.ClassroomRenewalPreviewItemResponse;
 import com.englishcenter.classroom.dto.ClassroomRenewalPreviewResponse;
 import com.englishcenter.classroom.dto.ClassroomRenewalRequest;
+import com.englishcenter.classroom.dto.PackageRenewalCommand;
+import com.englishcenter.classroom.dto.PackageRenewalResult;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
 import com.englishcenter.enrollment.Enrollment;
@@ -192,29 +194,110 @@ public class ClassroomRenewalService {
     }
 
     private ClassroomRenewalConfirmItemResponse confirmOne(RenewalContext context) {
+        PackageRenewalResult result = renewPackage(new PackageRenewalCommand(
+                context.enrollment().getId(),
+                context.tuitionPackage().getId(),
+                LocalDate.now(),
+                StudentPackageSourceType.RENEWAL,
+                "Gia hạn gói học phí",
+                true
+        ));
+
         Enrollment enrollment = context.enrollment();
-        TuitionPackage tuitionPackage = context.tuitionPackage();
-        LocalDate today = LocalDate.now();
-
-        enrollment.setTotalSessions(enrollment.getTotalSessions() + tuitionPackage.getTotalSessions());
-        enrollmentRepository.save(enrollment);
-
-        StudentPackage newStudentPackage = createStudentPackage(context, today);
-        newStudentPackage = studentPackageRepository.save(newStudentPackage);
-
-        Invoice invoice = createInvoice(context, newStudentPackage, today);
-        invoice = invoiceRepository.save(invoice);
-
         return new ClassroomRenewalConfirmItemResponse(
                 enrollment.getStudent().getId(),
                 enrollment.getId(),
                 enrollment.getStudent().getStudentCode(),
                 enrollment.getStudent().getFullName(),
+                result.studentPackageId(),
+                result.invoiceId(),
+                context.tuitionPackage().getName(),
+                context.tuitionPackage().getPrice(),
+                StudentPackageStatus.CONFIRMED
+        );
+    }
+
+    /**
+     * Shared package-renewal core used by classroom renew UI and legacy Excel import.
+     * Adds package sessions to Enrollment.totalSessions, creates StudentPackage cycle and optional UNPAID invoice.
+     * Idempotent for a given enrollment+cycleNo: if the next cycle already exists, returns created=false.
+     */
+    @Transactional
+    public PackageRenewalResult renewPackage(PackageRenewalCommand command) {
+        Enrollment enrollment = enrollmentRepository.findById(command.enrollmentId())
+                .orElseThrow(() -> new NotFoundException("Enrollment not found"));
+        if (enrollment.getStatus() != EnrollmentStatus.ACTIVE) {
+            throw new BusinessException("Học viên không có ghi danh đang hoạt động trong lớp này");
+        }
+
+        TuitionPackage tuitionPackage = tuitionPackageRepository.findById(command.tuitionPackageId())
+                .orElseThrow(() -> new NotFoundException("Tuition package not found"));
+        if (tuitionPackage.getStatus() != TuitionPackageStatus.ACTIVE) {
+            throw new BusinessException("Gói học phí phải đang hoạt động");
+        }
+        if (!classPackageRepository.existsByClassroomIdAndTuitionPackageIdAndActiveTrue(
+                enrollment.getClassroom().getId(),
+                tuitionPackage.getId()
+        )) {
+            throw new BusinessException("Gói học phí không được áp dụng cho lớp này");
+        }
+
+        int nextCycleNo = studentPackageRepository.findMaxCycleNoByEnrollmentId(enrollment.getId()) + 1;
+        LocalDate effectiveDate = command.effectiveDate() != null ? command.effectiveDate() : LocalDate.now();
+
+        enrollment.setTotalSessions(enrollment.getTotalSessions() + tuitionPackage.getTotalSessions());
+        enrollmentRepository.save(enrollment);
+
+        StudentPackageSourceType sourceType = command.sourceType() != null
+                ? command.sourceType()
+                : StudentPackageSourceType.RENEWAL;
+
+        StudentPackage newStudentPackage = new StudentPackage();
+        newStudentPackage.setStudent(enrollment.getStudent());
+        newStudentPackage.setClassroom(enrollment.getClassroom());
+        newStudentPackage.setEnrollment(enrollment);
+        newStudentPackage.setTuitionPackage(tuitionPackage);
+        newStudentPackage.setPackageName(tuitionPackage.getName());
+        newStudentPackage.setTotalSessions(tuitionPackage.getTotalSessions());
+        newStudentPackage.setPrice(tuitionPackage.getPrice());
+        newStudentPackage.setDiscountAmount(ZERO);
+        newStudentPackage.setAdjustmentAmount(ZERO);
+        newStudentPackage.setFinalAmount(tuitionPackage.getPrice());
+        newStudentPackage.setStartDate(effectiveDate);
+        newStudentPackage.setStatus(StudentPackageStatus.CONFIRMED);
+        newStudentPackage.setSourceType(sourceType);
+        newStudentPackage.setCycleNo(nextCycleNo);
+        newStudentPackage = studentPackageRepository.save(newStudentPackage);
+
+        Long invoiceId = null;
+        if (command.createUnpaidInvoice()) {
+            Invoice invoice = new Invoice();
+            invoice.setInvoiceCode(generateInvoiceCode());
+            invoice.setStudent(enrollment.getStudent());
+            invoice.setClassroom(enrollment.getClassroom());
+            invoice.setEnrollment(enrollment);
+            invoice.setStudentPackage(newStudentPackage);
+            invoice.setPackageNameSnapshot(tuitionPackage.getName());
+            invoice.setTotalSessionsSnapshot(tuitionPackage.getTotalSessions());
+            invoice.setAmount(tuitionPackage.getPrice());
+            invoice.setDiscountAmount(ZERO);
+            invoice.setAdjustmentAmount(ZERO);
+            invoice.setFinalAmount(tuitionPackage.getPrice());
+            invoice.setPaidAmount(ZERO);
+            invoice.setRemainingAmount(tuitionPackage.getPrice());
+            invoice.setDueDate(effectiveDate);
+            invoice.setStatus(InvoiceStatus.UNPAID);
+            invoice.setNote(command.invoiceNote() != null ? command.invoiceNote() : "Gia hạn gói học phí");
+            invoice = invoiceRepository.save(invoice);
+            invoiceId = invoice.getId();
+        }
+
+        return new PackageRenewalResult(
+                enrollment.getId(),
                 newStudentPackage.getId(),
-                invoice.getId(),
-                newStudentPackage.getPackageName(),
-                invoice.getFinalAmount(),
-                newStudentPackage.getStatus()
+                invoiceId,
+                nextCycleNo,
+                true
         );
     }
 
@@ -242,50 +325,6 @@ public class ClassroomRenewalService {
                 .orElse(null);
 
         return new RenewalContext(enrollment, latestPackage, tuitionPackage);
-    }
-
-    private StudentPackage createStudentPackage(RenewalContext context, LocalDate startDate) {
-        TuitionPackage tuitionPackage = context.tuitionPackage();
-        StudentPackage studentPackage = new StudentPackage();
-        studentPackage.setStudent(context.enrollment().getStudent());
-        studentPackage.setClassroom(context.enrollment().getClassroom());
-        studentPackage.setEnrollment(context.enrollment());
-        studentPackage.setTuitionPackage(tuitionPackage);
-        studentPackage.setPackageName(tuitionPackage.getName());
-        studentPackage.setTotalSessions(tuitionPackage.getTotalSessions());
-        studentPackage.setPrice(tuitionPackage.getPrice());
-        studentPackage.setDiscountAmount(ZERO);
-        studentPackage.setAdjustmentAmount(ZERO);
-        studentPackage.setFinalAmount(tuitionPackage.getPrice());
-        studentPackage.setStartDate(startDate);
-        studentPackage.setStatus(StudentPackageStatus.CONFIRMED);
-        studentPackage.setSourceType(StudentPackageSourceType.RENEWAL);
-        studentPackage.setCycleNo(
-                studentPackageRepository.findMaxCycleNoByEnrollmentId(context.enrollment().getId()) + 1
-        );
-        return studentPackage;
-    }
-
-    private Invoice createInvoice(RenewalContext context, StudentPackage studentPackage, LocalDate dueDate) {
-        TuitionPackage tuitionPackage = context.tuitionPackage();
-        Invoice invoice = new Invoice();
-        invoice.setInvoiceCode(generateInvoiceCode());
-        invoice.setStudent(context.enrollment().getStudent());
-        invoice.setClassroom(context.enrollment().getClassroom());
-        invoice.setEnrollment(context.enrollment());
-        invoice.setStudentPackage(studentPackage);
-        invoice.setPackageNameSnapshot(tuitionPackage.getName());
-        invoice.setTotalSessionsSnapshot(tuitionPackage.getTotalSessions());
-        invoice.setAmount(tuitionPackage.getPrice());
-        invoice.setDiscountAmount(ZERO);
-        invoice.setAdjustmentAmount(ZERO);
-        invoice.setFinalAmount(tuitionPackage.getPrice());
-        invoice.setPaidAmount(ZERO);
-        invoice.setRemainingAmount(tuitionPackage.getPrice());
-        invoice.setDueDate(dueDate);
-        invoice.setStatus(InvoiceStatus.UNPAID);
-        invoice.setNote("Gia hạn gói học phí");
-        return invoice;
     }
 
     private Map<Long, StudentPackage> latestPackagesByEnrollment(Long classroomId) {

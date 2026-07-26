@@ -5,5 +5,6 @@ public enum StudentPackageSourceType {
     RENEWAL,
     PACKAGE_CHANGE_REPLACEMENT,
     PACKAGE_CHANGE_NEW_CYCLE,
-    LEGACY
+    LEGACY,
+    LEGACY_IMPORT
 }

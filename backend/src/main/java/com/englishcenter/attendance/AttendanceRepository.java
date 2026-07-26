@@ -21,6 +21,21 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
     boolean existsBySessionId(Long sessionId);
 
     @Query("""
+            SELECT attendance
+            FROM Attendance attendance
+            JOIN FETCH attendance.session session
+            WHERE attendance.student.id = :studentId
+              AND session.classroom.id = :classroomId
+              AND attendance.valid = true
+              AND session.status <> com.englishcenter.classsession.ClassSessionStatus.CANCELED
+            ORDER BY session.sessionDate ASC, session.startTime ASC
+            """)
+    List<Attendance> findValidByStudentIdAndClassroomId(
+            @Param("studentId") Long studentId,
+            @Param("classroomId") Long classroomId
+    );
+
+    @Query("""
             SELECT COUNT(a)
             FROM Attendance a
             JOIN a.session s

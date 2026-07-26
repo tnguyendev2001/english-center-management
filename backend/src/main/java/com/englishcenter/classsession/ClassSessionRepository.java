@@ -41,4 +41,17 @@ public interface ClassSessionRepository extends JpaRepository<ClassSession, Long
     );
 
     List<ClassSession> findByClassroomIdOrderBySessionDateAscStartTimeAsc(Long classroomId);
+
+    List<ClassSession> findByClassroomIdAndSessionDateBetweenAndStatusNotOrderBySessionDateAscStartTimeAsc(
+            Long classroomId,
+            LocalDate fromDate,
+            LocalDate toDate,
+            ClassSessionStatus status
+    );
+
+    int countByClassroomIdAndSessionDateBetween(
+            Long classroomId,
+            LocalDate fromDate,
+            LocalDate toDate
+    );
 }

@@ -1,6 +1,7 @@
 package com.englishcenter.student;
 
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,6 +14,16 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     boolean existsByStudentCode(String studentCode);
 
     boolean existsByStudentCodeAndIdNot(String studentCode, Long id);
+
+    @Query(value = """
+            SELECT *
+            FROM students student
+            WHERE student.phone IS NOT NULL
+              AND regexp_replace(student.phone, '[ .\\-]', '', 'g') = :normalizedPhone
+            ORDER BY student.id
+            LIMIT 1
+            """, nativeQuery = true)
+    Optional<Student> findFirstByNormalizedPhone(@Param("normalizedPhone") String normalizedPhone);
 
     @Query("""
             SELECT student

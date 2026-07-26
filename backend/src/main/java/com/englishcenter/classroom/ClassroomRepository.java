@@ -1,5 +1,6 @@
 package com.englishcenter.classroom;
 
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,6 +13,16 @@ public interface ClassroomRepository extends JpaRepository<Classroom, Long> {
     boolean existsByClassCode(String classCode);
 
     boolean existsByClassCodeAndIdNot(String classCode, Long id);
+
+    Optional<Classroom> findFirstByClassCodeIgnoreCase(String classCode);
+
+    @Query("""
+            SELECT classroom
+            FROM Classroom classroom
+            WHERE LOWER(REPLACE(classroom.className, ' ', '')) = LOWER(:normalizedName)
+            ORDER BY classroom.id ASC
+            """)
+    java.util.List<Classroom> findByNormalizedClassName(@Param("normalizedName") String normalizedName);
 
     @Query("""
             SELECT classroom
