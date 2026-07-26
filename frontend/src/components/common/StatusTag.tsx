@@ -7,8 +7,10 @@ type StatusConfig = {
 
 const statusConfigs: Record<string, StatusConfig> = {
   ACTIVE: { label: 'Đang học', color: 'green' },
-  ON_HOLD: { label: 'Tạm nghỉ', color: 'gold' },
+  ON_HOLD: { label: 'Bảo lưu', color: 'gold' },
   INACTIVE: { label: 'Ngừng học', color: 'default' },
+  STOPPED: { label: 'Đã ngừng học', color: 'default' },
+  TRANSFERRED: { label: 'Đã chuyển lớp', color: 'blue' },
   PLANNED: { label: 'Dự kiến', color: 'blue' },
   ONGOING: { label: 'Đang học', color: 'green' },
   COMPLETED: { label: 'Hoàn thành', color: 'default' },

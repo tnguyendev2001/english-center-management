@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.englishcenter.enrollment.EnrollmentRepository;
 import com.englishcenter.enrollment.EnrollmentSessionService;
+import com.englishcenter.enrollment.EnrollmentStatusHistoryRepository;
 import com.englishcenter.classroom.dto.ClassroomResponse;
 import com.englishcenter.classroom.dto.ClassroomUpdateRequest;
 import com.englishcenter.classroom.mapper.ClassroomMapper;
@@ -32,11 +33,12 @@ class ClassroomServiceTest {
     private EnrollmentRepository enrollmentRepository;
 
     @Mock
+    private EnrollmentStatusHistoryRepository statusHistoryRepository;
+
+    @Mock
     private ClassroomScheduleUpdateService classroomScheduleUpdateService;
 
     private final ClassroomMapper classroomMapper = new ClassroomMapper();
-    private final EnrollmentSessionService enrollmentSessionService = new EnrollmentSessionService();
-
     @Test
     void createRejectsDuplicateClassCode() {
         ClassroomService classroomService = newService();
@@ -193,7 +195,7 @@ class ClassroomServiceTest {
                 classroomRepository,
                 classroomMapper,
                 enrollmentRepository,
-                enrollmentSessionService,
+                new EnrollmentSessionService(statusHistoryRepository),
                 classroomScheduleUpdateService
         );
     }

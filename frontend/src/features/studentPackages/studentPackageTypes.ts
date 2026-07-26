@@ -1,4 +1,5 @@
 import type { Invoice } from '../invoices/invoiceTypes'
+import type { EnrollmentStatus } from '../enrollments/enrollmentTypes'
 
 export type LearningProgressWarningType = 'OVERUSED' | 'DEPLETED' | 'LOW' | 'OK' | 'NONE'
 export type PackageChangeAdjustmentType = 'CREDIT' | 'DEBT' | 'NONE'
@@ -36,6 +37,9 @@ export interface EnrollmentLearningProgress {
   studentName: string
   classroomId: number
   classroomName: string
+  status: EnrollmentStatus
+  startDate: string
+  endDate?: string | null
   totalSessions: number
   usedSessions: number
   remainingSessions: number

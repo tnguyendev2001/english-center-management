@@ -9,6 +9,12 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class EnrollmentSessionService {
+    private final EnrollmentStatusHistoryRepository statusHistoryRepository;
+
+    public EnrollmentSessionService(EnrollmentStatusHistoryRepository statusHistoryRepository) {
+        this.statusHistoryRepository = statusHistoryRepository;
+    }
+
     public int remainingSessions(Enrollment enrollment) {
         return Math.max(enrollment.getTotalSessions() - enrollment.getUsedSessions(), 0);
     }
@@ -30,11 +36,18 @@ public class EnrollmentSessionService {
             return false;
         }
 
-        if (!EnrollmentLearningDateHelper.isEligibleForSession(enrollment, session.getSessionDate())) {
+        if (!consumesStatus(attendance.getStatus())) {
             return false;
         }
 
-        return consumesStatus(attendance.getStatus());
+        if (statusHistoryRepository.isActiveAt(enrollment.getId(), session.getSessionDate())) {
+            return true;
+        }
+
+        // Historical PRESENT/ABSENT for this same session must remain editable after stop/hold
+        // without treating the old mark as non-consuming (which would reverse usedSessions).
+        return attendance.getSession() != null
+                && attendance.getSession().getId().equals(session.getId());
     }
 
     public boolean consumesStatus(AttendanceStatus status) {

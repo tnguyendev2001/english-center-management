@@ -17,6 +17,7 @@ import com.englishcenter.studentpackage.StudentPackageRepository;
 import com.englishcenter.tuitionpackage.TuitionPackage;
 import com.englishcenter.tuitionpackage.TuitionPackageStatus;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,7 +51,7 @@ class EnrollmentProgressServiceTest {
         StudentPackage latestPackage = latestPackage(enrollment, tuitionPackage(4L, "12 sessions", 12, "700000"));
 
         when(classroomRepository.existsById(2L)).thenReturn(true);
-        when(enrollmentRepository.findByClassroomIdAndStatus(2L, EnrollmentStatus.ACTIVE))
+        when(enrollmentRepository.findByClassroomIdOrderByStartDateDescIdDesc(2L))
                 .thenReturn(List.of(enrollment));
         when(studentPackageRepository.findTopByEnrollmentIdOrderByCycleNoDescIdDesc(10L))
                 .thenReturn(java.util.Optional.of(latestPackage));
@@ -76,7 +77,7 @@ class EnrollmentProgressServiceTest {
         StudentPackage latestPackage = latestPackage(enrollment, tuitionPackage(4L, "8 sessions", 8, "500000"));
 
         when(classroomRepository.existsById(2L)).thenReturn(true);
-        when(enrollmentRepository.findByClassroomIdAndStatus(2L, EnrollmentStatus.ACTIVE))
+        when(enrollmentRepository.findByClassroomIdOrderByStartDateDescIdDesc(2L))
                 .thenReturn(List.of(enrollment));
         when(studentPackageRepository.findTopByEnrollmentIdOrderByCycleNoDescIdDesc(10L))
                 .thenReturn(java.util.Optional.of(latestPackage));
@@ -90,6 +91,28 @@ class EnrollmentProgressServiceTest {
         assertThat(progress.getFirst().overusedSessions()).isEqualTo(3);
         assertThat(progress.getFirst().warningType()).isEqualTo(LearningProgressWarningType.OVERUSED);
         assertThat(progress.getFirst().warningMessage()).isEqualTo("Vượt 3 buổi - cần gia hạn");
+    }
+
+    @Test
+    void getByStudentIdIncludesHistoricalEnrollmentStatusAndDates() {
+        EnrollmentProgressService service = newService();
+        Enrollment enrollment = enrollment(10L, 8, 3);
+        enrollment.setStatus(EnrollmentStatus.STOPPED);
+        enrollment.setStartDate(LocalDate.of(2026, 7, 1));
+        enrollment.setEndDate(LocalDate.of(2026, 7, 20));
+        when(studentRepository.existsById(1L)).thenReturn(true);
+        when(enrollmentRepository.findByStudentIdOrderByStartDateDescIdDesc(1L))
+                .thenReturn(List.of(enrollment));
+        when(studentPackageRepository.findTopByEnrollmentIdOrderByCycleNoDescIdDesc(10L))
+                .thenReturn(java.util.Optional.empty());
+        when(makeupCreditRepository.countAvailableMakeupCredits(1L, 2L, MakeupCreditStatus.AVAILABLE))
+                .thenReturn(0);
+
+        EnrollmentLearningProgressResponse response = service.getByStudentId(1L).getFirst();
+
+        assertThat(response.status()).isEqualTo(EnrollmentStatus.STOPPED);
+        assertThat(response.startDate()).isEqualTo(LocalDate.of(2026, 7, 1));
+        assertThat(response.endDate()).isEqualTo(LocalDate.of(2026, 7, 20));
     }
 
     private EnrollmentProgressService newService() {

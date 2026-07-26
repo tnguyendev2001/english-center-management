@@ -10,7 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface StudentPackageRepository extends JpaRepository<StudentPackage, Long> {
-    Optional<StudentPackage> findByEnrollmentId(Long enrollmentId);
+    List<StudentPackage> findAllByEnrollmentId(Long enrollmentId);
 
     @EntityGraph(attributePaths = {"student", "classroom", "enrollment", "tuitionPackage"})
     List<StudentPackage> findByEnrollmentIdAndStatusOrderByStartDateDesc(

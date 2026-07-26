@@ -34,7 +34,8 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
                     AND enrollment.classroom.id = :classroomId
                     AND enrollment.status IN (
                         com.englishcenter.enrollment.EnrollmentStatus.ACTIVE,
-                        com.englishcenter.enrollment.EnrollmentStatus.ON_HOLD
+                        com.englishcenter.enrollment.EnrollmentStatus.ON_HOLD,
+                        com.englishcenter.enrollment.EnrollmentStatus.STOPPED
                     )
               )
             ORDER BY student.fullName ASC

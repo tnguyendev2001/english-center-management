@@ -57,6 +57,9 @@ export interface AttendanceRosterStudent {
   studentCode: string
   studentName: string
   enrollmentId: number
+  remainingSessions: number
+  attendanceBlocked: boolean
+  blockedReason?: string | null
 }
 
 export interface AttendanceRoster {

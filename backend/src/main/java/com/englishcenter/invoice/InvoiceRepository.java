@@ -3,6 +3,7 @@ package com.englishcenter.invoice;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -12,6 +13,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
+    long countByEnrollmentIdIn(Collection<Long> enrollmentIds);
+
     long countByStatus(InvoiceStatus status);
 
     @Query("""
@@ -47,7 +50,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
     Page<Invoice> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
-    Optional<Invoice> findByEnrollmentId(Long enrollmentId);
+    Optional<Invoice> findTopByEnrollmentIdOrderByCreatedAtDesc(Long enrollmentId);
+
+    java.util.List<Invoice> findAllByEnrollmentIdOrderByCreatedAtDesc(Long enrollmentId);
 
     @Query("""
             SELECT invoice

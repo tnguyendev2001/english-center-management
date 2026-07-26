@@ -44,7 +44,7 @@ public class EnrollmentProgressService {
             throw new NotFoundException("Student not found");
         }
 
-        return enrollmentRepository.findByStudentIdAndStatus(studentId, EnrollmentStatus.ACTIVE)
+        return enrollmentRepository.findByStudentIdOrderByStartDateDescIdDesc(studentId)
                 .stream()
                 .map(this::toProgressResponse)
                 .toList();
@@ -56,7 +56,7 @@ public class EnrollmentProgressService {
             throw new NotFoundException("Classroom not found");
         }
 
-        return enrollmentRepository.findByClassroomIdAndStatus(classroomId, EnrollmentStatus.ACTIVE)
+        return enrollmentRepository.findByClassroomIdOrderByStartDateDescIdDesc(classroomId)
                 .stream()
                 .map(this::toProgressResponse)
                 .toList();

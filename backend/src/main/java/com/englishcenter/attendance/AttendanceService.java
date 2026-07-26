@@ -15,10 +15,9 @@ import com.englishcenter.classsession.ClassSessionStatus;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
 import com.englishcenter.enrollment.Enrollment;
-import com.englishcenter.enrollment.EnrollmentLearningDateHelper;
 import com.englishcenter.enrollment.EnrollmentRepository;
 import com.englishcenter.enrollment.EnrollmentSessionService;
-import com.englishcenter.enrollment.EnrollmentStatus;
+import com.englishcenter.enrollment.EnrollmentStatusHistoryRepository;
 import com.englishcenter.makeupcredit.MakeupCredit;
 import com.englishcenter.makeupcredit.MakeupCreditReason;
 import com.englishcenter.makeupcredit.MakeupCreditRepository;
@@ -28,10 +27,12 @@ import com.englishcenter.student.StudentRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
+import java.util.function.BinaryOperator;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -50,6 +51,7 @@ public class AttendanceService {
     private final AttendanceRepository attendanceRepository;
     private final ClassSessionRepository classSessionRepository;
     private final EnrollmentRepository enrollmentRepository;
+    private final EnrollmentStatusHistoryRepository statusHistoryRepository;
     private final StudentRepository studentRepository;
     private final MakeupCreditRepository makeupCreditRepository;
     private final EnrollmentSessionService enrollmentSessionService;
@@ -59,6 +61,7 @@ public class AttendanceService {
             AttendanceRepository attendanceRepository,
             ClassSessionRepository classSessionRepository,
             EnrollmentRepository enrollmentRepository,
+            EnrollmentStatusHistoryRepository statusHistoryRepository,
             StudentRepository studentRepository,
             MakeupCreditRepository makeupCreditRepository,
             EnrollmentSessionService enrollmentSessionService,
@@ -67,6 +70,7 @@ public class AttendanceService {
         this.attendanceRepository = attendanceRepository;
         this.classSessionRepository = classSessionRepository;
         this.enrollmentRepository = enrollmentRepository;
+        this.statusHistoryRepository = statusHistoryRepository;
         this.studentRepository = studentRepository;
         this.makeupCreditRepository = makeupCreditRepository;
         this.enrollmentSessionService = enrollmentSessionService;
@@ -79,15 +83,8 @@ public class AttendanceService {
                 .orElseThrow(() -> new NotFoundException("Class session not found"));
         validateClassroomAllowsAttendance(session);
         validateSessionAllowsAttendance(session);
-        AttendanceReadinessResponse readiness = ensureAttendanceReady(session);
-        if (!readiness.ready()) {
-            throw new BusinessException("Một số học viên đã hết buổi. Vui lòng gia hạn gói trước khi điểm danh.");
-        }
 
-        Map<Long, Enrollment> enrollmentsByStudentId = eligibleEnrollmentsByStudentId(
-                session.getClassroom().getId(),
-                session.getSessionDate()
-        );
+        Map<Long, Enrollment> enrollmentsByStudentId = rosterEnrollmentsByStudentId(session);
         List<Attendance> saved = request.items().stream()
                 .map(item -> markOne(session, enrollmentsByStudentId, item))
                 .toList();
@@ -103,19 +100,23 @@ public class AttendanceService {
         ClassSession session = classSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new NotFoundException("Class session not found"));
 
-        List<Enrollment> enrollments = findEligibleEnrollments(
-                session.getClassroom().getId(),
-                session.getSessionDate()
-        );
+        List<Enrollment> enrollments = findRosterEnrollments(session);
         logIneligibleAttendanceWarnings(session, enrollments);
 
         List<AttendanceRosterStudentResponse> students = enrollments.stream()
-                .map(enrollment -> new AttendanceRosterStudentResponse(
-                        enrollment.getStudent().getId(),
-                        enrollment.getStudent().getStudentCode(),
-                        enrollment.getStudent().getFullName(),
-                        enrollment.getId()
-                ))
+                .map(enrollment -> {
+                    int remainingSessions = enrollmentSessionService.remainingSessions(enrollment);
+                    boolean blocked = remainingSessions <= 0;
+                    return new AttendanceRosterStudentResponse(
+                            enrollment.getStudent().getId(),
+                            enrollment.getStudent().getStudentCode(),
+                            enrollment.getStudent().getFullName(),
+                            enrollment.getId(),
+                            remainingSessions,
+                            blocked,
+                            blocked ? "Hết buổi - cần gia hạn" : null
+                    );
+                })
                 .toList();
 
         return new AttendanceRosterResponse(sessionId, students);
@@ -149,18 +150,24 @@ public class AttendanceService {
             Map<Long, Enrollment> enrollmentsByStudentId,
             AttendanceItemRequest item
     ) {
+        Optional<Attendance> existingOptional = attendanceRepository.findBySessionIdAndStudentId(
+                session.getId(),
+                item.studentId()
+        );
         Enrollment enrollment = enrollmentsByStudentId.get(item.studentId());
+        if (enrollment == null && existingOptional.isPresent()) {
+            enrollment = resolveEnrollmentForSession(
+                    item.studentId(),
+                    session.getClassroom().getId(),
+                    session.getSessionDate()
+            );
+        }
         if (enrollment == null) {
             rejectIfNotEligibleForAttendance(session, item.studentId());
             throw new BusinessException("Student is not actively enrolled in this classroom");
         }
 
         Student student = enrollment.getStudent();
-
-        Optional<Attendance> existingOptional = attendanceRepository.findBySessionIdAndStudentId(
-                session.getId(),
-                student.getId()
-        );
         Attendance existingAttendance = existingOptional.orElse(null);
         AttendanceStatus previousValidStatus = existingAttendance != null
                 && Boolean.TRUE.equals(existingAttendance.getValid())
@@ -267,10 +274,7 @@ public class AttendanceService {
     }
 
     private AttendanceReadinessResponse ensureAttendanceReady(ClassSession session) {
-        List<Enrollment> enrollments = findEligibleEnrollments(
-                session.getClassroom().getId(),
-                session.getSessionDate()
-        );
+        List<Enrollment> enrollments = findRosterEnrollments(session);
         List<AttendanceReadinessBlockedStudentResponse> blockedStudents = new ArrayList<>();
 
         for (Enrollment enrollment : enrollments) {
@@ -302,7 +306,7 @@ public class AttendanceService {
         return new AttendanceReadinessResponse(
                 session.getId(),
                 session.getClassroom().getId(),
-                blockedStudents.isEmpty(),
+                true,
                 blockedStudents,
                 List.of()
         );
@@ -340,45 +344,91 @@ public class AttendanceService {
         }
     }
 
-    private List<Enrollment> findEligibleEnrollments(Long classroomId, LocalDate sessionDate) {
-        return enrollmentRepository.findEligibleForAttendanceBySessionDate(
-                classroomId,
-                EnrollmentStatus.ACTIVE,
-                sessionDate
-        );
+    private List<Enrollment> findRosterEnrollments(ClassSession session) {
+        Map<Long, Enrollment> byStudentId = new LinkedHashMap<>();
+        BinaryOperator<Enrollment> preferOlder = (first, second) ->
+                first.getId() <= second.getId() ? first : second;
+
+        for (Enrollment enrollment : enrollmentRepository.findEligibleForAttendanceBySessionDate(
+                session.getClassroom().getId(),
+                session.getSessionDate()
+        )) {
+            byStudentId.merge(enrollment.getStudent().getId(), enrollment, preferOlder);
+        }
+
+        // Existing attendance must remain visible/editable even if current enrollment status
+        // is STOPPED/ON_HOLD (or history data is incomplete for older rows).
+        for (Attendance attendance : attendanceRepository.findBySessionId(session.getId())) {
+            Long studentId = attendance.getStudent().getId();
+            if (byStudentId.containsKey(studentId)) {
+                continue;
+            }
+            Enrollment enrollment = resolveEnrollmentForSession(
+                    studentId,
+                    session.getClassroom().getId(),
+                    session.getSessionDate()
+            );
+            if (enrollment != null) {
+                byStudentId.put(studentId, enrollment);
+            }
+        }
+
+        return byStudentId.values().stream()
+                .sorted(Comparator.comparing(
+                        enrollment -> enrollment.getStudent().getFullName(),
+                        String.CASE_INSENSITIVE_ORDER
+                ))
+                .toList();
     }
 
-    private Map<Long, Enrollment> eligibleEnrollmentsByStudentId(Long classroomId, LocalDate sessionDate) {
-        return findEligibleEnrollments(classroomId, sessionDate)
-                .stream()
-                .collect(Collectors.toMap(enrollment -> enrollment.getStudent().getId(), Function.identity()));
+    private Map<Long, Enrollment> rosterEnrollmentsByStudentId(ClassSession session) {
+        return findRosterEnrollments(session).stream()
+                .collect(Collectors.toMap(
+                        enrollment -> enrollment.getStudent().getId(),
+                        Function.identity(),
+                        (first, second) -> first,
+                        LinkedHashMap::new
+                ));
+    }
+
+    private Enrollment resolveEnrollmentForSession(Long studentId, Long classroomId, LocalDate sessionDate) {
+        List<Enrollment> enrollments = enrollmentRepository
+                .findByStudentIdAndClassroomIdOrderByStartDateAscIdAsc(studentId, classroomId);
+        for (Enrollment enrollment : enrollments) {
+            if (statusHistoryRepository.isActiveAt(enrollment.getId(), sessionDate)) {
+                return enrollment;
+            }
+        }
+        // Fallback for historical attendance rows when current status is STOPPED/ON_HOLD
+        // but a prior ACTIVE period covered the session date (or history backfill is incomplete).
+        return enrollments.stream().findFirst().orElse(null);
     }
 
     private void rejectIfNotEligibleForAttendance(ClassSession session, Long studentId) {
-        Enrollment enrollment = enrollmentRepository.findByClassroomIdAndStatus(
-                        session.getClassroom().getId(),
-                        EnrollmentStatus.ACTIVE
-                ).stream()
-                .filter(activeEnrollment -> activeEnrollment.getStudent().getId().equals(studentId))
-                .findFirst()
-                .orElse(null);
-
-        if (enrollment == null) {
+        boolean hasExistingAttendance = attendanceRepository
+                .findBySessionIdAndStudentId(session.getId(), studentId)
+                .isPresent();
+        // Existing historical marks stay editable; new marks require an ACTIVE history period
+        // on the session date: effectiveFrom <= sessionDate < effectiveTo (effectiveTo exclusive).
+        if (hasExistingAttendance) {
             return;
         }
 
-        EnrollmentLearningDateHelper.validateEligibleForSession(enrollment, session.getSessionDate());
+        Enrollment enrollment = resolveEnrollmentForSession(
+                studentId,
+                session.getClassroom().getId(),
+                session.getSessionDate()
+        );
+        if (enrollment == null
+                || !statusHistoryRepository.isActiveAt(enrollment.getId(), session.getSessionDate())) {
+            throw new BusinessException("Student is not actively enrolled in this classroom");
+        }
     }
 
-    private void logIneligibleAttendanceWarnings(ClassSession session, List<Enrollment> eligibleEnrollments) {
-        Set<Long> eligibleStudentIds = eligibleEnrollments.stream()
+    private void logIneligibleAttendanceWarnings(ClassSession session, List<Enrollment> rosterEnrollments) {
+        var rosterStudentIds = rosterEnrollments.stream()
                 .map(enrollment -> enrollment.getStudent().getId())
                 .collect(Collectors.toSet());
-
-        Map<Long, Enrollment> activeEnrollmentsByStudentId = enrollmentRepository
-                .findByClassroomIdAndStatus(session.getClassroom().getId(), EnrollmentStatus.ACTIVE)
-                .stream()
-                .collect(Collectors.toMap(enrollment -> enrollment.getStudent().getId(), Function.identity()));
 
         for (Attendance attendance : attendanceRepository.findBySessionId(session.getId())) {
             if (!Boolean.TRUE.equals(attendance.getValid())) {
@@ -386,13 +436,16 @@ public class AttendanceService {
             }
 
             Long studentId = attendance.getStudent().getId();
-            if (eligibleStudentIds.contains(studentId)) {
+            if (rosterStudentIds.contains(studentId)) {
                 continue;
             }
 
-            Enrollment enrollment = activeEnrollmentsByStudentId.get(studentId);
-            if (enrollment == null
-                    || EnrollmentLearningDateHelper.isEligibleForSession(enrollment, session.getSessionDate())) {
+            Enrollment enrollment = resolveEnrollmentForSession(
+                    studentId,
+                    session.getClassroom().getId(),
+                    session.getSessionDate()
+            );
+            if (enrollment == null) {
                 continue;
             }
 

@@ -48,8 +48,14 @@ import type {
   GenerateClassSessionsPayload,
 } from '../../classSessions/classSessionTypes'
 import { EnrollStudentModal } from '../../enrollments/components/EnrollStudentModal'
+import {
+  EnrollmentLifecycleModal,
+  type EnrollmentLifecycleAction,
+} from '../../enrollments/components/EnrollmentLifecycleModal'
+import { EnrollmentStatusHistoryDrawer } from '../../enrollments/components/EnrollmentStatusHistoryDrawer'
 import { useEnrollments, useEnrollStudent } from '../../enrollments/enrollmentQueries'
-import type { EnrollStudentPayload } from '../../enrollments/enrollmentTypes'
+import type { Enrollment, EnrollStudentPayload } from '../../enrollments/enrollmentTypes'
+import { dedupeCurrentEnrollments } from '../../enrollments/enrollmentUtils'
 import { ChangePackageModal } from '../../studentPackages/components/ChangePackageModal'
 import {
   useChangePackage,
@@ -92,6 +98,11 @@ export function ClassroomDetailPage() {
     initialSearch.tab === 'attendance' ? initialSearch.sessionId : undefined,
   )
   const [changingPackage, setChangingPackage] = useState<EnrollmentLearningProgress>()
+  const [lifecycleAction, setLifecycleAction] = useState<{
+    action: EnrollmentLifecycleAction
+    enrollment: Enrollment
+  }>()
+  const [historyEnrollment, setHistoryEnrollment] = useState<Enrollment>()
   const tuitionPackageParams: TuitionPackageSearchParams = useMemo(
     () => ({
       page: 0,
@@ -141,11 +152,15 @@ export function ClassroomDetailPage() {
   const classPackages = classPackagesQuery.data ?? []
   const canEnroll = classroom.status === 'PLANNED' || classroom.status === 'ONGOING'
   const canMarkAttendance = classroom.status === 'ONGOING'
-  const activeEnrollments = (enrollmentsQuery.data?.data ?? []).filter(
-    (enrollment) => enrollment.classroomId === classroomId && enrollment.status === 'ACTIVE',
+  const currentEnrollments = dedupeCurrentEnrollments(
+    (enrollmentsQuery.data?.data ?? []).filter(
+      (enrollment) => enrollment.classroomId === classroomId,
+    ),
   )
   const progressByEnrollmentId = buildProgressByEnrollmentId(studentPackagesQuery.data ?? [])
-  const activeProgress = studentPackagesQuery.data ?? []
+  const activeProgress = (studentPackagesQuery.data ?? []).filter(
+    (progress) => progress.status === 'ACTIVE',
+  )
   const outOfSessionsCount = activeProgress.filter(
     (progress: EnrollmentLearningProgress) => progress.remainingSessions <= 0,
   ).length
@@ -180,6 +195,19 @@ export function ClassroomDetailPage() {
   function openAttendance(sessionId: number) {
     setAttendanceSessionId(sessionId)
     setActiveTab('attendance')
+  }
+
+  function openLifecycleAction(action: EnrollmentLifecycleAction, enrollmentId: number) {
+    const enrollment = (enrollmentsQuery.data?.data ?? []).find(
+      (item) => item.id === enrollmentId,
+    )
+
+    if (!enrollment) {
+      message.error('Không tìm thấy ghi danh của học viên')
+      return
+    }
+
+    setLifecycleAction({ action, enrollment })
   }
 
   const packageColumns: ColumnsType<ClassPackage> = [
@@ -382,6 +410,8 @@ export function ClassroomDetailPage() {
       selectedSessionId={attendanceSessionId}
       onSelectedSessionIdChange={setAttendanceSessionId}
       onRenewNow={() => setRenewalModalOpen(true)}
+      onStopEnrollment={(enrollmentId) => openLifecycleAction('stop', enrollmentId)}
+      onTransferEnrollment={(enrollmentId) => openLifecycleAction('transfer', enrollmentId)}
       isActive={activeTab === 'attendance'}
     />
   )
@@ -590,7 +620,7 @@ export function ClassroomDetailPage() {
               children: (
                 <Table
                   rowKey="id"
-                  dataSource={activeEnrollments}
+                  dataSource={currentEnrollments}
                   loading={enrollmentsQuery.isLoading || studentPackagesQuery.isLoading}
                   pagination={false}
                   columns={[
@@ -608,7 +638,7 @@ export function ClassroomDetailPage() {
                       key: 'latestPackagePrice',
                       render: (_, enrollment) => {
                         const progress = progressByEnrollmentId.get(enrollment.id)
-                        const price = progress?.latestPackagePrice
+                        const price = progress?.latestPackagePrice ?? enrollment.packagePriceSnapshot
 
                         return price != null ? <MoneyText value={price} /> : '-'
                       },
@@ -616,18 +646,23 @@ export function ClassroomDetailPage() {
                     {
                       title: 'Tổng buổi',
                       key: 'totalSessions',
-                      render: (_, enrollment) => progressByEnrollmentId.get(enrollment.id)?.totalSessions ?? '-',
+                      render: (_, enrollment) =>
+                        progressByEnrollmentId.get(enrollment.id)?.totalSessions
+                        ?? enrollment.totalSessions,
                     },
                     {
                       title: 'Đã học',
                       key: 'usedSessions',
-                      render: (_, enrollment) => progressByEnrollmentId.get(enrollment.id)?.usedSessions ?? '-',
+                      render: (_, enrollment) =>
+                        progressByEnrollmentId.get(enrollment.id)?.usedSessions
+                        ?? enrollment.usedSessions,
                     },
                     {
                       title: 'Còn lại',
                       key: 'remainingSessions',
                       render: (_, enrollment) =>
-                        progressByEnrollmentId.get(enrollment.id)?.remainingSessions ?? '-',
+                        progressByEnrollmentId.get(enrollment.id)?.remainingSessions
+                        ?? enrollment.remainingSessions,
                     },
                     {
                       title: 'Buổi bù',
@@ -642,6 +677,14 @@ export function ClassroomDetailPage() {
                       render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
                     },
                     {
+                      title: 'Trạng thái',
+                      dataIndex: 'status',
+                      key: 'status',
+                      render: (status: string) => (
+                        <StatusTag status={status} labels={{ CANCELED: 'Đã hủy ghi danh' }} />
+                      ),
+                    },
+                    {
                       title: 'Thao tác',
                       key: 'actions',
                       render: (_, enrollment) => {
@@ -649,21 +692,79 @@ export function ClassroomDetailPage() {
                         const disabledReason = getChangePackageDisabledReason(progress)
 
                         return (
-                          <Tooltip title={disabledReason}>
-                            <span>
+                          <Space wrap size={0}>
+                            {enrollment.status === 'ACTIVE' ? (
+                              <>
+                                <Tooltip title={disabledReason}>
+                                  <span>
+                                    <Button
+                                      type="link"
+                                      disabled={Boolean(disabledReason)}
+                                      onClick={() => {
+                                        if (progress) {
+                                          setChangingPackage(progress)
+                                        }
+                                      }}
+                                    >
+                                      Đổi gói
+                                    </Button>
+                                  </span>
+                                </Tooltip>
+                                <Button
+                                  type="link"
+                                  onClick={() => openLifecycleAction('hold', enrollment.id)}
+                                >
+                                  Bảo lưu
+                                </Button>
+                                <Button
+                                  type="link"
+                                  onClick={() => openLifecycleAction('stop', enrollment.id)}
+                                >
+                                  Ngừng học
+                                </Button>
+                                <Button
+                                  type="link"
+                                  onClick={() => openLifecycleAction('transfer', enrollment.id)}
+                                >
+                                  Chuyển lớp
+                                </Button>
+                                <Button
+                                  type="link"
+                                  danger
+                                  onClick={() => openLifecycleAction('cancel', enrollment.id)}
+                                >
+                                  Hủy ghi danh
+                                </Button>
+                              </>
+                            ) : null}
+                            {enrollment.status === 'ON_HOLD' ? (
+                              <>
+                                <Button
+                                  type="link"
+                                  onClick={() => openLifecycleAction('reactivate', enrollment.id)}
+                                >
+                                  Học lại
+                                </Button>
+                                <Button
+                                  type="link"
+                                  onClick={() => openLifecycleAction('stop', enrollment.id)}
+                                >
+                                  Ngừng học
+                                </Button>
+                              </>
+                            ) : null}
+                            {enrollment.status === 'STOPPED' ? (
                               <Button
                                 type="link"
-                                disabled={Boolean(disabledReason)}
-                                onClick={() => {
-                                  if (progress) {
-                                    setChangingPackage(progress)
-                                  }
-                                }}
+                                onClick={() => openLifecycleAction('reactivate', enrollment.id)}
                               >
-                                Đổi gói
+                                Học lại
                               </Button>
-                            </span>
-                          </Tooltip>
+                            ) : null}
+                            <Button type="link" onClick={() => setHistoryEnrollment(enrollment)}>
+                              Lịch sử
+                            </Button>
+                          </Space>
                         )
                       },
                     },
@@ -756,6 +857,33 @@ export function ClassroomDetailPage() {
         onPreview={handlePreviewChangePackage}
         onSubmit={handleChangePackage}
         onCancel={closeChangePackageModal}
+      />
+
+      <EnrollmentLifecycleModal
+        open={Boolean(lifecycleAction)}
+        action={lifecycleAction?.action ?? 'stop'}
+        enrollment={
+          lifecycleAction
+            ? {
+                ...lifecycleAction.enrollment,
+                remainingSessions:
+                  progressByEnrollmentId.get(lifecycleAction.enrollment.id)?.remainingSessions ??
+                  lifecycleAction.enrollment.remainingSessions,
+              }
+            : undefined
+        }
+        onCancel={() => setLifecycleAction(undefined)}
+      />
+
+      <EnrollmentStatusHistoryDrawer
+        open={Boolean(historyEnrollment)}
+        enrollmentId={historyEnrollment?.id}
+        title={
+          historyEnrollment
+            ? `${historyEnrollment.studentCode} - ${historyEnrollment.studentName}`
+            : undefined
+        }
+        onClose={() => setHistoryEnrollment(undefined)}
       />
 
     </Space>

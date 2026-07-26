@@ -3,7 +3,15 @@ package com.englishcenter.enrollment;
 import com.englishcenter.common.api.ApiResponse;
 import com.englishcenter.common.api.PageMeta;
 import com.englishcenter.enrollment.dto.EnrollStudentRequest;
+import com.englishcenter.enrollment.dto.CancelEnrollmentRequest;
 import com.englishcenter.enrollment.dto.EnrollmentResponse;
+import com.englishcenter.enrollment.dto.DuplicateEnrollmentGroupResponse;
+import com.englishcenter.enrollment.dto.EnrollmentStatusHistoryResponse;
+import com.englishcenter.enrollment.dto.HoldEnrollmentRequest;
+import com.englishcenter.enrollment.dto.ReactivateEnrollmentRequest;
+import com.englishcenter.enrollment.dto.StopEnrollmentRequest;
+import com.englishcenter.enrollment.dto.TransferEnrollmentRequest;
+import com.englishcenter.enrollment.dto.TransferEnrollmentResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -51,5 +59,55 @@ public class EnrollmentController {
     @GetMapping("/{id}")
     public ApiResponse<EnrollmentResponse> getById(@PathVariable Long id) {
         return ApiResponse.success(enrollmentService.getById(id));
+    }
+
+    @GetMapping("/{id}/status-history")
+    public ApiResponse<List<EnrollmentStatusHistoryResponse>> getStatusHistory(@PathVariable Long id) {
+        return ApiResponse.success(enrollmentService.getStatusHistory(id));
+    }
+
+    @GetMapping("/duplicates")
+    public ApiResponse<List<DuplicateEnrollmentGroupResponse>> getDuplicates() {
+        return ApiResponse.success(enrollmentService.getDuplicates());
+    }
+
+    @PostMapping("/{id}/hold")
+    public ApiResponse<EnrollmentResponse> hold(
+            @PathVariable Long id,
+            @Valid @RequestBody HoldEnrollmentRequest request
+    ) {
+        return ApiResponse.success(enrollmentService.hold(id, request));
+    }
+
+    @PostMapping("/{id}/reactivate")
+    public ApiResponse<EnrollmentResponse> reactivate(
+            @PathVariable Long id,
+            @Valid @RequestBody ReactivateEnrollmentRequest request
+    ) {
+        return ApiResponse.success(enrollmentService.reactivate(id, request));
+    }
+
+    @PostMapping("/{id}/stop")
+    public ApiResponse<EnrollmentResponse> stop(
+            @PathVariable Long id,
+            @Valid @RequestBody StopEnrollmentRequest request
+    ) {
+        return ApiResponse.success(enrollmentService.stop(id, request));
+    }
+
+    @PostMapping("/{id}/transfer")
+    public ApiResponse<TransferEnrollmentResponse> transfer(
+            @PathVariable Long id,
+            @Valid @RequestBody TransferEnrollmentRequest request
+    ) {
+        return ApiResponse.success(enrollmentService.transfer(id, request));
+    }
+
+    @PostMapping("/{id}/cancel")
+    public ApiResponse<EnrollmentResponse> cancel(
+            @PathVariable Long id,
+            @Valid @RequestBody CancelEnrollmentRequest request
+    ) {
+        return ApiResponse.success(enrollmentService.cancel(id, request));
     }
 }

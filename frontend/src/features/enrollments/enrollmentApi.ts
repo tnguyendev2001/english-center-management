@@ -1,6 +1,17 @@
 import type { ApiResponse } from '../../api/apiResponse'
 import { httpClient } from '../../api/httpClient'
-import type { Enrollment, EnrollmentSearchParams, EnrollStudentPayload } from './enrollmentTypes'
+import type {
+  CancelEnrollmentPayload,
+  Enrollment,
+  EnrollmentSearchParams,
+  EnrollmentStatusHistory,
+  EnrollStudentPayload,
+  HoldEnrollmentPayload,
+  ReactivateEnrollmentPayload,
+  StopEnrollmentPayload,
+  TransferEnrollmentPayload,
+  TransferEnrollmentResult,
+} from './enrollmentTypes'
 
 export async function getEnrollments(params: EnrollmentSearchParams) {
   const response = await httpClient.get<ApiResponse<Enrollment[]>>('/enrollments', {
@@ -18,6 +29,59 @@ export async function getEnrollment(id: number) {
 
 export async function enrollStudent(payload: EnrollStudentPayload) {
   const response = await httpClient.post<ApiResponse<Enrollment>>('/enrollments', payload)
+
+  return response.data.data
+}
+
+export async function stopEnrollment(id: number, payload: StopEnrollmentPayload) {
+  const response = await httpClient.post<ApiResponse<Enrollment>>(
+    `/enrollments/${id}/stop`,
+    payload,
+  )
+
+  return response.data.data
+}
+
+export async function holdEnrollment(id: number, payload: HoldEnrollmentPayload) {
+  const response = await httpClient.post<ApiResponse<Enrollment>>(
+    `/enrollments/${id}/hold`,
+    payload,
+  )
+
+  return response.data.data
+}
+
+export async function reactivateEnrollment(id: number, payload: ReactivateEnrollmentPayload) {
+  const response = await httpClient.post<ApiResponse<Enrollment>>(
+    `/enrollments/${id}/reactivate`,
+    payload,
+  )
+
+  return response.data.data
+}
+
+export async function transferEnrollment(id: number, payload: TransferEnrollmentPayload) {
+  const response = await httpClient.post<ApiResponse<TransferEnrollmentResult>>(
+    `/enrollments/${id}/transfer`,
+    payload,
+  )
+
+  return response.data.data
+}
+
+export async function cancelEnrollment(id: number, payload: CancelEnrollmentPayload) {
+  const response = await httpClient.post<ApiResponse<Enrollment>>(
+    `/enrollments/${id}/cancel`,
+    payload,
+  )
+
+  return response.data.data
+}
+
+export async function getEnrollmentStatusHistory(id: number) {
+  const response = await httpClient.get<ApiResponse<EnrollmentStatusHistory[]>>(
+    `/enrollments/${id}/status-history`,
+  )
 
   return response.data.data
 }

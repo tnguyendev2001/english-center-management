@@ -1,7 +1,12 @@
 import type { Invoice } from '../invoices/invoiceTypes'
 import type { StudentPackage } from '../studentPackages/studentPackageTypes'
 
-export type EnrollmentStatus = 'ACTIVE' | 'ON_HOLD' | 'DROPPED' | 'COMPLETED'
+export type EnrollmentStatus =
+  | 'ACTIVE'
+  | 'ON_HOLD'
+  | 'STOPPED'
+  | 'TRANSFERRED'
+  | 'CANCELED'
 
 export interface Enrollment {
   id: number
@@ -19,6 +24,9 @@ export interface Enrollment {
   packagePriceSnapshot: number
   discountAmount: number
   finalAmount: number
+  totalSessions: number
+  usedSessions: number
+  remainingSessions: number
   note?: string | null
   studentPackage?: StudentPackage | null
   invoice?: Invoice | null
@@ -39,4 +47,47 @@ export interface EnrollStudentPayload {
 export interface EnrollmentSearchParams {
   page: number
   size: number
+}
+
+export interface StopEnrollmentPayload {
+  effectiveDate?: string | null
+  reason: string
+}
+
+export interface HoldEnrollmentPayload {
+  effectiveDate?: string | null
+  expectedReturnDate?: string | null
+  reason: string
+}
+
+export interface ReactivateEnrollmentPayload {
+  effectiveDate?: string | null
+  reason?: string | null
+}
+
+export interface TransferEnrollmentPayload {
+  targetClassroomId: number
+  targetLearningStartDate: string
+  reason: string
+}
+
+export interface TransferEnrollmentResult {
+  sourceEnrollment: Enrollment
+  targetEnrollment: Enrollment
+  transferredSessions: number
+  warningMessage?: string | null
+}
+
+export interface CancelEnrollmentPayload {
+  reason: string
+}
+
+export interface EnrollmentStatusHistory {
+  id: number
+  enrollmentId: number
+  status: EnrollmentStatus
+  effectiveFrom: string
+  effectiveTo?: string | null
+  reason?: string | null
+  createdAt: string
 }

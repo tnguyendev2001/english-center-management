@@ -1,21 +1,23 @@
-import { Alert, Button, Descriptions, Form, Input, message, Modal, Radio, Select, Space, Table } from 'antd'
+import { Alert, Button, Descriptions, Form, Input, message, Radio, Select, Space, Table, Tag, Typography } from 'antd'
 import { isAxiosError } from 'axios'
 import dayjs from 'dayjs'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { StatusTag } from '../../../components/common/StatusTag'
-import { formatStudentLabel, studentCodeColumn, studentNameColumn } from '../../../components/common/studentDisplay'
+import { studentCodeColumn, studentNameColumn } from '../../../components/common/studentDisplay'
 import type { ClassSession } from '../../classSessions/classSessionTypes'
 import type { ClassroomStatus } from '../../classrooms/classroomTypes'
 import type { EnrollmentLearningProgress } from '../../studentPackages/studentPackageTypes'
-import { buildProgressByStudentId } from '../../studentPackages/studentPackageUtils'
+import {
+  buildProgressByEnrollmentId,
+  buildProgressByStudentId,
+} from '../../studentPackages/studentPackageUtils'
 import { pickDefaultSessionId } from '../attendanceSessionSelection'
 import {
   useAttendance,
-  useAttendanceReadiness,
   useAttendanceRoster,
   useMarkAttendance,
 } from '../attendanceQueries'
-import type { Attendance, AttendanceStatus } from '../attendanceTypes'
+import type { Attendance, AttendanceRosterStudent, AttendanceStatus } from '../attendanceTypes'
 
 interface AttendanceMarkPanelProps {
   sessions: ClassSession[]
@@ -24,7 +26,9 @@ interface AttendanceMarkPanelProps {
   loadingSessions: boolean
   selectedSessionId?: number
   onSelectedSessionIdChange?: (sessionId: number | undefined) => void
-  onRenewNow?: () => void
+  onRenewNow?: (enrollmentId: number) => void
+  onStopEnrollment?: (enrollmentId: number) => void
+  onTransferEnrollment?: (enrollmentId: number) => void
   isActive?: boolean
 }
 
@@ -53,32 +57,56 @@ export function AttendanceMarkPanel({
   selectedSessionId,
   onSelectedSessionIdChange,
   onRenewNow,
+  onStopEnrollment,
+  onTransferEnrollment,
   isActive = true,
 }: AttendanceMarkPanelProps) {
   const [form] = Form.useForm<AttendanceMarkFormValues>()
-  const [statuses, setStatuses] = useState<Record<string, AttendanceStatus>>({})
-  const [blockedModalOpen, setBlockedModalOpen] = useState(false)
+  const watchedStatuses = Form.useWatch('statuses', form)
+  const statuses = useMemo(() => watchedStatuses ?? {}, [watchedStatuses])
   const canMarkAttendance = classroomStatus === 'ONGOING'
   const selectedSession = sessions.find((session) => session.id === selectedSessionId)
   const rosterQuery = useAttendanceRoster(selectedSessionId)
   const attendanceQuery = useAttendance(selectedSessionId)
-  const readinessQuery = useAttendanceReadiness(
-    selectedSessionId,
-    isActive && canMarkAttendance && Boolean(selectedSession) && selectedSession?.status !== 'CANCELED',
-  )
   const markAttendance = useMarkAttendance()
-  const blockedStudents = readinessQuery.data?.blockedStudents ?? []
-  const isAttendanceBlocked = blockedStudents.length > 0
 
-  const rosterStudents = useMemo(
-    () => rosterQuery.data?.students ?? [],
-    [rosterQuery.data?.students],
+  const progressByEnrollmentId = useMemo(
+    () => buildProgressByEnrollmentId(studentPackages),
+    [studentPackages],
   )
 
   const progressByStudentId = useMemo(
     () => buildProgressByStudentId(studentPackages),
     [studentPackages],
   )
+
+  // Render backend roster as-is; also surface any existing attendance rows for this session
+  // so historical marks stay visible even if current enrollment status is STOPPED/ON_HOLD.
+  const rosterStudents = useMemo(() => {
+    const byStudentId = new Map<number, AttendanceRosterStudent>()
+    for (const student of rosterQuery.data?.students ?? []) {
+      byStudentId.set(student.studentId, student)
+    }
+
+    for (const record of attendanceQuery.data ?? []) {
+      if (byStudentId.has(record.studentId)) {
+        continue
+      }
+
+      const progress = progressByStudentId.get(record.studentId)
+      byStudentId.set(record.studentId, {
+        studentId: record.studentId,
+        studentCode: record.studentCode,
+        studentName: record.studentName,
+        enrollmentId: progress?.enrollmentId ?? 0,
+        remainingSessions: progress?.remainingSessions ?? 0,
+        attendanceBlocked: false,
+        blockedReason: null,
+      })
+    }
+
+    return [...byStudentId.values()]
+  }, [attendanceQuery.data, progressByStudentId, rosterQuery.data?.students])
 
   const previousAttendanceByStudentId = useMemo(() => {
     const map = new Map<number, Attendance>()
@@ -91,6 +119,9 @@ export function AttendanceMarkPanel({
   const needsExcusedCorrection = useMemo(
     () =>
       rosterStudents.some((student) => {
+        if (student.attendanceBlocked) {
+          return false
+        }
         const previousStatus = previousAttendanceByStudentId.get(student.studentId)?.status
         const nextStatus = statuses[String(student.studentId)]
         return nextStatus != null && isExcusedCorrection(previousStatus, nextStatus)
@@ -110,15 +141,6 @@ export function AttendanceMarkPanel({
   }, [isActive, onSelectedSessionIdChange, selectedSessionId, sessions])
 
   useEffect(() => {
-    if (isAttendanceBlocked) {
-      setBlockedModalOpen(true)
-      return
-    }
-
-    setBlockedModalOpen(false)
-  }, [isAttendanceBlocked])
-
-  useEffect(() => {
     if (!selectedSessionId) {
       return
     }
@@ -131,7 +153,6 @@ export function AttendanceMarkPanel({
       nextStatuses[studentKey] = existing?.status ?? 'PRESENT'
       nextNotes[studentKey] = existing?.note ?? ''
     })
-    setStatuses(nextStatuses)
     form.setFieldsValue({
       statuses: nextStatuses,
       notes: nextNotes,
@@ -144,11 +165,12 @@ export function AttendanceMarkPanel({
       return
     }
 
-    const nextStatuses: Record<string, AttendanceStatus> = {}
+    const nextStatuses = { ...statuses }
     rosterStudents.forEach((student) => {
-      nextStatuses[String(student.studentId)] = 'PRESENT'
+      if (!student.attendanceBlocked) {
+        nextStatuses[String(student.studentId)] = 'PRESENT'
+      }
     })
-    setStatuses(nextStatuses)
     form.setFieldsValue({ statuses: nextStatuses })
   }
 
@@ -168,11 +190,6 @@ export function AttendanceMarkPanel({
       return
     }
 
-    if (isAttendanceBlocked) {
-      message.error('Một số học viên đã hết buổi. Vui lòng gia hạn gói trước khi điểm danh.')
-      return
-    }
-
     const correctionReason = values.correctionReason?.trim() || null
     if (needsExcusedCorrection && !correctionReason) {
       message.error('Vui lòng nhập lý do điều chỉnh điểm danh')
@@ -182,7 +199,7 @@ export function AttendanceMarkPanel({
     markAttendance.mutate(
       {
         sessionId: selectedSession.id,
-        items: rosterStudents.map((student) => {
+        items: rosterStudents.filter((student) => !student.attendanceBlocked).map((student) => {
           const studentKey = String(student.studentId)
           const previousStatus = previousAttendanceByStudentId.get(student.studentId)?.status
           const nextStatus = values.statuses[studentKey]
@@ -262,57 +279,11 @@ export function AttendanceMarkPanel({
         <Alert type="warning" showIcon message="Buổi học đã hủy, không thể điểm danh." />
       ) : null}
 
-      <Modal
-        title="Một số học viên đã hết buổi"
-        open={blockedModalOpen && isAttendanceBlocked}
-        okText="Gia hạn ngay"
-        cancelText="Đóng"
-        onOk={() => {
-          setBlockedModalOpen(false)
-          onRenewNow?.()
-        }}
-        onCancel={() => setBlockedModalOpen(false)}
-      >
-        <Space direction="vertical" size={4}>
-          <span>Vui lòng gia hạn gói trước khi điểm danh.</span>
-          {blockedStudents.map((student) => (
-            <span key={student.studentId}>
-              {formatStudentLabel(student.studentCode, student.studentName)}: {student.reason}
-            </span>
-          ))}
-        </Space>
-      </Modal>
-
-      {isAttendanceBlocked ? (
-        <Alert
-          type="error"
-          showIcon
-          message="Một số học viên đã hết buổi. Vui lòng gia hạn gói trước khi điểm danh."
-          description={
-            <Space direction="vertical" size={2}>
-              {blockedStudents.map((student) => (
-                <span key={student.studentId}>
-                  {formatStudentLabel(student.studentCode, student.studentName)}: {student.reason}
-                </span>
-              ))}
-              <Button type="primary" onClick={onRenewNow}>
-                Gia hạn ngay
-              </Button>
-            </Space>
-          }
-        />
-      ) : null}
-
       {selectedSession && canMarkAttendance ? (
         <Form
           form={form}
           layout="vertical"
           onFinish={handleSave}
-          onValuesChange={(_, allValues) => {
-            if (allValues.statuses) {
-              setStatuses(allValues.statuses)
-            }
-          }}
         >
           <Space style={{ marginBottom: 16 }}>
             <Button
@@ -325,7 +296,7 @@ export function AttendanceMarkPanel({
 
           <Table
             rowKey="studentId"
-            loading={rosterQuery.isLoading || attendanceQuery.isLoading || readinessQuery.isLoading}
+            loading={rosterQuery.isLoading || attendanceQuery.isLoading}
             pagination={false}
             dataSource={rosterStudents}
             columns={[
@@ -334,18 +305,50 @@ export function AttendanceMarkPanel({
               {
                 title: 'Tổng buổi',
                 key: 'totalSessions',
-                render: (_, student) => progressByStudentId.get(student.studentId)?.totalSessions ?? '-',
+                render: (_, student) =>
+                  progressByEnrollmentId.get(student.enrollmentId)?.totalSessions ?? '-',
               },
               {
                 title: 'Đã học',
                 key: 'usedSessions',
-                render: (_, student) => progressByStudentId.get(student.studentId)?.usedSessions ?? '-',
+                render: (_, student) =>
+                  progressByEnrollmentId.get(student.enrollmentId)?.usedSessions ?? '-',
               },
               {
                 title: 'Còn lại',
                 key: 'remainingSessions',
+                render: (_, student) => student.remainingSessions,
+              },
+              {
+                title: 'Tình trạng',
+                key: 'blocking',
                 render: (_, student) =>
-                  progressByStudentId.get(student.studentId)?.remainingSessions ?? '-',
+                  student.attendanceBlocked ? (
+                    <Space direction="vertical" size={4}>
+                      <Tag color="red">Hết buổi - cần gia hạn</Tag>
+                      {student.blockedReason ? (
+                        <Typography.Text type="secondary">
+                          {student.blockedReason}
+                        </Typography.Text>
+                      ) : null}
+                      <Space wrap size={0}>
+                        <Button type="link" onClick={() => onRenewNow?.(student.enrollmentId)}>
+                          Gia hạn
+                        </Button>
+                        <Button type="link" onClick={() => onStopEnrollment?.(student.enrollmentId)}>
+                          Ngừng học
+                        </Button>
+                        <Button
+                          type="link"
+                          onClick={() => onTransferEnrollment?.(student.enrollmentId)}
+                        >
+                          Chuyển lớp
+                        </Button>
+                      </Space>
+                    </Space>
+                  ) : (
+                    '-'
+                  ),
               },
               {
                 title: 'Trạng thái',
@@ -356,7 +359,11 @@ export function AttendanceMarkPanel({
                     style={{ margin: 0 }}
                   >
                     <Radio.Group
-                      disabled={!canMarkAttendance || selectedSession.status === 'CANCELED'}
+                      disabled={
+                        !canMarkAttendance ||
+                        selectedSession.status === 'CANCELED' ||
+                        student.attendanceBlocked
+                      }
                       options={[
                         { label: 'Có mặt', value: 'PRESENT' },
                         { label: 'Vắng', value: 'ABSENT' },
@@ -373,7 +380,11 @@ export function AttendanceMarkPanel({
                   <Form.Item name={['notes', String(student.studentId)]} style={{ margin: 0 }}>
                     <Input
                       placeholder="Ghi chú"
-                      disabled={!canMarkAttendance || selectedSession.status === 'CANCELED'}
+                      disabled={
+                        !canMarkAttendance ||
+                        selectedSession.status === 'CANCELED' ||
+                        student.attendanceBlocked
+                      }
                     />
                   </Form.Item>
                 ),
@@ -412,8 +423,7 @@ export function AttendanceMarkPanel({
               !canMarkAttendance ||
               !selectedSession ||
               selectedSession.status === 'CANCELED' ||
-              readinessQuery.isLoading ||
-              isAttendanceBlocked
+              rosterQuery.isLoading
             }
             style={{ marginTop: 16 }}
           >

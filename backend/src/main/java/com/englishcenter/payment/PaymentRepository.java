@@ -4,6 +4,7 @@ import com.englishcenter.payment.PaymentMethod;
 import com.englishcenter.payment.PaymentStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,6 +12,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
+    boolean existsByInvoiceIdAndStatus(Long invoiceId, PaymentStatus status);
+
+    @Query("""
+            SELECT COUNT(payment)
+            FROM Payment payment
+            WHERE payment.status = com.englishcenter.payment.PaymentStatus.VALID
+              AND payment.invoice.enrollment.id IN :enrollmentIds
+            """)
+    long countValidByEnrollmentIds(@Param("enrollmentIds") Collection<Long> enrollmentIds);
+
     Page<Payment> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     @Query("""

@@ -1,16 +1,23 @@
 package com.englishcenter.enrollment;
 
+import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT enrollment FROM Enrollment enrollment WHERE enrollment.id = :id")
+    Optional<Enrollment> findByIdForUpdate(@Param("id") Long id);
+
     long countByStatus(EnrollmentStatus status);
 
     @Query("""
@@ -97,27 +104,72 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
             Collection<EnrollmentStatus> statuses
     );
 
+    boolean existsByStudentIdAndClassroomIdAndStatusAndIdNot(
+            Long studentId,
+            Long classroomId,
+            EnrollmentStatus status,
+            Long id
+    );
+
+    Optional<Enrollment> findFirstByStudentIdAndClassroomIdAndStatusInOrderByIdDesc(
+            Long studentId,
+            Long classroomId,
+            Collection<EnrollmentStatus> statuses
+    );
+
+    @EntityGraph(attributePaths = {"student", "classroom", "selectedPackage"})
+    List<Enrollment> findByStudentIdAndClassroomIdOrderByStartDateAscIdAsc(
+            Long studentId,
+            Long classroomId
+    );
+
+    @Query("""
+            SELECT enrollment
+            FROM Enrollment enrollment
+            WHERE EXISTS (
+                SELECT 1
+                FROM Enrollment duplicate
+                WHERE duplicate.student.id = enrollment.student.id
+                  AND duplicate.classroom.id = enrollment.classroom.id
+                  AND duplicate.id <> enrollment.id
+            )
+            ORDER BY enrollment.student.id, enrollment.classroom.id, enrollment.startDate, enrollment.id
+            """)
+    List<Enrollment> findDuplicateStudentClassroomEnrollments();
+
     Page<Enrollment> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     @EntityGraph(attributePaths = {"student", "classroom", "selectedPackage"})
     List<Enrollment> findByClassroomIdAndStatus(Long classroomId, EnrollmentStatus status);
 
     @EntityGraph(attributePaths = {"student", "classroom", "selectedPackage"})
+    List<Enrollment> findByClassroomIdOrderByStartDateDescIdDesc(Long classroomId);
+
+    /**
+     * Attendance eligibility uses ACTIVE history periods only (half-open):
+     * effectiveFrom &lt;= sessionDate and (effectiveTo is null or sessionDate &lt; effectiveTo).
+     * Current Enrollment.status is intentionally not used.
+     */
+    @EntityGraph(attributePaths = {"student", "classroom", "selectedPackage"})
     @Query("""
-            SELECT enrollment
-            FROM Enrollment enrollment
+            SELECT DISTINCT enrollment
+            FROM EnrollmentStatusHistory history
+            JOIN history.enrollment enrollment
             WHERE enrollment.classroom.id = :classroomId
-              AND enrollment.status = :status
               AND enrollment.startDate <= :sessionDate
-              AND (enrollment.endDate IS NULL OR enrollment.endDate >= :sessionDate)
+              AND history.status = com.englishcenter.enrollment.EnrollmentStatus.ACTIVE
+              AND history.effectiveFrom <= :sessionDate
+              AND (history.effectiveTo IS NULL OR :sessionDate < history.effectiveTo)
             ORDER BY enrollment.student.fullName ASC
             """)
     List<Enrollment> findEligibleForAttendanceBySessionDate(
             @Param("classroomId") Long classroomId,
-            @Param("status") EnrollmentStatus status,
             @Param("sessionDate") LocalDate sessionDate
     );
 
     @EntityGraph(attributePaths = {"student", "classroom", "selectedPackage"})
     List<Enrollment> findByStudentIdAndStatus(Long studentId, EnrollmentStatus status);
+
+    @EntityGraph(attributePaths = {"student", "classroom", "selectedPackage"})
+    List<Enrollment> findByStudentIdOrderByStartDateDescIdDesc(Long studentId);
 }

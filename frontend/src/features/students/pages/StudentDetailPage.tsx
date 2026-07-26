@@ -1,8 +1,15 @@
-import { Card, Descriptions, Empty, Space, Spin, Table, Typography } from 'antd'
+import { Button, Card, Descriptions, Empty, Space, Spin, Table, Typography } from 'antd'
+import dayjs from 'dayjs'
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
 import { useMakeupCredits } from '../../makeupCredits/makeupCreditQueries'
+import {
+  EnrollmentLifecycleModal,
+  type EnrollmentLifecycleAction,
+} from '../../enrollments/components/EnrollmentLifecycleModal'
+import { EnrollmentStatusHistoryDrawer } from '../../enrollments/components/EnrollmentStatusHistoryDrawer'
 import { useStudentPackages } from '../../studentPackages/studentPackageQueries'
 import type { EnrollmentLearningProgress } from '../../studentPackages/studentPackageTypes'
 import { useStudentDetail } from '../studentQueries'
@@ -15,6 +22,11 @@ export function StudentDetailPage() {
   const studentQuery = useStudentDetail(studentId)
   const studentPackagesQuery = useStudentPackages(studentId)
   const makeupCreditsQuery = useMakeupCredits()
+  const [lifecycleAction, setLifecycleAction] = useState<{
+    action: EnrollmentLifecycleAction
+    enrollment: EnrollmentLearningProgress
+  }>()
+  const [historyEnrollment, setHistoryEnrollment] = useState<EnrollmentLearningProgress>()
 
   if (!Number.isFinite(studentId)) {
     return <Empty description="Không tìm thấy học viên" />
@@ -86,6 +98,90 @@ export function StudentDetailPage() {
               render: (_: unknown, record: EnrollmentLearningProgress) => record.remainingSessions,
             },
             { title: 'Buổi bù', dataIndex: 'makeupAvailableSessions', key: 'makeupAvailableSessions' },
+            {
+              title: 'Thời gian học',
+              key: 'learningDates',
+              render: (_: unknown, record: EnrollmentLearningProgress) =>
+                `${dayjs(record.startDate).format('DD/MM/YYYY')} - ${
+                  record.endDate ? dayjs(record.endDate).format('DD/MM/YYYY') : 'nay'
+                }`,
+            },
+            {
+              title: 'Trạng thái',
+              dataIndex: 'status',
+              key: 'status',
+              render: (status: string) => (
+                <StatusTag status={status} labels={{ CANCELED: 'Đã hủy ghi danh' }} />
+              ),
+            },
+            {
+              title: 'Thao tác',
+              key: 'actions',
+              render: (_: unknown, record: EnrollmentLearningProgress) => (
+                <Space wrap size={0}>
+                  {record.status === 'ACTIVE' ? (
+                    <>
+                      <Button
+                        type="link"
+                        onClick={() => setLifecycleAction({ action: 'hold', enrollment: record })}
+                      >
+                        Bảo lưu
+                      </Button>
+                      <Button
+                        type="link"
+                        onClick={() => setLifecycleAction({ action: 'stop', enrollment: record })}
+                      >
+                        Ngừng học
+                      </Button>
+                      <Button
+                        type="link"
+                        onClick={() => setLifecycleAction({ action: 'transfer', enrollment: record })}
+                      >
+                        Chuyển lớp
+                      </Button>
+                      <Button
+                        type="link"
+                        danger
+                        onClick={() => setLifecycleAction({ action: 'cancel', enrollment: record })}
+                      >
+                        Hủy ghi danh
+                      </Button>
+                    </>
+                  ) : null}
+                  {record.status === 'ON_HOLD' ? (
+                    <>
+                      <Button
+                        type="link"
+                        onClick={() =>
+                          setLifecycleAction({ action: 'reactivate', enrollment: record })
+                        }
+                      >
+                        Học lại
+                      </Button>
+                      <Button
+                        type="link"
+                        onClick={() => setLifecycleAction({ action: 'stop', enrollment: record })}
+                      >
+                        Ngừng học
+                      </Button>
+                    </>
+                  ) : null}
+                  {record.status === 'STOPPED' ? (
+                    <Button
+                      type="link"
+                      onClick={() =>
+                        setLifecycleAction({ action: 'reactivate', enrollment: record })
+                      }
+                    >
+                      Học lại
+                    </Button>
+                  ) : null}
+                  <Button type="link" onClick={() => setHistoryEnrollment(record)}>
+                    Lịch sử
+                  </Button>
+                </Space>
+              ),
+            },
           ]}
         />
       </Card>
@@ -121,6 +217,30 @@ export function StudentDetailPage() {
           ]}
         />
       </Card>
+
+      <EnrollmentLifecycleModal
+        open={Boolean(lifecycleAction)}
+        action={lifecycleAction?.action ?? 'stop'}
+        enrollment={
+          lifecycleAction
+            ? {
+                id: lifecycleAction.enrollment.enrollmentId,
+                studentCode: lifecycleAction.enrollment.studentCode,
+                studentName: lifecycleAction.enrollment.studentName,
+                classroomId: lifecycleAction.enrollment.classroomId,
+                classroomName: lifecycleAction.enrollment.classroomName,
+                remainingSessions: lifecycleAction.enrollment.remainingSessions,
+              }
+            : undefined
+        }
+        onCancel={() => setLifecycleAction(undefined)}
+      />
+      <EnrollmentStatusHistoryDrawer
+        open={Boolean(historyEnrollment)}
+        enrollmentId={historyEnrollment?.enrollmentId}
+        title={historyEnrollment?.classroomName}
+        onClose={() => setHistoryEnrollment(undefined)}
+      />
     </Space>
   )
 }

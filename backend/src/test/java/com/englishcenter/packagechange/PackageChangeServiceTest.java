@@ -507,6 +507,9 @@ class PackageChangeServiceTest {
         int remainingSessions = Math.max(enrollment.getTotalSessions() - enrollment.getUsedSessions(), 0);
         return new EnrollmentLearningProgressResponse(
                 enrollment.getId(),
+                enrollment.getStatus(),
+                enrollment.getStartDate(),
+                enrollment.getEndDate(),
                 enrollment.getStudent().getId(),
                 enrollment.getStudent().getStudentCode(),
                 enrollment.getStudent().getFullName(),

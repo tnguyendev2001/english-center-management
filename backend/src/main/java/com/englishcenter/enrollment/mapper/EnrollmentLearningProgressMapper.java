@@ -22,6 +22,9 @@ public class EnrollmentLearningProgressMapper {
 
         return new EnrollmentLearningProgressResponse(
                 enrollment.getId(),
+                enrollment.getStatus(),
+                enrollment.getStartDate(),
+                enrollment.getEndDate(),
                 enrollment.getStudent().getId(),
                 enrollment.getStudent().getStudentCode(),
                 enrollment.getStudent().getFullName(),

@@ -17,6 +17,7 @@ import com.englishcenter.classsession.mapper.ClassSessionMapper;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.enrollment.EnrollmentRepository;
 import com.englishcenter.enrollment.EnrollmentSessionService;
+import com.englishcenter.enrollment.EnrollmentStatusHistoryRepository;
 import com.englishcenter.makeupcredit.MakeupCredit;
 import com.englishcenter.makeupcredit.MakeupCreditRepository;
 import com.englishcenter.makeupcredit.MakeupCreditStatus;
@@ -48,8 +49,10 @@ class ClassSessionServiceTest {
     @Mock
     private EnrollmentRepository enrollmentRepository;
 
+    @Mock
+    private EnrollmentStatusHistoryRepository statusHistoryRepository;
+
     private final ClassSessionMapper classSessionMapper = new ClassSessionMapper();
-    private final EnrollmentSessionService enrollmentSessionService = new EnrollmentSessionService();
 
     @Test
     void correctionCancelVoidsAttendanceAndCancelsSession() {
@@ -130,7 +133,7 @@ class ClassSessionServiceTest {
                 attendanceRepository,
                 makeupCreditRepository,
                 enrollmentRepository,
-                enrollmentSessionService,
+                new EnrollmentSessionService(statusHistoryRepository),
                 classSessionMapper
         );
     }

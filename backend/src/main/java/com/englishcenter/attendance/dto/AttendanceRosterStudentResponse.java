@@ -4,6 +4,9 @@ public record AttendanceRosterStudentResponse(
         Long studentId,
         String studentCode,
         String studentName,
-        Long enrollmentId
+        Long enrollmentId,
+        int remainingSessions,
+        boolean attendanceBlocked,
+        String blockedReason
 ) {
 }
