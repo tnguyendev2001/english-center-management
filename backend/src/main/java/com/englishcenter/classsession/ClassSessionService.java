@@ -8,6 +8,9 @@ import com.englishcenter.classroom.Classroom;
 import com.englishcenter.classroom.ClassroomRepository;
 import com.englishcenter.classsession.dto.CancelClassSessionRequest;
 import com.englishcenter.classsession.dto.ClassSessionResponse;
+import com.englishcenter.classsession.dto.ClassSessionSearchResponse;
+import com.englishcenter.classsession.dto.FocusSessionTargetResponse;
+import com.englishcenter.classsession.dto.FocusSessionTargetsResponse;
 import com.englishcenter.classsession.dto.GenerateClassSessionsRequest;
 import com.englishcenter.classsession.dto.GenerateClassSessionsResponse;
 import com.englishcenter.classsession.dto.SessionGenerationPlan;
@@ -26,10 +29,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -209,13 +214,53 @@ public class ClassSessionService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ClassSessionResponse> search(Long classroomId, int page, int size) {
-        Pageable pageable = PageRequest.of(Math.max(page, 0), normalizePageSize(size));
-        Page<ClassSession> sessions = classroomId == null
-                ? classSessionRepository.findAllByOrderBySessionDateAscStartTimeAsc(pageable)
-                : classSessionRepository.findByClassroomIdOrderBySessionDateAscStartTimeAsc(classroomId, pageable);
+    public SearchResult search(
+            Long classroomId,
+            LocalDate fromDate,
+            LocalDate toDate,
+            ClassSessionStatus status,
+            int page,
+            int size,
+            String sort,
+            String direction
+    ) {
+        int normalizedSize = normalizePageSize(size);
+        int normalizedPage = Math.max(page, 0);
+        Sort sortSpec = resolveSort(sort, direction);
+        boolean ascending = isAscending(sortSpec);
 
-        return sessions.map(classSessionMapper::toResponse);
+        Pageable pageable = PageRequest.of(normalizedPage, normalizedSize, sortSpec);
+        Page<ClassSession> sessions = classSessionRepository.search(
+                classroomId,
+                fromDate,
+                toDate,
+                status,
+                pageable
+        );
+
+        // Quick-nav targets ignore list filters so "Hôm nay" / "Buổi tiếp theo" stay usable.
+        FocusSessionTargetsResponse focusTargets = classroomId == null
+                ? new FocusSessionTargetsResponse(null, null, null)
+                : buildFocusTargets(classroomId, normalizedSize, ascending);
+
+        return new SearchResult(
+                new ClassSessionSearchResponse(
+                        sessions.map(classSessionMapper::toResponse).getContent(),
+                        resolveFocusSession(focusTargets),
+                        focusTargets
+                ),
+                sessions.getNumber(),
+                sessions.getSize(),
+                sessions.getTotalElements(),
+                sessions.getTotalPages()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public ClassSessionResponse getById(Long id) {
+        ClassSession session = classSessionRepository.findByIdWithClassroom(id)
+                .orElseThrow(() -> new NotFoundException("Class session not found"));
+        return classSessionMapper.toResponse(session);
     }
 
     @Transactional(readOnly = true)
@@ -224,6 +269,151 @@ public class ClassSessionService {
                 .stream()
                 .map(classSessionMapper::toResponse)
                 .toList();
+    }
+
+    public record SearchResult(
+            ClassSessionSearchResponse data,
+            int page,
+            int size,
+            long totalElements,
+            int totalPages
+    ) {
+    }
+
+    private FocusSessionTargetsResponse buildFocusTargets(
+            Long classroomId,
+            int pageSize,
+            boolean ascending
+    ) {
+        LocalDate today = LocalDate.now();
+        Pageable single = PageRequest.of(0, 1);
+
+        ClassSession todaySession = classSessionRepository
+                .findByClassroomIdAndSessionDateOrderByStartTimeAscIdAsc(classroomId, today)
+                .stream()
+                .findFirst()
+                .orElse(null);
+        ClassSession nextSession = classSessionRepository.findNextSessions(classroomId, today, single)
+                .stream()
+                .findFirst()
+                .orElse(null);
+        ClassSession latestSession = classSessionRepository.findLatestPastSessions(classroomId, today, single)
+                .stream()
+                .findFirst()
+                .orElse(null);
+
+        return new FocusSessionTargetsResponse(
+                toFocusTarget(todaySession, FocusSessionType.TODAY, classroomId, pageSize, ascending),
+                toFocusTarget(nextSession, FocusSessionType.NEXT, classroomId, pageSize, ascending),
+                toFocusTarget(latestSession, FocusSessionType.LATEST, classroomId, pageSize, ascending)
+        );
+    }
+
+    private FocusSessionTargetResponse resolveFocusSession(FocusSessionTargetsResponse targets) {
+        if (targets.today() != null) {
+            return targets.today();
+        }
+        if (targets.next() != null) {
+            return targets.next();
+        }
+        if (targets.latest() != null) {
+            return targets.latest();
+        }
+        return new FocusSessionTargetResponse(
+                null,
+                null,
+                FocusSessionType.NONE,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+    }
+
+    private FocusSessionTargetResponse toFocusTarget(
+            ClassSession session,
+            FocusSessionType type,
+            Long classroomId,
+            int pageSize,
+            boolean ascending
+    ) {
+        if (session == null) {
+            return null;
+        }
+
+        long index = ascending
+                ? classSessionRepository.countSessionsBeforeAscending(
+                        classroomId,
+                        null,
+                        null,
+                        null,
+                        session.getSessionDate(),
+                        session.getStartTime(),
+                        session.getId()
+                )
+                : classSessionRepository.countSessionsBeforeDescending(
+                        classroomId,
+                        null,
+                        null,
+                        null,
+                        session.getSessionDate(),
+                        session.getStartTime(),
+                        session.getId()
+                );
+        int focusPage = (int) (index / pageSize);
+        int markedCount = (int) attendanceRepository.countBySessionIdAndValidTrue(session.getId());
+        int totalStudents = (int) enrollmentRepository.countByClassroomIdAndStatus(
+                classroomId,
+                EnrollmentStatus.ACTIVE
+        );
+
+        return new FocusSessionTargetResponse(
+                session.getId(),
+                focusPage,
+                type,
+                session.getSessionDate(),
+                session.getStartTime(),
+                session.getEndTime(),
+                session.getStatus(),
+                session.getSessionNo(),
+                markedCount,
+                totalStudents
+        );
+    }
+
+    private boolean isAscending(Sort sortSpec) {
+        Sort.Order order = sortSpec.getOrderFor("sessionDate");
+        if (order == null) {
+            order = sortSpec.getOrderFor("sessionNo");
+        }
+        return order == null || order.getDirection().isAscending();
+    }
+
+    private Sort resolveSort(String sort, String direction) {
+        String sortField = sort == null || sort.isBlank() ? "sessionDate" : sort.trim();
+        if (!"sessionDate".equals(sortField) && !"sessionNo".equals(sortField)) {
+            sortField = "sessionDate";
+        }
+
+        Sort.Direction sortDirection = Sort.Direction.DESC;
+        if (direction != null && !direction.isBlank()) {
+            try {
+                sortDirection = Sort.Direction.fromString(direction.trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException ignored) {
+                sortDirection = Sort.Direction.DESC;
+            }
+        }
+
+        if ("sessionNo".equals(sortField)) {
+            return Sort.by(sortDirection, "sessionNo").and(Sort.by(sortDirection, "id"));
+        }
+
+        return Sort.by(sortDirection, "sessionDate")
+                .and(Sort.by(sortDirection, "startTime"))
+                .and(Sort.by(sortDirection, "id"));
     }
 
     @Transactional

@@ -29,3 +29,34 @@ body {
 .app-content {
   padding: 24px;
 }
+
+.session-attention-card {
+  border-left: 4px solid #1677ff;
+  background: #f0f7ff;
+}
+
+.session-row-focused > td {
+  background: #e6f4ff !important;
+}
+
+.session-row-today > td {
+  background: #f0f7ff;
+}
+
+.session-row-focused > td:first-child,
+.session-row-today > td:first-child {
+  box-shadow: inset 4px 0 0 #1677ff;
+}
+
+.session-row-upcoming > td:first-child {
+  box-shadow: inset 4px 0 0 #69b1ff;
+}
+
+.session-row-unmarked > td:first-child {
+  box-shadow: inset 4px 0 0 #faad14;
+}
+
+.session-row-cancelled > td {
+  opacity: 0.55;
+  color: rgba(0, 0, 0, 0.45);
+}

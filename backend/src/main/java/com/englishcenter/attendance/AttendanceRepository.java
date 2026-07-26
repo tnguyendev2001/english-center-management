@@ -20,6 +20,8 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
 
     boolean existsBySessionId(Long sessionId);
 
+    long countBySessionIdAndValidTrue(Long sessionId);
+
     @Query("""
             SELECT attendance
             FROM Attendance attendance

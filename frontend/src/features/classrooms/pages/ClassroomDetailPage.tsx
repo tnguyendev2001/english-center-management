@@ -33,20 +33,8 @@ import {
 import type { ClassPackage } from '../../classPackages/classPackageTypes'
 import { AttendanceMarkPanel } from '../../attendance/components/AttendanceMarkPanel'
 import { attendanceKeys } from '../../attendance/attendanceQueries'
-import { CancelSessionModal } from '../../classSessions/components/CancelSessionModal'
-import { GenerateSessionsModal } from '../../classSessions/components/GenerateSessionsModal'
-import {
-  useCancelClassSession,
-  useClassSessions,
-  useCorrectionCancelClassSession,
-  useGenerateClassSessions,
-  useRestoreClassSession,
-} from '../../classSessions/classSessionQueries'
-import type {
-  CancelClassSessionPayload,
-  ClassSession,
-  GenerateClassSessionsPayload,
-} from '../../classSessions/classSessionTypes'
+import { ClassroomSessionsPanel } from '../../classSessions/components/ClassroomSessionsPanel'
+import { useClassSessions } from '../../classSessions/classSessionQueries'
 import { EnrollStudentModal } from '../../enrollments/components/EnrollStudentModal'
 import {
   EnrollmentLifecycleModal,
@@ -76,8 +64,6 @@ import { formatDaysOfWeek } from '../classroomTypes'
 
 const { Title, Text } = Typography
 
-type CancelSessionMode = 'normal' | 'correction'
-
 export function ClassroomDetailPage() {
   const { id } = useParams()
   const [searchParams] = useSearchParams()
@@ -90,9 +76,6 @@ export function ClassroomDetailPage() {
   const [addPackageModalOpen, setAddPackageModalOpen] = useState(false)
   const [enrollModalOpen, setEnrollModalOpen] = useState(false)
   const [renewalModalOpen, setRenewalModalOpen] = useState(false)
-  const [generateSessionsOpen, setGenerateSessionsOpen] = useState(false)
-  const [cancelingSession, setCancelingSession] = useState<ClassSession>()
-  const [cancelSessionMode, setCancelSessionMode] = useState<CancelSessionMode>('normal')
   const [activeTab, setActiveTab] = useState(initialSearch.tab)
   const [attendanceSessionId, setAttendanceSessionId] = useState<number | undefined>(
     initialSearch.tab === 'attendance' ? initialSearch.sessionId : undefined,
@@ -114,18 +97,21 @@ export function ClassroomDetailPage() {
   const classPackagesQuery = useClassPackages(classroomId)
   const tuitionPackagesQuery = useTuitionPackages(tuitionPackageParams)
   const eligibleStudentsQuery = useEligibleStudents(classroomId, enrollModalOpen)
-  const sessionsQuery = useClassSessions({ classroomId, page: 0, size: 100 })
+  const sessionsQuery = useClassSessions({
+    classroomId,
+    page: 0,
+    size: 100,
+    sort: 'sessionDate',
+    direction: 'DESC',
+  })
   const enrollmentsQuery = useEnrollments({ page: 0, size: 100 })
   const studentPackagesQuery = useClassroomStudentPackages(classroomId)
   const addClassPackage = useAddClassPackage(classroomId)
   const deactivateClassPackage = useDeactivateClassPackage(classroomId)
   const enrollStudent = useEnrollStudent()
-  const generateSessions = useGenerateClassSessions()
-  const cancelClassSession = useCancelClassSession()
-  const correctionCancelClassSession = useCorrectionCancelClassSession()
-  const restoreClassSession = useRestoreClassSession()
   const previewChangePackage = usePreviewChangePackage(changingPackage?.latestStudentPackageId ?? undefined)
   const changePackage = useChangePackage(changingPackage?.latestStudentPackageId ?? undefined)
+  const sessions = sessionsQuery.data?.data?.content ?? []
 
   useEffect(() => {
     const { tab, sessionId } = parseClassroomDetailSearchParams(searchParams)
@@ -302,108 +288,17 @@ export function ClassroomDetailPage() {
     </Space>
   )
 
-  const sessionColumns: ColumnsType<ClassSession> = [
-    {
-      title: 'Buổi',
-      dataIndex: 'sessionNo',
-      key: 'sessionNo',
-    },
-    {
-      title: 'Ngày học',
-      dataIndex: 'sessionDate',
-      key: 'sessionDate',
-      render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
-    },
-    {
-      title: 'Giờ học',
-      key: 'time',
-      render: (_, session) => `${formatTime(session.startTime)} - ${formatTime(session.endTime)}`,
-    },
-    {
-      title: 'Trạng thái',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => <StatusTag status={status} />,
-    },
-    {
-      title: 'Thao tác',
-      key: 'actions',
-      render: (_, session) => (
-        <Space wrap>
-          {session.status === 'CANCELED' ? (
-            <Popconfirm
-              title="Khôi phục buổi học?"
-              description="Buổi học sẽ chuyển về trạng thái đã lên lịch và có thể điểm danh lại."
-              okText="Khôi phục"
-              cancelText="Đóng"
-              onConfirm={() => handleRestoreSession(session.id)}
-            >
-              <Button type="link" loading={restoreClassSession.isPending}>
-                Khôi phục
-              </Button>
-            </Popconfirm>
-          ) : session.status === 'COMPLETED' ? (
-            canMarkAttendance ? (
-              <>
-                <Button type="link" onClick={() => openAttendance(session.id)}>
-                  Xem/Sửa điểm danh
-                </Button>
-                <Button
-                  type="link"
-                  danger
-                  onClick={() => {
-                    setCancelSessionMode('correction')
-                    setCancelingSession(session)
-                  }}
-                >
-                  Hoàn tác điểm danh & hủy buổi
-                </Button>
-              </>
-            ) : null
-          ) : canMarkAttendance ? (
-            <>
-              <Button type="link" onClick={() => openAttendance(session.id)}>
-                Điểm danh
-              </Button>
-              <Button
-                type="link"
-                danger
-                onClick={() => {
-                  setCancelSessionMode('normal')
-                  setCancelingSession(session)
-                }}
-              >
-                Hủy buổi
-              </Button>
-            </>
-          ) : null}
-        </Space>
-      ),
-    },
-  ]
-
   const sessionsTab = (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
-        <Text type="secondary">Tạo lịch học từ lịch tuần của lớp và điểm danh từng buổi.</Text>
-        <Button type="primary" onClick={() => setGenerateSessionsOpen(true)}>
-          Tạo lịch học
-        </Button>
-      </Space>
-
-      <Table
-        rowKey="id"
-        columns={sessionColumns}
-        dataSource={sessionsQuery.data?.data ?? []}
-        loading={sessionsQuery.isLoading}
-        pagination={false}
-      />
-    </Space>
+    <ClassroomSessionsPanel
+      classroomId={classroomId}
+      canMarkAttendance={canMarkAttendance}
+      onOpenAttendance={openAttendance}
+    />
   )
 
   const attendanceTab = (
     <AttendanceMarkPanel
-      sessions={sessionsQuery.data?.data ?? []}
+      sessions={sessions}
       studentPackages={studentPackagesQuery.data ?? []}
       classroomStatus={classroom.status}
       loadingSessions={sessionsQuery.isLoading}
@@ -508,56 +403,6 @@ export function ClassroomDetailPage() {
     setChangingPackage(undefined)
     previewChangePackage.reset()
     changePackage.reset()
-  }
-
-  function handleGenerateSessions(payload: GenerateClassSessionsPayload) {
-    generateSessions.mutate(payload, {
-      onSuccess: (result) => {
-        message.success(`Đã tạo ${result.createdCount} buổi, bỏ qua ${result.skippedCount} buổi trùng`)
-        setGenerateSessionsOpen(false)
-      },
-      onError: showErrorMessage,
-    })
-  }
-
-  function handleRestoreSession(sessionId: number) {
-    restoreClassSession.mutate(sessionId, {
-      onSuccess: () => {
-        message.success('Đã khôi phục buổi học')
-      },
-      onError: showErrorMessage,
-    })
-  }
-
-  function handleCancelSession(payload: CancelClassSessionPayload) {
-    if (!cancelingSession) {
-      return
-    }
-
-    if (cancelSessionMode === 'correction') {
-      correctionCancelClassSession.mutate(
-        { id: cancelingSession.id, payload },
-        {
-          onSuccess: () => {
-            message.success('Đã hoàn tác điểm danh và hủy buổi học')
-            setCancelingSession(undefined)
-          },
-          onError: showErrorMessage,
-        },
-      )
-      return
-    }
-
-    cancelClassSession.mutate(
-      { id: cancelingSession.id, payload },
-      {
-        onSuccess: () => {
-          message.success('Đã hủy buổi học')
-          setCancelingSession(undefined)
-        },
-        onError: showErrorMessage,
-      },
-    )
   }
 
   function showErrorMessage(error: unknown) {
@@ -802,7 +647,7 @@ export function ClassroomDetailPage() {
         classroomName={classroom.className}
         classroomStartDate={classroom.startDate}
         classroomDaysOfWeek={classroom.daysOfWeek}
-        sessions={sessionsQuery.data?.data ?? []}
+        sessions={sessions}
         students={eligibleStudentsQuery.data ?? []}
         classPackages={classPackages}
         loadingStudents={eligibleStudentsQuery.isLoading}
@@ -822,23 +667,6 @@ export function ClassroomDetailPage() {
           void queryClient.invalidateQueries({ queryKey: attendanceKeys.all })
           setRenewalModalOpen(false)
         }}
-      />
-
-      <GenerateSessionsModal
-        open={generateSessionsOpen}
-        classroomId={classroom.id}
-        submitting={generateSessions.isPending}
-        onCancel={() => setGenerateSessionsOpen(false)}
-        onSubmit={handleGenerateSessions}
-      />
-
-      <CancelSessionModal
-        open={Boolean(cancelingSession)}
-        mode={cancelSessionMode}
-        session={cancelingSession}
-        submitting={cancelClassSession.isPending || correctionCancelClassSession.isPending}
-        onCancel={() => setCancelingSession(undefined)}
-        onSubmit={handleCancelSession}
       />
 
       <ChangePackageModal

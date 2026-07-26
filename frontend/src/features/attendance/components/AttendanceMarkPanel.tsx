@@ -4,6 +4,7 @@ import dayjs from 'dayjs'
 import { useEffect, useMemo } from 'react'
 import { StatusTag } from '../../../components/common/StatusTag'
 import { studentCodeColumn, studentNameColumn } from '../../../components/common/studentDisplay'
+import { useClassSession } from '../../classSessions/classSessionQueries'
 import type { ClassSession } from '../../classSessions/classSessionTypes'
 import type { ClassroomStatus } from '../../classrooms/classroomTypes'
 import type { EnrollmentLearningProgress } from '../../studentPackages/studentPackageTypes'
@@ -65,7 +66,11 @@ export function AttendanceMarkPanel({
   const watchedStatuses = Form.useWatch('statuses', form)
   const statuses = useMemo(() => watchedStatuses ?? {}, [watchedStatuses])
   const canMarkAttendance = classroomStatus === 'ONGOING'
-  const selectedSession = sessions.find((session) => session.id === selectedSessionId)
+  const selectedFromList = sessions.find((session) => session.id === selectedSessionId)
+  const selectedSessionQuery = useClassSession(
+    selectedFromList || selectedSessionId == null ? undefined : selectedSessionId,
+  )
+  const selectedSession = selectedFromList ?? selectedSessionQuery.data
   const rosterQuery = useAttendanceRoster(selectedSessionId)
   const attendanceQuery = useAttendance(selectedSessionId)
   const markAttendance = useMarkAttendance()
@@ -263,13 +268,16 @@ export function AttendanceMarkPanel({
       <Select
         showSearch
         allowClear
-        loading={loadingSessions}
+        loading={loadingSessions || selectedSessionQuery.isLoading}
         optionFilterProp="label"
         placeholder="Chọn buổi khác"
         style={{ width: 360 }}
         value={selectedSessionId}
         onChange={(value) => onSelectedSessionIdChange?.(value)}
-        options={sessions.map((session) => ({
+        options={(selectedSession && !sessions.some((session) => session.id === selectedSession.id)
+          ? [selectedSession, ...sessions]
+          : sessions
+        ).map((session) => ({
           value: session.id,
           label: `Buổi ${session.sessionNo} - ${dayjs(session.sessionDate).format('DD/MM/YYYY')}`,
         }))}

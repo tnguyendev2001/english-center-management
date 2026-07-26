@@ -4,14 +4,23 @@ import type {
   CancelClassSessionPayload,
   ClassSession,
   ClassSessionSearchParams,
+  ClassSessionSearchResult,
   GenerateClassSessionsPayload,
   GenerateClassSessionsResponse,
 } from './classSessionTypes'
 
 export async function getClassSessions(params: ClassSessionSearchParams) {
-  const response = await httpClient.get<ApiResponse<ClassSession[]>>('/class-sessions', { params })
+  const response = await httpClient.get<ApiResponse<ClassSessionSearchResult>>('/class-sessions', {
+    params,
+  })
 
   return response.data
+}
+
+export async function getClassSession(id: number) {
+  const response = await httpClient.get<ApiResponse<ClassSession>>(`/class-sessions/${id}`)
+
+  return response.data.data
 }
 
 export async function getTodaySessions() {

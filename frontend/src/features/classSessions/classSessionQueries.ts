@@ -3,6 +3,7 @@ import {
   cancelClassSession,
   correctionCancelClassSession,
   generateClassSessions,
+  getClassSession,
   getClassSessions,
   getTodaySessions,
   restoreClassSession,
@@ -18,13 +19,23 @@ import { studentPackageKeys } from '../studentPackages/studentPackageQueries'
 export const classSessionKeys = {
   all: ['classSessions'] as const,
   list: (params: ClassSessionSearchParams) => ['classSessions', 'list', params] as const,
+  detail: (id?: number) => ['classSessions', 'detail', id] as const,
   today: ['classSessions', 'today'] as const,
 }
 
-export function useClassSessions(params: ClassSessionSearchParams) {
+export function useClassSessions(params: ClassSessionSearchParams, enabled = true) {
   return useQuery({
     queryKey: classSessionKeys.list(params),
     queryFn: () => getClassSessions(params),
+    enabled,
+  })
+}
+
+export function useClassSession(id?: number) {
+  return useQuery({
+    queryKey: classSessionKeys.detail(id),
+    queryFn: () => getClassSession(id!),
+    enabled: id != null,
   })
 }
 
