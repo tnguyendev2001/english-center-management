@@ -1,11 +1,24 @@
 package com.englishcenter.dashboard;
 
+import com.englishcenter.academic.assessment.AssessmentRepository;
+import com.englishcenter.academic.assessment.AssessmentStatus;
+import com.englishcenter.academic.assignment.AssignmentRepository;
+import com.englishcenter.academic.assignment.AssignmentStatus;
+import com.englishcenter.academic.evaluation.EvaluationPeriodRepository;
+import com.englishcenter.academic.evaluation.StudentEvaluationRepository;
+import com.englishcenter.academic.evaluation.StudentEvaluationStatus;
+import com.englishcenter.academic.report.ProgressReportStatus;
+import com.englishcenter.academic.report.StudentProgressReportRepository;
+import com.englishcenter.academic.score.AssessmentScoreRepository;
+import com.englishcenter.academic.submission.AssignmentSubmissionRepository;
+import com.englishcenter.academic.submission.SubmissionStatus;
 import com.englishcenter.auth.AccountRole;
 import com.englishcenter.auth.security.AccountPrincipal;
 import com.englishcenter.classroom.ClassroomRepository;
 import com.englishcenter.classroom.ClassroomStatus;
 import com.englishcenter.classsession.ClassSession;
 import com.englishcenter.classsession.ClassSessionRepository;
+import com.englishcenter.common.config.AppTimeProperties;
 import com.englishcenter.dashboard.dto.DashboardAlertResponse;
 import com.englishcenter.enrollment.Enrollment;
 import com.englishcenter.enrollment.EnrollmentRepository;
@@ -24,6 +37,7 @@ import com.englishcenter.security.CurrentUserService;
 import com.englishcenter.security.SecurityUtils;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -49,6 +63,14 @@ public class DashboardAlertService {
     private final FinanceCalculationService financeCalculationService;
     private final FinancialPeriodService financialPeriodService;
     private final CurrentUserService currentUserService;
+    private final AssessmentRepository assessmentRepository;
+    private final AssignmentRepository assignmentRepository;
+    private final AssignmentSubmissionRepository assignmentSubmissionRepository;
+    private final EvaluationPeriodRepository evaluationPeriodRepository;
+    private final StudentEvaluationRepository studentEvaluationRepository;
+    private final AssessmentScoreRepository assessmentScoreRepository;
+    private final StudentProgressReportRepository studentProgressReportRepository;
+    private final AppTimeProperties appTimeProperties;
 
     public DashboardAlertService(
             EnrollmentRepository enrollmentRepository,
@@ -58,7 +80,15 @@ public class DashboardAlertService {
             ClassSessionRepository classSessionRepository,
             FinanceCalculationService financeCalculationService,
             FinancialPeriodService financialPeriodService,
-            CurrentUserService currentUserService
+            CurrentUserService currentUserService,
+            AssessmentRepository assessmentRepository,
+            AssignmentRepository assignmentRepository,
+            AssignmentSubmissionRepository assignmentSubmissionRepository,
+            EvaluationPeriodRepository evaluationPeriodRepository,
+            StudentEvaluationRepository studentEvaluationRepository,
+            AssessmentScoreRepository assessmentScoreRepository,
+            StudentProgressReportRepository studentProgressReportRepository,
+            AppTimeProperties appTimeProperties
     ) {
         this.enrollmentRepository = enrollmentRepository;
         this.enrollmentSessionService = enrollmentSessionService;
@@ -68,6 +98,14 @@ public class DashboardAlertService {
         this.financeCalculationService = financeCalculationService;
         this.financialPeriodService = financialPeriodService;
         this.currentUserService = currentUserService;
+        this.assessmentRepository = assessmentRepository;
+        this.assignmentRepository = assignmentRepository;
+        this.assignmentSubmissionRepository = assignmentSubmissionRepository;
+        this.evaluationPeriodRepository = evaluationPeriodRepository;
+        this.studentEvaluationRepository = studentEvaluationRepository;
+        this.assessmentScoreRepository = assessmentScoreRepository;
+        this.studentProgressReportRepository = studentProgressReportRepository;
+        this.appTimeProperties = appTimeProperties;
     }
 
     @Transactional(readOnly = true)
@@ -208,6 +246,46 @@ public class DashboardAlertService {
             ));
         }
 
+        long assessmentsWaiting = assessmentRepository.countByStatus(AssessmentStatus.OPEN);
+        addIfPositive(alerts, alert(
+                DashboardAlertType.ASSESSMENTS_WAITING_SCORES,
+                DashboardAlertSeverity.WARNING,
+                assessmentsWaiting + " bài kiểm tra đang mở chờ điểm",
+                "Các bài kiểm tra còn ở trạng thái OPEN cần hoàn tất nhập điểm.",
+                assessmentsWaiting,
+                "Xem bài kiểm tra",
+                "/academic/assessments?status=OPEN",
+                75
+        ));
+
+        long missingSubmissions = assignmentRepository.countPublishedWithoutSubmissions(AssignmentStatus.PUBLISHED);
+        addIfPositive(alerts, alert(
+                DashboardAlertType.PUBLISHED_ASSIGNMENTS_MISSING_SUBMISSIONS,
+                DashboardAlertSeverity.WARNING,
+                missingSubmissions + " bài tập đã xuất bản chưa có bài nộp",
+                "Bài tập đang mở nhưng chưa nhận được bài nộp nào.",
+                missingSubmissions,
+                "Xem bài tập",
+                "/academic/assignments?status=PUBLISHED",
+                72
+        ));
+
+        LocalDate businessToday = LocalDate.now(appTimeProperties.zoneId());
+        long periodsNearingEnd = evaluationPeriodRepository.countOpenEndingBetween(
+                businessToday,
+                businessToday.plusDays(7)
+        );
+        addIfPositive(alerts, alert(
+                DashboardAlertType.EVALUATION_PERIODS_NEARING_END_INCOMPLETE,
+                DashboardAlertSeverity.WARNING,
+                periodsNearingEnd + " kỳ đánh giá sắp kết thúc",
+                "Kỳ đánh giá OPEN sẽ kết thúc trong 7 ngày tới.",
+                periodsNearingEnd,
+                "Xem kỳ đánh giá",
+                "/academic/evaluation-periods?status=OPEN",
+                68
+        ));
+
         return sortAlerts(alerts);
     }
 
@@ -282,6 +360,51 @@ public class DashboardAlertService {
                 "Xem buổi học sắp tới",
                 "/me/sessions?filter=UPCOMING",
                 30
+        ));
+
+        LocalDate businessToday = LocalDate.now(appTimeProperties.zoneId());
+        long ungraded = assignmentSubmissionRepository.countByTeacherIdAndStatusIn(
+                teacherId,
+                List.of(SubmissionStatus.SUBMITTED, SubmissionStatus.LATE)
+        );
+        addIfPositive(alerts, alert(
+                DashboardAlertType.ASSIGNMENTS_WITH_UNGRADED_SUBMISSIONS,
+                DashboardAlertSeverity.WARNING,
+                ungraded + " bài nộp chưa chấm",
+                "Học viên đã nộp bài nhưng chưa được chấm điểm.",
+                ungraded,
+                "Xem bài tập",
+                "/academic/assignments",
+                80
+        ));
+
+        long openAssessments = assessmentRepository.countByTeacherIdAndStatus(teacherId, AssessmentStatus.OPEN);
+        addIfPositive(alerts, alert(
+                DashboardAlertType.ASSESSMENTS_WITH_MISSING_SCORES,
+                DashboardAlertSeverity.WARNING,
+                openAssessments + " bài kiểm tra đang mở",
+                "Các bài kiểm tra OPEN trong lớp bạn phụ trách cần nhập điểm.",
+                openAssessments,
+                "Xem bài kiểm tra",
+                "/academic/assessments?status=OPEN",
+                78
+        ));
+
+        long draftEvals = studentEvaluationRepository.countDraftNearPeriodEndByTeacher(
+                teacherId,
+                StudentEvaluationStatus.DRAFT,
+                businessToday,
+                businessToday.plusDays(7)
+        );
+        addIfPositive(alerts, alert(
+                DashboardAlertType.DRAFT_EVALUATIONS_NEAR_PERIOD_END,
+                DashboardAlertSeverity.WARNING,
+                draftEvals + " nhận xét nháp gần hết kỳ",
+                "Nhận xét DRAFT thuộc kỳ đánh giá sẽ kết thúc trong 7 ngày.",
+                draftEvals,
+                "Xem nhận xét",
+                "/academic/evaluations",
+                76
         ));
 
         return sortAlerts(alerts);
@@ -375,6 +498,67 @@ public class DashboardAlertService {
                 "Xem hóa đơn",
                 "/student/tuition?tab=invoices",
                 95
+        ));
+
+        LocalDate businessToday = LocalDate.now(appTimeProperties.zoneId());
+        long dueSoon = assignmentRepository.countDueSoonWithoutSubmissionForStudent(
+                studentId,
+                businessToday,
+                businessToday.plusDays(2)
+        );
+        addIfPositive(alerts, alert(
+                DashboardAlertType.ASSIGNMENT_DUE_SOON,
+                DashboardAlertSeverity.WARNING,
+                dueSoon + " bài tập sắp đến hạn",
+                "Bài tập đến hạn trong 2 ngày tới và bạn chưa nộp.",
+                dueSoon,
+                "Xem bài tập",
+                "/student/learning?tab=assignments",
+                82
+        ));
+
+        long overdueAssignments = assignmentRepository.countOverdueWithoutSubmissionForStudent(
+                studentId,
+                businessToday
+        );
+        addIfPositive(alerts, alert(
+                DashboardAlertType.OVERDUE_ASSIGNMENT,
+                DashboardAlertSeverity.CRITICAL,
+                overdueAssignments + " bài tập quá hạn",
+                "Bài tập đã quá hạn và bạn chưa nộp.",
+                overdueAssignments,
+                "Xem bài tập",
+                "/student/learning?tab=assignments",
+                92
+        ));
+
+        LocalDateTime since = businessToday.minusDays(7).atStartOfDay();
+        long newScores = assessmentScoreRepository.countPublishedSinceForStudent(studentId, since);
+        addIfPositive(alerts, alert(
+                DashboardAlertType.NEW_PUBLISHED_SCORE,
+                DashboardAlertSeverity.INFO,
+                newScores + " điểm mới được công bố",
+                "Điểm bài kiểm tra mới trong 7 ngày gần đây.",
+                newScores,
+                "Xem kết quả",
+                "/student/learning?tab=scores",
+                45
+        ));
+
+        long newReports = studentProgressReportRepository.countPublishedSinceForStudent(
+                studentId,
+                List.of(ProgressReportStatus.PUBLISHED, ProgressReportStatus.FINALIZED),
+                since
+        );
+        addIfPositive(alerts, alert(
+                DashboardAlertType.NEW_PUBLISHED_PROGRESS_REPORT,
+                DashboardAlertSeverity.INFO,
+                newReports + " phiếu tổng kết mới",
+                "Phiếu tổng kết học tập mới trong 7 ngày gần đây.",
+                newReports,
+                "Xem tổng kết",
+                "/student/learning?tab=reports",
+                44
         ));
 
         return sortAlerts(alerts);

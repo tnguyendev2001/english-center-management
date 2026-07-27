@@ -4,6 +4,13 @@ import type { Dayjs } from 'dayjs'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { StatusTag } from '../../../components/common/StatusTag'
+import {
+  StudentAssignmentsTab,
+  StudentFeedbackTab,
+  StudentLessonsTab,
+  StudentMaterialsTab,
+  StudentResultsTab,
+} from '../../academic/components/StudentAcademicTabs'
 import { formatDaysOfWeek } from '../../classrooms/classroomTypes'
 import {
   useMyAttendance,
@@ -73,7 +80,9 @@ export function StudentLearningPage() {
         <Title level={2} style={{ margin: 0 }}>
           Việc học của tôi
         </Title>
-        <Text type="secondary">Lớp học, lịch học, điểm danh và tiến độ của bạn.</Text>
+        <Text type="secondary">
+          Lớp học, lịch học, bài học, bài tập, kết quả và tổng kết của bạn.
+        </Text>
       </Space>
 
       <Card>
@@ -250,6 +259,31 @@ export function StudentLearningPage() {
                     })}
                   </Space>
                 ),
+            },
+            {
+              key: 'lessons',
+              label: 'Bài học',
+              children: <StudentLessonsTab />,
+            },
+            {
+              key: 'materials',
+              label: 'Tài liệu',
+              children: <StudentMaterialsTab />,
+            },
+            {
+              key: 'assignments',
+              label: 'Bài tập',
+              children: <StudentAssignmentsTab />,
+            },
+            {
+              key: 'results',
+              label: 'Kết quả',
+              children: <StudentResultsTab />,
+            },
+            {
+              key: 'feedback',
+              label: 'Nhận xét & Tổng kết',
+              children: <StudentFeedbackTab />,
             },
           ]}
         />

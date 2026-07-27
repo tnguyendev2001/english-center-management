@@ -180,3 +180,19 @@ Possible additions:
 - UI polish.
 
 Do not add new major modules in this phase.
+
+## Phase 11 - Learning content, assignments, assessments, progress reports
+
+Goal:
+- Simple academic management for a small English center (not a full LMS).
+
+Included:
+- LessonRecord (1:1 ClassSession)
+- LearningMaterial upload/download
+- Assignment + submission + grading
+- Assessment + bulk scores
+- EvaluationPeriod + StudentEvaluation + printable StudentProgressReport
+- Role/ownership protection and dashboard academic alerts
+
+Docs: `docs/ACADEMIC.md`
+Migration: `V28__create_academic_module.sql`

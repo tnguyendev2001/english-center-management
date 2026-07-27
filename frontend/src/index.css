@@ -12,22 +12,72 @@ body {
   min-height: 100vh;
 }
 
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-sider {
+  border-right: 1px solid #f0f0f0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: auto;
+}
+
+.app-sider-menu {
+  padding-bottom: 24px;
+}
+
 .app-logo {
   padding: 20px 16px;
   border-bottom: 1px solid #f0f0f0;
 }
 
+.app-logo-collapsed {
+  display: flex;
+  justify-content: center;
+  padding: 16px 8px;
+}
+
+.app-mobile-drawer-logo {
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
 .app-header {
-  height: 56px;
-  padding: 0 24px;
+  min-height: 56px;
+  height: auto;
+  padding: 8px 16px;
   background: #ffffff;
   border-bottom: 1px solid #f0f0f0;
   font-weight: 600;
-  line-height: 56px;
+  line-height: 40px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.app-header-title {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.75);
+  max-width: min(60vw, 480px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-content {
   padding: 24px;
+}
+
+@media (max-width: 767px) {
+  .app-content {
+    padding: 16px;
+  }
+
+  .app-header-title {
+    max-width: 42vw;
+  }
 }
 
 .session-attention-card {

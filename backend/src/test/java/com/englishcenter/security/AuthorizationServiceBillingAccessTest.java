@@ -6,6 +6,11 @@ import static org.mockito.Mockito.when;
 import com.englishcenter.auth.AccountRole;
 import com.englishcenter.auth.AccountStatus;
 import com.englishcenter.auth.security.AccountPrincipal;
+import com.englishcenter.academic.assessment.AssessmentRepository;
+import com.englishcenter.academic.assignment.AssignmentRepository;
+import com.englishcenter.academic.lesson.LessonRecordRepository;
+import com.englishcenter.academic.report.StudentProgressReportRepository;
+import com.englishcenter.academic.submission.AssignmentSubmissionRepository;
 import com.englishcenter.classroom.Classroom;
 import com.englishcenter.classroom.ClassroomRepository;
 import com.englishcenter.classsession.ClassSessionRepository;
@@ -35,6 +40,16 @@ class AuthorizationServiceBillingAccessTest {
     private InvoiceRepository invoiceRepository;
     @Mock
     private PaymentRepository paymentRepository;
+    @Mock
+    private LessonRecordRepository lessonRecordRepository;
+    @Mock
+    private AssignmentRepository assignmentRepository;
+    @Mock
+    private AssessmentRepository assessmentRepository;
+    @Mock
+    private AssignmentSubmissionRepository assignmentSubmissionRepository;
+    @Mock
+    private StudentProgressReportRepository studentProgressReportRepository;
 
     private AuthorizationService authorizationService;
 
@@ -45,7 +60,12 @@ class AuthorizationServiceBillingAccessTest {
                 classSessionRepository,
                 enrollmentRepository,
                 invoiceRepository,
-                paymentRepository
+                paymentRepository,
+                lessonRecordRepository,
+                assignmentRepository,
+                assessmentRepository,
+                assignmentSubmissionRepository,
+                studentProgressReportRepository
         );
     }
 

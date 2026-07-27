@@ -1,5 +1,10 @@
 package com.englishcenter.security;
 
+import com.englishcenter.academic.assessment.AssessmentRepository;
+import com.englishcenter.academic.assignment.AssignmentRepository;
+import com.englishcenter.academic.lesson.LessonRecordRepository;
+import com.englishcenter.academic.report.StudentProgressReportRepository;
+import com.englishcenter.academic.submission.AssignmentSubmissionRepository;
 import com.englishcenter.auth.AccountRole;
 import com.englishcenter.auth.security.AccountPrincipal;
 import com.englishcenter.classroom.ClassroomRepository;
@@ -19,19 +24,34 @@ public class AuthorizationService {
     private final EnrollmentRepository enrollmentRepository;
     private final InvoiceRepository invoiceRepository;
     private final PaymentRepository paymentRepository;
+    private final LessonRecordRepository lessonRecordRepository;
+    private final AssignmentRepository assignmentRepository;
+    private final AssessmentRepository assessmentRepository;
+    private final AssignmentSubmissionRepository assignmentSubmissionRepository;
+    private final StudentProgressReportRepository studentProgressReportRepository;
 
     public AuthorizationService(
             ClassroomRepository classroomRepository,
             ClassSessionRepository classSessionRepository,
             EnrollmentRepository enrollmentRepository,
             InvoiceRepository invoiceRepository,
-            PaymentRepository paymentRepository
+            PaymentRepository paymentRepository,
+            LessonRecordRepository lessonRecordRepository,
+            AssignmentRepository assignmentRepository,
+            AssessmentRepository assessmentRepository,
+            AssignmentSubmissionRepository assignmentSubmissionRepository,
+            StudentProgressReportRepository studentProgressReportRepository
     ) {
         this.classroomRepository = classroomRepository;
         this.classSessionRepository = classSessionRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.invoiceRepository = invoiceRepository;
         this.paymentRepository = paymentRepository;
+        this.lessonRecordRepository = lessonRecordRepository;
+        this.assignmentRepository = assignmentRepository;
+        this.assessmentRepository = assessmentRepository;
+        this.assignmentSubmissionRepository = assignmentSubmissionRepository;
+        this.studentProgressReportRepository = studentProgressReportRepository;
     }
 
     public boolean canAccessClassroom(Authentication authentication, Long classroomId) {
@@ -139,6 +159,58 @@ public class AuthorizationService {
                     .orElse(false);
         }
         return false;
+    }
+
+    public boolean canManageLesson(Authentication authentication, Long lessonId) {
+        return lessonRecordRepository.findById(lessonId)
+                .map(lesson -> canManageSession(authentication, lesson.getClassSessionId()))
+                .orElse(false);
+    }
+
+    public boolean canManageAssignment(Authentication authentication, Long assignmentId) {
+        return assignmentRepository.findById(assignmentId)
+                .map(assignment -> canManageClassroom(authentication, assignment.getClassroomId()))
+                .orElse(false);
+    }
+
+    public boolean canManageAssessment(Authentication authentication, Long assessmentId) {
+        return assessmentRepository.findById(assessmentId)
+                .map(assessment -> canManageClassroom(authentication, assessment.getClassroomId()))
+                .orElse(false);
+    }
+
+    public boolean canGradeSubmission(Authentication authentication, Long submissionId) {
+        return assignmentSubmissionRepository.findById(submissionId)
+                .flatMap(submission -> assignmentRepository.findById(submission.getAssignmentId()))
+                .map(assignment -> canManageClassroom(authentication, assignment.getClassroomId()))
+                .orElse(false);
+    }
+
+    public boolean canAccessStudentAcademicData(
+            Authentication authentication,
+            Long studentId,
+            Long classroomId
+    ) {
+        return canAccessStudent(authentication, studentId) && canAccessClassroom(authentication, classroomId);
+    }
+
+    public boolean canAccessProgressReport(Authentication authentication, Long reportId) {
+        AccountPrincipal principal = SecurityUtils.requirePrincipal(authentication);
+        return studentProgressReportRepository.findById(reportId)
+                .map(report -> {
+                    if (principal.role() == AccountRole.ADMIN) {
+                        return true;
+                    }
+                    if (principal.role() == AccountRole.STUDENT) {
+                        return principal.studentId() != null
+                                && principal.studentId().equals(report.getStudentId());
+                    }
+                    if (principal.role() == AccountRole.TEACHER) {
+                        return canManageClassroom(authentication, report.getClassroomId());
+                    }
+                    return false;
+                })
+                .orElse(false);
     }
 
     private boolean isAssignedTeacher(AccountPrincipal principal, Long classroomId) {

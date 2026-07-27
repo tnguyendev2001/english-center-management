@@ -1,13 +1,23 @@
 package com.englishcenter.dashboard;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
+import com.englishcenter.academic.assessment.AssessmentRepository;
+import com.englishcenter.academic.assignment.AssignmentRepository;
+import com.englishcenter.academic.evaluation.EvaluationPeriodRepository;
+import com.englishcenter.academic.evaluation.StudentEvaluationRepository;
+import com.englishcenter.academic.report.StudentProgressReportRepository;
+import com.englishcenter.academic.score.AssessmentScoreRepository;
+import com.englishcenter.academic.submission.AssignmentSubmissionRepository;
 import com.englishcenter.classroom.ClassroomRepository;
 import com.englishcenter.classroom.ClassroomStatus;
 import com.englishcenter.classsession.ClassSessionRepository;
+import com.englishcenter.common.config.AppTimeProperties;
 import com.englishcenter.dashboard.dto.DashboardAlertResponse;
 import com.englishcenter.enrollment.EnrollmentRepository;
 import com.englishcenter.enrollment.EnrollmentSessionService;
@@ -25,7 +35,9 @@ import com.englishcenter.security.CurrentUserService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.ZoneId;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -50,9 +62,43 @@ class DashboardAlertServiceTest {
     private FinancialPeriodService financialPeriodService;
     @Mock
     private CurrentUserService currentUserService;
+    @Mock
+    private AssessmentRepository assessmentRepository;
+    @Mock
+    private AssignmentRepository assignmentRepository;
+    @Mock
+    private AssignmentSubmissionRepository assignmentSubmissionRepository;
+    @Mock
+    private EvaluationPeriodRepository evaluationPeriodRepository;
+    @Mock
+    private StudentEvaluationRepository studentEvaluationRepository;
+    @Mock
+    private AssessmentScoreRepository assessmentScoreRepository;
+    @Mock
+    private StudentProgressReportRepository studentProgressReportRepository;
+    @Mock
+    private AppTimeProperties appTimeProperties;
 
     @InjectMocks
     private DashboardAlertService dashboardAlertService;
+
+    @BeforeEach
+    void stubAcademicDefaults() {
+        lenient().when(appTimeProperties.zoneId()).thenReturn(ZoneId.of("Asia/Ho_Chi_Minh"));
+        lenient().when(assessmentRepository.countByStatus(any())).thenReturn(0L);
+        lenient().when(assignmentRepository.countPublishedWithoutSubmissions(any())).thenReturn(0L);
+        lenient().when(evaluationPeriodRepository.countOpenEndingBetween(any(), any())).thenReturn(0L);
+        lenient().when(assignmentSubmissionRepository.countByTeacherIdAndStatusIn(any(), any())).thenReturn(0L);
+        lenient().when(assessmentRepository.countByTeacherIdAndStatus(any(), any())).thenReturn(0L);
+        lenient().when(studentEvaluationRepository.countDraftNearPeriodEndByTeacher(any(), any(), any(), any()))
+                .thenReturn(0L);
+        lenient().when(assignmentRepository.countDueSoonWithoutSubmissionForStudent(any(), any(), any()))
+                .thenReturn(0L);
+        lenient().when(assignmentRepository.countOverdueWithoutSubmissionForStudent(any(), any())).thenReturn(0L);
+        lenient().when(assessmentScoreRepository.countPublishedSinceForStudent(any(), any())).thenReturn(0L);
+        lenient().when(studentProgressReportRepository.countPublishedSinceForStudent(any(), any(), any()))
+                .thenReturn(0L);
+    }
 
     @Test
     void getAdminAlerts_excludesZeroCountsAndIncludesCriticalAlerts() {

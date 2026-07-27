@@ -104,6 +104,52 @@ export const DASHBOARD_DESTINATIONS: Partial<Record<DashboardAlertType, Dashboar
     search: '?tab=invoices',
     actionLabel: 'Xem hóa đơn quá hạn',
   },
+  ASSESSMENTS_WAITING_SCORES: {
+    pathname: '/academic/assessments',
+    search: '?status=OPEN',
+    actionLabel: 'Nhập điểm kiểm tra',
+  },
+  PUBLISHED_ASSIGNMENTS_MISSING_SUBMISSIONS: {
+    pathname: '/academic/assignments',
+    search: '?status=PUBLISHED',
+    actionLabel: 'Xem bài tập thiếu nộp',
+  },
+  EVALUATION_PERIODS_NEARING_END_INCOMPLETE: {
+    pathname: '/academic/evaluations',
+    actionLabel: 'Xem kỳ đánh giá',
+  },
+  ASSIGNMENTS_WITH_UNGRADED_SUBMISSIONS: {
+    pathname: '/me/assignments',
+    actionLabel: 'Chấm bài nộp',
+  },
+  ASSESSMENTS_WITH_MISSING_SCORES: {
+    pathname: '/me/assessments',
+    actionLabel: 'Nhập điểm kiểm tra',
+  },
+  DRAFT_EVALUATIONS_NEAR_PERIOD_END: {
+    pathname: '/me/evaluations',
+    actionLabel: 'Hoàn tất nhận xét',
+  },
+  ASSIGNMENT_DUE_SOON: {
+    pathname: '/student/learning',
+    search: '?tab=assignments',
+    actionLabel: 'Xem bài tập sắp đến hạn',
+  },
+  OVERDUE_ASSIGNMENT: {
+    pathname: '/student/learning',
+    search: '?tab=assignments',
+    actionLabel: 'Xem bài tập quá hạn',
+  },
+  NEW_PUBLISHED_SCORE: {
+    pathname: '/student/learning',
+    search: '?tab=results',
+    actionLabel: 'Xem điểm mới',
+  },
+  NEW_PUBLISHED_PROGRESS_REPORT: {
+    pathname: '/student/learning',
+    search: '?tab=feedback',
+    actionLabel: 'Xem phiếu tổng kết',
+  },
 }
 
 export function dashboardDestinationPath(type: DashboardAlertType): string {
