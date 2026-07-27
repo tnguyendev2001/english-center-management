@@ -70,6 +70,7 @@ public class EnrollmentService {
     private final PaymentRepository paymentRepository;
     private final EnrollmentMapper enrollmentMapper;
     private final StudentMapper studentMapper;
+    private final com.englishcenter.invoice.InvoiceBillingSnapshotService invoiceBillingSnapshotService;
 
     public EnrollmentService(
             EnrollmentRepository enrollmentRepository,
@@ -84,7 +85,8 @@ public class EnrollmentService {
             AttendanceRepository attendanceRepository,
             PaymentRepository paymentRepository,
             EnrollmentMapper enrollmentMapper,
-            StudentMapper studentMapper
+            StudentMapper studentMapper,
+            com.englishcenter.invoice.InvoiceBillingSnapshotService invoiceBillingSnapshotService
     ) {
         this.enrollmentRepository = enrollmentRepository;
         this.statusHistoryRepository = statusHistoryRepository;
@@ -99,6 +101,7 @@ public class EnrollmentService {
         this.paymentRepository = paymentRepository;
         this.enrollmentMapper = enrollmentMapper;
         this.studentMapper = studentMapper;
+        this.invoiceBillingSnapshotService = invoiceBillingSnapshotService;
     }
 
     @Transactional
@@ -233,6 +236,7 @@ public class EnrollmentService {
                 discountAmount,
                 adjustmentAmount,
                 finalAmount,
+                learningStartDate,
                 learningStartDate
         );
         invoice.setNote("Nhập liệu legacy Excel");
@@ -618,7 +622,33 @@ public class EnrollmentService {
             BigDecimal discountAmount,
             BigDecimal adjustmentAmount,
             BigDecimal finalAmount,
-            LocalDate dueDate
+            LocalDate issueDate
+    ) {
+        return createInvoice(
+                enrollment,
+                studentPackage,
+                student,
+                classroom,
+                tuitionPackage,
+                discountAmount,
+                adjustmentAmount,
+                finalAmount,
+                issueDate,
+                null
+        );
+    }
+
+    private Invoice createInvoice(
+            Enrollment enrollment,
+            StudentPackage studentPackage,
+            Student student,
+            Classroom classroom,
+            TuitionPackage tuitionPackage,
+            BigDecimal discountAmount,
+            BigDecimal adjustmentAmount,
+            BigDecimal finalAmount,
+            LocalDate issueDate,
+            LocalDate overrideDueDate
     ) {
         Invoice invoice = new Invoice();
         invoice.setInvoiceCode(generateInvoiceCode());
@@ -626,16 +656,20 @@ public class EnrollmentService {
         invoice.setClassroom(classroom);
         invoice.setEnrollment(enrollment);
         invoice.setStudentPackage(studentPackage);
-        invoice.setPackageNameSnapshot(tuitionPackage.getName());
-        invoice.setTotalSessionsSnapshot(tuitionPackage.getTotalSessions());
         invoice.setAmount(tuitionPackage.getPrice());
         invoice.setDiscountAmount(discountAmount);
         invoice.setAdjustmentAmount(adjustmentAmount);
         invoice.setFinalAmount(finalAmount);
         invoice.setPaidAmount(ZERO);
         invoice.setRemainingAmount(finalAmount);
-        invoice.setDueDate(dueDate);
         invoice.setStatus(InvoiceStatus.UNPAID);
+        invoiceBillingSnapshotService.applyBillingSnapshot(
+                invoice,
+                studentPackage,
+                tuitionPackage,
+                issueDate,
+                overrideDueDate
+        );
         return invoice;
     }
 

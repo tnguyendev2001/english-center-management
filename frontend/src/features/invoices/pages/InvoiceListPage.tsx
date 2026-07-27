@@ -2,15 +2,17 @@ import {
   Button,
   Card,
   Col,
+  Collapse,
   DatePicker,
   Input,
+  InputNumber,
   Row,
   Select,
   Space,
   Statistic,
+  Switch,
   Table,
   Tabs,
-  Tag,
   Typography,
   message,
 } from 'antd'
@@ -19,12 +21,13 @@ import type { ColumnsType } from 'antd/es/table'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
 import { isAxiosError } from 'axios'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { ActiveFilterTags } from '../../../components/common/ActiveFilterTags'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
 import {
   STUDENT_SEARCH_PLACEHOLDER,
-  studentCodeColumn,
   studentKeywordFields,
   studentNameColumn,
 } from '../../../components/common/studentDisplay'
@@ -32,32 +35,40 @@ import { matchesKeyword, paginateItems } from '../../../utils/clientPagination'
 import { useClassrooms } from '../../classrooms/classroomQueries'
 import { StudentInvoiceListDrawer } from '../../financial/components/StudentInvoiceListDrawer'
 import type { StudentTuitionSummary } from '../../financial/financialSummaryTypes'
-import { useDebts } from '../../debts/debtQueries'
 import { PaymentFormModal } from '../../payments/components/PaymentFormModal'
 import { useCreatePayment } from '../../payments/paymentQueries'
-import type { CreatePaymentPayload } from '../../payments/paymentTypes'
-import { useRevenueSummary } from '../../revenue/revenueQueries'
+import type { CreatePaymentPayload, Payment } from '../../payments/paymentTypes'
+import { useTuitionPackages } from '../../tuitionPackages/tuitionPackageQueries'
 import { InvoiceDetailModal } from '../components/InvoiceDetailModal'
-import { useInvoices, useTuitionStudentSummaries } from '../invoiceQueries'
-import type { Invoice, InvoiceSearchParams, InvoiceStatus } from '../invoiceTypes'
+import { useInvoiceSummary, useInvoices, useTuitionStudentSummaries } from '../invoiceQueries'
+import {
+  INVOICE_STATUS_LABELS,
+  formatEstimatedEffectiveTo,
+  type Invoice,
+  type InvoiceStatus,
+} from '../invoiceTypes'
 
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
 
-type InvoiceTab = 'by-student' | 'needs-collection' | 'paid' | 'replaced' | 'canceled' | 'all'
-
-const invoiceStatusLabels = {
-  UNPAID: 'Chưa đóng',
-  PARTIALLY_PAID: 'Đóng một phần',
-  PAID: 'Đã đóng',
-  CANCELED: 'Đã hủy',
-  REPLACED: 'Đã thay thế do đổi gói',
-}
+type InvoiceTab = 'by-cycle' | 'by-student'
 
 const FETCH_SIZE = 100
 
 function summaryRowKey(summary: StudentTuitionSummary) {
   return `${summary.studentId}-${summary.classroomId}`
+}
+
+function parseOptionalBoolean(value: string | null): boolean | undefined {
+  if (value === 'true') return true
+  if (value === 'false') return false
+  return undefined
+}
+
+function parseOptionalNumber(value: string | null): number | undefined {
+  if (value == null || value === '') return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
 }
 
 function findCollectibleInvoice(invoices: Invoice[], studentId: number, classroomId: number) {
@@ -72,128 +83,118 @@ function findCollectibleInvoice(invoices: Invoice[], studentId: number, classroo
 }
 
 export function InvoiceListPage() {
-  const [tab, setTab] = useState<InvoiceTab>('by-student')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = (searchParams.get('tab') === 'by-student' ? 'by-student' : 'by-cycle') as InvoiceTab
+  const keyword = searchParams.get('keyword') ?? ''
+  const statusFilter = (searchParams.get('status') as InvoiceStatus | null) ?? undefined
+  const classroomId = parseOptionalNumber(searchParams.get('classroomId'))
+  const packageId = parseOptionalNumber(searchParams.get('packageId'))
+  const cycleNo = parseOptionalNumber(searchParams.get('cycleNo'))
+  const overdue = parseOptionalBoolean(searchParams.get('overdue'))
+  const hasRemainingDebt = parseOptionalBoolean(searchParams.get('hasRemainingDebt'))
+  const dueFrom = searchParams.get('dueFrom') ?? undefined
+  const dueTo = searchParams.get('dueTo') ?? undefined
+  const effectiveFrom = searchParams.get('effectiveFrom') ?? undefined
+  const effectiveTo = searchParams.get('effectiveTo') ?? undefined
+
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(10)
-  const [keyword, setKeyword] = useState('')
-  const [statusFilter, setStatusFilter] = useState<InvoiceStatus>()
-  const [classroomId, setClassroomId] = useState<number>()
-  const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>()
   const [collectingInvoice, setCollectingInvoice] = useState<Invoice>()
+  const [successPayment, setSuccessPayment] = useState<Payment>()
   const [detailInvoice, setDetailInvoice] = useState<Invoice>()
   const [detailSummary, setDetailSummary] = useState<StudentTuitionSummary>()
 
-  const summaryParams = useMemo(() => ({ classroomId }), [classroomId])
-
-  const invoiceParams: InvoiceSearchParams = useMemo(
-    () => ({
-      status:
-        tab === 'paid'
-          ? 'PAID'
-          : tab === 'replaced'
-            ? 'REPLACED'
-            : tab === 'canceled'
-              ? 'CANCELED'
-              : undefined,
-      classroomId,
-      page: 0,
-      size: FETCH_SIZE,
-    }),
-    [classroomId, tab],
+  const patchParams = useCallback(
+    (updates: Record<string, string | undefined | null>) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          for (const [key, value] of Object.entries(updates)) {
+            if (value == null || value === '') {
+              next.delete(key)
+            } else {
+              next.set(key, value)
+            }
+          }
+          return next
+        },
+        { replace: true },
+      )
+      setPage(0)
+    },
+    [setSearchParams],
   )
 
-  const debtsParams = useMemo(
+  const invoiceParams = useMemo(
     () => ({
+      keyword: keyword || undefined,
+      status: statusFilter,
+      classroomId,
+      packageId,
+      cycleNo,
+      overdue,
+      hasRemainingDebt,
+      dueFrom,
+      dueTo,
+      effectiveFrom,
+      effectiveTo,
       page: 0,
       size: FETCH_SIZE,
     }),
-    [],
+    [
+      classroomId,
+      cycleNo,
+      dueFrom,
+      dueTo,
+      effectiveFrom,
+      effectiveTo,
+      hasRemainingDebt,
+      keyword,
+      overdue,
+      packageId,
+      statusFilter,
+    ],
   )
 
   const isStudentTab = tab === 'by-student'
-  const useDebtsQuery = tab === 'needs-collection'
+  const summaryParams = useMemo(() => ({ classroomId }), [classroomId])
   const studentSummariesQuery = useTuitionStudentSummaries(summaryParams, isStudentTab)
-  const invoicesQuery = useInvoices(invoiceParams, !isStudentTab && !useDebtsQuery)
-  const debtsQuery = useDebts(debtsParams, !isStudentTab && useDebtsQuery)
-  const collectibleInvoicesQuery = useDebts(debtsParams, isStudentTab)
-  const debtSummaryQuery = useDebts({ page: 0, size: FETCH_SIZE })
-  const revenueQuery = useRevenueSummary()
+  const invoicesQuery = useInvoices(invoiceParams, !isStudentTab)
+  const collectibleQuery = useInvoices(
+    { classroomId, hasRemainingDebt: true, page: 0, size: FETCH_SIZE },
+    isStudentTab,
+  )
+  const summaryQuery = useInvoiceSummary(classroomId)
   const classroomsQuery = useClassrooms({ page: 0, size: 100 })
+  const packagesQuery = useTuitionPackages({ page: 0, size: 100 })
   const createPayment = useCreatePayment()
 
-  const rawInvoices = useDebtsQuery ? (debtsQuery.data?.data ?? []) : (invoicesQuery.data?.data ?? [])
-  const isLoading = isStudentTab
-    ? studentSummariesQuery.isLoading
-    : useDebtsQuery
-      ? debtsQuery.isLoading
-      : invoicesQuery.isLoading
-
   const filteredSummaries = useMemo(() => {
-    return (studentSummariesQuery.data?.data ?? []).filter((summary) => {
-      if (classroomId && summary.classroomId !== classroomId) {
-        return false
-      }
-
-      return matchesKeyword(keyword, ...studentKeywordFields(summary), summary.classroomName)
-    })
-  }, [classroomId, keyword, studentSummariesQuery.data?.data])
+    return (studentSummariesQuery.data?.data ?? []).filter((summary) =>
+      matchesKeyword(keyword, ...studentKeywordFields(summary), summary.classroomName),
+    )
+  }, [keyword, studentSummariesQuery.data?.data])
 
   const pagedSummaries = useMemo(
     () => paginateItems(filteredSummaries, page, size),
     [filteredSummaries, page, size],
   )
 
-  const filteredInvoices = useMemo(() => {
-    return rawInvoices.filter((invoice) => {
-      if (tab === 'all' && statusFilter && invoice.status !== statusFilter) {
-        return false
-      }
+  const invoices = invoicesQuery.data?.data ?? []
+  const pagedInvoices = useMemo(() => paginateItems(invoices, page, size), [invoices, page, size])
 
-      if (tab === 'needs-collection' && statusFilter && invoice.status !== statusFilter) {
-        return false
-      }
+  const dueRange: [Dayjs, Dayjs] | null =
+    dueFrom && dueTo ? [dayjs(dueFrom), dayjs(dueTo)] : null
+  const effectiveRange: [Dayjs, Dayjs] | null =
+    effectiveFrom && effectiveTo ? [dayjs(effectiveFrom), dayjs(effectiveTo)] : null
 
-      if (classroomId && invoice.classroomId !== classroomId) {
-        return false
-      }
-
-      if (!matchesKeyword(keyword, ...studentKeywordFields(invoice), invoice.invoiceCode)) {
-        return false
-      }
-
-      if (dateRange) {
-        const dueDate = dayjs(invoice.dueDate)
-        if (dueDate.isBefore(dateRange[0], 'day') || dueDate.isAfter(dateRange[1], 'day')) {
-          return false
-        }
-      }
-
-      return true
-    })
-  }, [classroomId, dateRange, keyword, rawInvoices, statusFilter, tab])
-
-  const pagedInvoices = useMemo(
-    () => paginateItems(filteredInvoices, page, size),
-    [filteredInvoices, page, size],
-  )
-
-  const debtSummary = useMemo(() => {
-    const debts = debtSummaryQuery.data?.data ?? []
-    return {
-      totalRemaining: debts.reduce((sum, invoice) => sum + invoice.remainingAmount, 0),
-      unpaidCount: debts.filter((invoice) => invoice.status === 'UNPAID').length,
-      partialCount: debts.filter((invoice) => invoice.status === 'PARTIALLY_PAID').length,
-    }
-  }, [debtSummaryQuery.data?.data])
+  const classroomName = classroomsQuery.data?.data?.find((item) => item.id === classroomId)?.className
+  const packageName = packagesQuery.data?.data?.find((item) => item.id === packageId)?.name
 
   const studentSummaryColumns: ColumnsType<StudentTuitionSummary> = [
-    studentCodeColumn(),
+    { title: 'Mã HV', dataIndex: 'studentCode', key: 'studentCode' },
     studentNameColumn(),
-    {
-      title: 'Lớp',
-      dataIndex: 'classroomName',
-      key: 'classroomName',
-    },
+    { title: 'Lớp', dataIndex: 'classroomName', key: 'classroomName' },
     {
       title: 'Tổng học phí',
       dataIndex: 'totalTuitionAmount',
@@ -201,7 +202,7 @@ export function InvoiceListPage() {
       render: (value: number) => <MoneyText value={value} />,
     },
     {
-      title: 'Đã đóng',
+      title: 'Đã TT',
       dataIndex: 'totalPaidAmount',
       key: 'totalPaidAmount',
       render: (value: number) => <MoneyText value={value} />,
@@ -212,36 +213,7 @@ export function InvoiceListPage() {
       key: 'remainingDebt',
       render: (value: number) => <MoneyText value={value} />,
     },
-    {
-      title: 'Số hóa đơn',
-      dataIndex: 'totalInvoiceCount',
-      key: 'totalInvoiceCount',
-    },
-    {
-      title: 'Chưa đóng',
-      dataIndex: 'unpaidCount',
-      key: 'unpaidCount',
-    },
-    {
-      title: 'Đóng một phần',
-      dataIndex: 'partialCount',
-      key: 'partialCount',
-    },
-    {
-      title: 'Đã đóng',
-      dataIndex: 'paidCount',
-      key: 'paidCount',
-    },
-    {
-      title: 'Trạng thái',
-      key: 'status',
-      render: (_, summary) => (
-        <Space size={[4, 4]} wrap>
-          {summary.remainingDebt > 0 ? <Tag color="orange">Còn nợ</Tag> : <Tag color="green">Đã đóng đủ</Tag>}
-          {summary.hasReplacedInvoices ? <Tag color="purple">Có hóa đơn thay thế</Tag> : null}
-        </Space>
-      ),
-    },
+    { title: 'Số HĐ', dataIndex: 'totalInvoiceCount', key: 'totalInvoiceCount' },
     {
       title: 'Thao tác',
       key: 'actions',
@@ -261,22 +233,50 @@ export function InvoiceListPage() {
   ]
 
   const columns: ColumnsType<Invoice> = [
+    { title: 'Mã HĐ', dataIndex: 'invoiceCode', key: 'invoiceCode', fixed: 'left' },
     {
-      title: 'Mã học phí',
-      dataIndex: 'invoiceCode',
-      key: 'invoiceCode',
+      title: 'Học viên',
+      key: 'student',
+      render: (_, invoice) => (
+        <Space direction="vertical" size={0}>
+          <Text>{invoice.studentName}</Text>
+          <Text type="secondary">{invoice.studentCode}</Text>
+        </Space>
+      ),
     },
-    studentCodeColumn(),
-    studentNameColumn(),
     {
-      title: 'Lớp học',
-      dataIndex: 'classroomName',
-      key: 'classroomName',
+      title: 'Lớp',
+      key: 'classroom',
+      render: (_, invoice) => invoice.classroomCode || invoice.classroomName,
     },
     {
-      title: 'Gói học phí',
+      title: 'Kỳ học phí',
+      dataIndex: 'billingLabel',
+      key: 'billingLabel',
+      render: (value?: string | null) => value || '-',
+    },
+    {
+      title: 'Gói học',
       dataIndex: 'packageNameSnapshot',
       key: 'packageNameSnapshot',
+    },
+    {
+      title: 'Áp dụng từ',
+      dataIndex: 'effectiveFrom',
+      key: 'effectiveFrom',
+      render: (value?: string | null) => (value ? dayjs(value).format('DD/MM/YYYY') : '-'),
+    },
+    {
+      title: 'Dự kiến đến',
+      key: 'estimatedEffectiveTo',
+      render: (_, invoice) =>
+        formatEstimatedEffectiveTo(invoice.estimatedEffectiveTo, invoice.totalSessionsSnapshot),
+    },
+    {
+      title: 'Hạn TT',
+      dataIndex: 'dueDate',
+      key: 'dueDate',
+      render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
     },
     {
       title: 'Phải đóng',
@@ -285,7 +285,7 @@ export function InvoiceListPage() {
       render: (value: number) => <MoneyText value={value} />,
     },
     {
-      title: 'Đã đóng',
+      title: 'Đã TT',
       dataIndex: 'paidAmount',
       key: 'paidAmount',
       render: (value: number) => <MoneyText value={value} />,
@@ -300,26 +300,25 @@ export function InvoiceListPage() {
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => <StatusTag status={status} labels={invoiceStatusLabels} />,
+      render: (status: string) => <StatusTag status={status} labels={INVOICE_STATUS_LABELS} />,
     },
     {
       title: 'Thao tác',
       key: 'actions',
+      fixed: 'right',
       render: (_, invoice) => (
-        <Space size="small">
-          {invoice.status === 'UNPAID' ? (
+        <Space size="small" wrap>
+          {invoice.status === 'UNPAID' || invoice.status === 'PARTIALLY_PAID' ? (
             <Button type="link" onClick={() => setCollectingInvoice(invoice)}>
               Thu tiền
-            </Button>
-          ) : null}
-          {invoice.status === 'PARTIALLY_PAID' ? (
-            <Button type="link" onClick={() => setCollectingInvoice(invoice)}>
-              Thu tiếp
             </Button>
           ) : null}
           <Button type="link" onClick={() => setDetailInvoice(invoice)}>
             Xem chi tiết
           </Button>
+          <Link to={`/print/invoices/${invoice.id}`}>
+            In phiếu học phí
+          </Link>
         </Space>
       ),
     },
@@ -327,16 +326,14 @@ export function InvoiceListPage() {
 
   function handleCollectFromSummary(summary: StudentTuitionSummary) {
     const invoice = findCollectibleInvoice(
-      collectibleInvoicesQuery.data?.data ?? [],
+      collectibleQuery.data?.data ?? [],
       summary.studentId,
       summary.classroomId,
     )
-
     if (!invoice) {
       message.warning('Không tìm thấy hóa đơn cần thu')
       return
     }
-
     setCollectingInvoice(invoice)
   }
 
@@ -345,51 +342,24 @@ export function InvoiceListPage() {
     setSize(pagination.pageSize ?? 10)
   }
 
-  function handleTabChange(nextTab: string) {
-    setTab(nextTab as InvoiceTab)
-    setStatusFilter(undefined)
-    setPage(0)
-  }
-
-  function handleKeywordChange(value: string) {
-    setKeyword(value)
-    setPage(0)
-  }
-
-  function handleStatusFilterChange(value?: InvoiceStatus) {
-    setStatusFilter(value)
-    setPage(0)
-  }
-
-  function handleClassroomChange(value?: number) {
-    setClassroomId(value)
-    setPage(0)
-  }
-
-  function handleDateRangeChange(values: [Dayjs | null, Dayjs | null] | null) {
-    if (values?.[0] && values[1]) {
-      setDateRange([values[0], values[1]])
-    } else {
-      setDateRange(undefined)
-    }
-    setPage(0)
-  }
-
   function handleCreatePayment(payload: CreatePaymentPayload) {
-    if (!collectingInvoice) {
-      return
-    }
+    if (!collectingInvoice) return
 
     createPayment.mutate(
       { invoiceId: collectingInvoice.id, payload },
       {
-        onSuccess: () => {
+        onSuccess: (payment) => {
           message.success('Đã thu tiền')
-          setCollectingInvoice(undefined)
+          setSuccessPayment(payment)
         },
         onError: showErrorMessage,
       },
     )
+  }
+
+  function closePaymentModal() {
+    setCollectingInvoice(undefined)
+    setSuccessPayment(undefined)
   }
 
   function showErrorMessage(error: unknown) {
@@ -397,23 +367,10 @@ export function InvoiceListPage() {
       message.error(error.response?.data?.message ?? 'Có lỗi xảy ra')
       return
     }
-
     message.error('Có lỗi xảy ra')
   }
 
-  const statusFilterOptions =
-    tab === 'needs-collection'
-      ? [
-          { label: 'Chưa đóng', value: 'UNPAID' as const },
-          { label: 'Đóng một phần', value: 'PARTIALLY_PAID' as const },
-        ]
-      : [
-          { label: 'Chưa đóng', value: 'UNPAID' as const },
-          { label: 'Đóng một phần', value: 'PARTIALLY_PAID' as const },
-          { label: 'Đã đóng', value: 'PAID' as const },
-          { label: 'Đã hủy', value: 'CANCELED' as const },
-          { label: 'Đã thay thế do đổi gói', value: 'REPLACED' as const },
-        ]
+  const moneyFormatter = (value: number | string) => `${Number(value).toLocaleString('vi-VN')} VND`
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -421,35 +378,38 @@ export function InvoiceListPage() {
         <Title level={2} style={{ margin: 0 }}>
           Học phí
         </Title>
-        <Text type="secondary">Quản lý học phí và thu tiền theo học viên hoặc từng hóa đơn.</Text>
+        <Text type="secondary">Quản lý hóa đơn học phí theo kỳ và theo học viên.</Text>
       </Space>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
-          <Card loading={debtSummaryQuery.isLoading}>
+          <Card loading={summaryQuery.isLoading}>
             <Statistic
-              title="Tổng cần thu"
-              value={debtSummary.totalRemaining}
-              formatter={(value) => `${Number(value).toLocaleString('en-US')} VND`}
+              title="Tổng còn phải thu"
+              value={summaryQuery.data?.totalRemainingCollectible ?? 0}
+              formatter={(value) => moneyFormatter(value as number)}
             />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card loading={debtSummaryQuery.isLoading}>
-            <Statistic title="Số hóa đơn chưa đóng" value={debtSummary.unpaidCount} />
+          <Card loading={summaryQuery.isLoading}>
+            <Statistic title="Hóa đơn chưa thanh toán" value={summaryQuery.data?.unpaidCount ?? 0} />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card loading={debtSummaryQuery.isLoading}>
-            <Statistic title="Số hóa đơn đóng một phần" value={debtSummary.partialCount} />
+          <Card loading={summaryQuery.isLoading}>
+            <Statistic
+              title="Hóa đơn thanh toán một phần"
+              value={summaryQuery.data?.partiallyPaidCount ?? 0}
+            />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card loading={revenueQuery.isLoading}>
+          <Card loading={summaryQuery.isLoading}>
             <Statistic
               title="Đã thu tháng này"
-              value={revenueQuery.data?.monthRevenue ?? 0}
-              formatter={(value) => `${Number(value).toLocaleString('en-US')} VND`}
+              value={summaryQuery.data?.collectedThisMonth ?? 0}
+              formatter={(value) => moneyFormatter(value as number)}
             />
           </Card>
         </Col>
@@ -459,63 +419,205 @@ export function InvoiceListPage() {
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <Tabs
             activeKey={tab}
-            onChange={handleTabChange}
+            onChange={(next) => patchParams({ tab: next === 'by-student' ? 'by-student' : undefined })}
             items={[
+              { key: 'by-cycle', label: 'Theo kỳ học phí' },
               { key: 'by-student', label: 'Theo học viên' },
-              { key: 'needs-collection', label: 'Cần thu' },
-              { key: 'paid', label: 'Đã đóng' },
-              { key: 'replaced', label: 'Đã thay thế' },
-              { key: 'canceled', label: 'Đã hủy' },
-              { key: 'all', label: 'Tất cả' },
             ]}
           />
 
           <Space wrap>
             <Input.Search
               allowClear
-              placeholder={isStudentTab ? STUDENT_SEARCH_PLACEHOLDER : 'Tìm theo mã hoặc tên học viên, mã học phí'}
+              placeholder={
+                isStudentTab
+                  ? STUDENT_SEARCH_PLACEHOLDER
+                  : 'Tìm mã HĐ, học viên, lớp...'
+              }
               style={{ width: 280 }}
               value={keyword}
-              onChange={(event) => handleKeywordChange(event.target.value)}
+              onChange={(event) => patchParams({ keyword: event.target.value || undefined })}
             />
-            {!isStudentTab && (tab === 'needs-collection' || tab === 'all') && (
-              <Select
-                allowClear
-                placeholder="Trạng thái"
-                style={{ width: 180 }}
-                value={statusFilter}
-                onChange={handleStatusFilterChange}
-                options={statusFilterOptions}
-              />
-            )}
             <Select
               allowClear
               placeholder="Lớp học"
-              style={{ width: 220 }}
+              style={{ width: 200 }}
               value={classroomId}
-              onChange={handleClassroomChange}
+              onChange={(value) =>
+                patchParams({ classroomId: value != null ? String(value) : undefined })
+              }
               options={(classroomsQuery.data?.data ?? []).map((classroom) => ({
                 label: classroom.className,
                 value: classroom.id,
               }))}
             />
-            {!isStudentTab && (
-              <RangePicker
+            {!isStudentTab ? (
+              <Select
                 allowClear
-                format="DD/MM/YYYY"
-                placeholder={['Hạn từ', 'Hạn đến']}
-                value={dateRange}
-                onChange={handleDateRangeChange}
+                placeholder="Trạng thái"
+                style={{ width: 200 }}
+                value={statusFilter}
+                onChange={(value) => patchParams({ status: value })}
+                options={Object.entries(INVOICE_STATUS_LABELS).map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
               />
-            )}
+            ) : null}
           </Space>
+
+          {!isStudentTab ? (
+            <Collapse
+              items={[
+                {
+                  key: 'advanced',
+                  label: 'Bộ lọc nâng cao',
+                  children: (
+                    <Space wrap>
+                      <RangePicker
+                        allowClear
+                        format="DD/MM/YYYY"
+                        placeholder={['Hạn TT từ', 'Hạn TT đến']}
+                        value={dueRange}
+                        onChange={(values) =>
+                          patchParams({
+                            dueFrom: values?.[0]?.format('YYYY-MM-DD'),
+                            dueTo: values?.[1]?.format('YYYY-MM-DD'),
+                          })
+                        }
+                      />
+                      <RangePicker
+                        allowClear
+                        format="DD/MM/YYYY"
+                        placeholder={['Áp dụng từ', 'Áp dụng đến']}
+                        value={effectiveRange}
+                        onChange={(values) =>
+                          patchParams({
+                            effectiveFrom: values?.[0]?.format('YYYY-MM-DD'),
+                            effectiveTo: values?.[1]?.format('YYYY-MM-DD'),
+                          })
+                        }
+                      />
+                      <Select
+                        allowClear
+                        placeholder="Gói học"
+                        style={{ width: 200 }}
+                        value={packageId}
+                        onChange={(value) =>
+                          patchParams({ packageId: value != null ? String(value) : undefined })
+                        }
+                        options={(packagesQuery.data?.data ?? []).map((item) => ({
+                          label: item.name,
+                          value: item.id,
+                        }))}
+                      />
+                      <InputNumber
+                        min={1}
+                        placeholder="Số kỳ"
+                        value={cycleNo}
+                        onChange={(value) =>
+                          patchParams({
+                            cycleNo: value != null ? String(value) : undefined,
+                          })
+                        }
+                      />
+                      <Space>
+                        <Text>Quá hạn</Text>
+                        <Switch
+                          checked={overdue === true}
+                          onChange={(checked) =>
+                            patchParams({ overdue: checked ? 'true' : undefined })
+                          }
+                        />
+                      </Space>
+                      <Space>
+                        <Text>Còn nợ</Text>
+                        <Switch
+                          checked={hasRemainingDebt === true}
+                          onChange={(checked) =>
+                            patchParams({ hasRemainingDebt: checked ? 'true' : undefined })
+                          }
+                        />
+                      </Space>
+                    </Space>
+                  ),
+                },
+              ]}
+            />
+          ) : null}
+
+          <ActiveFilterTags
+            tags={[
+              ...(statusFilter
+                ? [
+                    {
+                      key: 'status',
+                      label: INVOICE_STATUS_LABELS[statusFilter],
+                      onClose: () => patchParams({ status: undefined }),
+                    },
+                  ]
+                : []),
+              ...(overdue
+                ? [
+                    {
+                      key: 'overdue',
+                      label: 'Quá hạn',
+                      color: 'red',
+                      onClose: () => patchParams({ overdue: undefined }),
+                    },
+                  ]
+                : []),
+              ...(hasRemainingDebt
+                ? [
+                    {
+                      key: 'hasRemainingDebt',
+                      label: 'Còn nợ',
+                      onClose: () => patchParams({ hasRemainingDebt: undefined }),
+                    },
+                  ]
+                : []),
+              ...(classroomId && classroomName
+                ? [
+                    {
+                      key: 'classroom',
+                      label: `Lớp: ${classroomName}`,
+                      onClose: () => patchParams({ classroomId: undefined }),
+                    },
+                  ]
+                : []),
+              ...(packageId && packageName
+                ? [
+                    {
+                      key: 'package',
+                      label: `Gói: ${packageName}`,
+                      onClose: () => patchParams({ packageId: undefined }),
+                    },
+                  ]
+                : []),
+            ]}
+            onClearAll={() =>
+              patchParams({
+                status: undefined,
+                overdue: undefined,
+                hasRemainingDebt: undefined,
+                classroomId: undefined,
+                packageId: undefined,
+                cycleNo: undefined,
+                dueFrom: undefined,
+                dueTo: undefined,
+                effectiveFrom: undefined,
+                effectiveTo: undefined,
+                keyword: undefined,
+              })
+            }
+          />
 
           {isStudentTab ? (
             <Table
               rowKey={summaryRowKey}
               columns={studentSummaryColumns}
               dataSource={pagedSummaries}
-              loading={isLoading}
+              loading={studentSummariesQuery.isLoading}
               pagination={{
                 current: page + 1,
                 pageSize: size,
@@ -523,22 +625,24 @@ export function InvoiceListPage() {
                 showSizeChanger: true,
               }}
               onChange={handleTableChange}
-              locale={{ emptyText: 'Không có học phí cần thu' }}
-              scroll={{ x: 1200 }}
+              locale={{ emptyText: 'Chưa có hóa đơn học phí.' }}
+              scroll={{ x: 1100 }}
             />
           ) : (
             <Table
               rowKey="id"
               columns={columns}
               dataSource={pagedInvoices}
-              loading={isLoading}
+              loading={invoicesQuery.isLoading}
               pagination={{
                 current: page + 1,
                 pageSize: size,
-                total: filteredInvoices.length,
+                total: invoices.length,
                 showSizeChanger: true,
               }}
               onChange={handleTableChange}
+              locale={{ emptyText: 'Chưa có hóa đơn học phí.' }}
+              scroll={{ x: 1600 }}
             />
           )}
         </Space>
@@ -548,14 +652,26 @@ export function InvoiceListPage() {
         open={Boolean(collectingInvoice)}
         invoice={collectingInvoice}
         submitting={createPayment.isPending}
-        onCancel={() => setCollectingInvoice(undefined)}
+        successPayment={successPayment}
+        onCancel={closePaymentModal}
         onSubmit={handleCreatePayment}
+        onCloseSuccess={closePaymentModal}
+        onViewInvoice={(invoiceId) => {
+          const invoice =
+            invoices.find((item) => item.id === invoiceId) ??
+            collectibleQuery.data?.data?.find((item) => item.id === invoiceId) ??
+            collectingInvoice
+          if (invoice) {
+            setDetailInvoice(invoice)
+          }
+        }}
       />
 
       <InvoiceDetailModal
         open={Boolean(detailInvoice)}
         invoice={detailInvoice}
         onClose={() => setDetailInvoice(undefined)}
+        onCollect={(invoice) => setCollectingInvoice(invoice)}
       />
 
       <StudentInvoiceListDrawer

@@ -102,12 +102,17 @@ public class AuthorizationService {
         if (principal.role() == AccountRole.ADMIN) {
             return true;
         }
-        if (principal.role() != AccountRole.STUDENT || principal.studentId() == null) {
-            return false;
+        if (principal.role() == AccountRole.STUDENT && principal.studentId() != null) {
+            return invoiceRepository.findById(invoiceId)
+                    .map(invoice -> principal.studentId().equals(invoice.getStudent().getId()))
+                    .orElse(false);
         }
-        return invoiceRepository.findById(invoiceId)
-                .map(invoice -> principal.studentId().equals(invoice.getStudent().getId()))
-                .orElse(false);
+        if (principal.role() == AccountRole.TEACHER && principal.teacherId() != null) {
+            return invoiceRepository.findById(invoiceId)
+                    .map(invoice -> principal.teacherId().equals(invoice.getClassroom().getTeacherId()))
+                    .orElse(false);
+        }
+        return false;
     }
 
     public boolean canAccessOwnTeacherProfile(Authentication authentication, Long teacherId) {
@@ -123,12 +128,17 @@ public class AuthorizationService {
         if (principal.role() == AccountRole.ADMIN) {
             return true;
         }
-        if (principal.role() != AccountRole.STUDENT || principal.studentId() == null) {
-            return false;
+        if (principal.role() == AccountRole.STUDENT && principal.studentId() != null) {
+            return paymentRepository.findById(paymentId)
+                    .map(payment -> principal.studentId().equals(payment.getStudent().getId()))
+                    .orElse(false);
         }
-        return paymentRepository.findById(paymentId)
-                .map(payment -> principal.studentId().equals(payment.getStudent().getId()))
-                .orElse(false);
+        if (principal.role() == AccountRole.TEACHER && principal.teacherId() != null) {
+            return paymentRepository.findById(paymentId)
+                    .map(payment -> principal.teacherId().equals(payment.getClassroom().getTeacherId()))
+                    .orElse(false);
+        }
+        return false;
     }
 
     private boolean isAssignedTeacher(AccountPrincipal principal, Long classroomId) {

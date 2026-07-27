@@ -13,5 +13,5 @@ export function MoneyText({ value }: MoneyTextProps) {
     return <>{value}</>
   }
 
-  return <>{amount.toLocaleString('en-US')} VND</>
+  return <>{amount.toLocaleString('vi-VN')} VND</>
 }

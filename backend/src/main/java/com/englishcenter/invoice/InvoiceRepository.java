@@ -135,12 +135,68 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
             WHERE (:status IS NULL OR invoice.status = :status)
               AND (:studentId IS NULL OR invoice.student.id = :studentId)
               AND (:classroomId IS NULL OR invoice.classroom.id = :classroomId)
-            ORDER BY invoice.createdAt DESC
+              AND (:packageId IS NULL OR invoice.packageId = :packageId)
+              AND (:cycleNo IS NULL OR invoice.cycleNo = :cycleNo)
+              AND (:overdue IS NULL OR (
+                    :overdue = TRUE
+                    AND invoice.remainingAmount > 0
+                    AND invoice.status IN (
+                        com.englishcenter.invoice.InvoiceStatus.UNPAID,
+                        com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
+                    )
+                    AND invoice.dueDate < :today
+                  ) OR (
+                    :overdue = FALSE
+                    AND NOT (
+                        invoice.remainingAmount > 0
+                        AND invoice.status IN (
+                            com.englishcenter.invoice.InvoiceStatus.UNPAID,
+                            com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
+                        )
+                        AND invoice.dueDate < :today
+                    )
+                  ))
+              AND (:hasRemainingDebt IS NULL OR (
+                    :hasRemainingDebt = TRUE AND invoice.remainingAmount > 0
+                    AND invoice.status IN (
+                        com.englishcenter.invoice.InvoiceStatus.UNPAID,
+                        com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
+                    )
+                  ) OR (
+                    :hasRemainingDebt = FALSE AND (
+                        invoice.remainingAmount <= 0
+                        OR invoice.status NOT IN (
+                            com.englishcenter.invoice.InvoiceStatus.UNPAID,
+                            com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
+                        )
+                    )
+                  ))
+              AND (:effectiveFrom IS NULL OR invoice.effectiveFrom >= :effectiveFrom)
+              AND (:effectiveTo IS NULL OR invoice.effectiveFrom <= :effectiveTo)
+              AND (:dueFrom IS NULL OR invoice.dueDate >= :dueFrom)
+              AND (:dueTo IS NULL OR invoice.dueDate <= :dueTo)
+              AND (
+                  :keyword IS NULL OR :keyword = ''
+                  OR LOWER(invoice.student.studentCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(invoice.student.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(invoice.student.phone) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(invoice.invoiceCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
+              )
             """)
     Page<Invoice> search(
             @Param("status") InvoiceStatus status,
             @Param("studentId") Long studentId,
             @Param("classroomId") Long classroomId,
+            @Param("packageId") Long packageId,
+            @Param("cycleNo") Integer cycleNo,
+            @Param("overdue") Boolean overdue,
+            @Param("hasRemainingDebt") Boolean hasRemainingDebt,
+            @Param("effectiveFrom") LocalDate effectiveFrom,
+            @Param("effectiveTo") LocalDate effectiveTo,
+            @Param("dueFrom") LocalDate dueFrom,
+            @Param("dueTo") LocalDate dueTo,
+            @Param("keyword") String keyword,
+            @Param("today") LocalDate today,
             Pageable pageable
     );
 

@@ -6,6 +6,7 @@ import { RoleRoute } from './features/auth/components/RoleRoute'
 import { ChangePasswordPage } from './features/auth/pages/ChangePasswordPage'
 import { ForbiddenPage } from './features/auth/pages/ForbiddenPage'
 import { LoginPage } from './features/auth/pages/LoginPage'
+import { CenterProfilePage } from './features/center/pages/CenterProfilePage'
 import { ClassroomDetailPage } from './features/classrooms/pages/ClassroomDetailPage'
 import { ClassroomListPage } from './features/classrooms/pages/ClassroomListPage'
 import { DashboardPage } from './features/dashboard/pages/DashboardPage'
@@ -14,6 +15,8 @@ import { InvoiceListPage } from './features/invoices/pages/InvoiceListPage'
 import { MakeupCreditPage } from './features/makeupCredits/pages/MakeupCreditPage'
 import { FinancePage } from './features/finance/pages/FinancePage'
 import { PaymentListPage } from './features/payments/pages/PaymentListPage'
+import { InvoicePrintPage } from './features/print/pages/InvoicePrintPage'
+import { PaymentReceiptPrintPage } from './features/print/pages/PaymentReceiptPrintPage'
 import { ReportsPage } from './features/reports/pages/ReportsPage'
 import { StudentDetailPage } from './features/students/pages/StudentDetailPage'
 import { StudentListPage } from './features/students/pages/StudentListPage'
@@ -59,6 +62,7 @@ const MENU_ITEMS: MenuItem[] = [
   { key: '/tuition-packages', label: 'Gói học phí', roles: ['ADMIN'] },
   { key: '/imports/legacy-students', label: 'Nhập liệu Excel', roles: ['ADMIN'] },
   { key: '/admin/users', label: 'Quản lý tài khoản', roles: ['ADMIN'] },
+  { key: '/admin/center-profile', label: 'Thông tin trung tâm', roles: ['ADMIN'] },
   { key: '/student/profile', label: 'Hồ sơ', roles: ['STUDENT'] },
   { key: '/me/profile', label: 'Hồ sơ', roles: ['TEACHER'] },
 ]
@@ -129,6 +133,7 @@ function AppLayout() {
               <Route path="/debts" element={<DebtPage />} />
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/admin/users" element={<UserManagementPage />} />
+              <Route path="/admin/center-profile" element={<CenterProfilePage />} />
               <Route path="/makeup-credits" element={<MakeupCreditPage />} />
             </Route>
 
@@ -199,6 +204,8 @@ function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/change-password" element={<ChangePasswordPage />} />
       <Route element={<ProtectedRoute />}>
+        <Route path="/print/invoices/:invoiceId" element={<InvoicePrintPage />} />
+        <Route path="/print/payments/:paymentId" element={<PaymentReceiptPrintPage />} />
         <Route path="/*" element={<AppLayout />} />
       </Route>
     </Routes>

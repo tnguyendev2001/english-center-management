@@ -18,6 +18,7 @@ import com.englishcenter.enrollment.mapper.EnrollmentMapper;
 import com.englishcenter.invoice.Invoice;
 import com.englishcenter.invoice.InvoiceRepository;
 import com.englishcenter.invoice.InvoiceStatus;
+import com.englishcenter.invoice.InvoiceTestSupport;
 import com.englishcenter.invoice.mapper.InvoiceMapper;
 import com.englishcenter.payment.PaymentRepository;
 import com.englishcenter.student.Student;
@@ -81,8 +82,9 @@ class EnrollmentLegacyImportTest {
                 classSessionRepository,
                 attendanceRepository,
                 paymentRepository,
-                new EnrollmentMapper(new StudentPackageMapper(), new InvoiceMapper()),
-                new StudentMapper()
+                new EnrollmentMapper(new StudentPackageMapper(), InvoiceTestSupport.invoiceMapper()),
+                new StudentMapper(),
+                InvoiceTestSupport.billingSnapshotService()
         );
 
         Student student = new Student();

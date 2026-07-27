@@ -76,6 +76,12 @@ public class PaymentService {
                 .map(paymentMapper::toResponse);
     }
 
+    @Transactional(readOnly = true)
+    public PaymentResponse getById(Long paymentId) {
+        return paymentMapper.toResponse(paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new NotFoundException("Payment not found")));
+    }
+
     @Transactional
     public PaymentResponse createPayment(Long invoiceId, CreatePaymentRequest request) {
         Invoice invoice = findInvoice(invoiceId);

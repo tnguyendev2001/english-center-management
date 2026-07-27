@@ -9,6 +9,7 @@ import com.englishcenter.enrollment.EnrollmentRepository;
 import com.englishcenter.enrollment.EnrollmentStatus;
 import com.englishcenter.enrollment.dto.EnrollmentLearningProgressResponse;
 import com.englishcenter.invoice.Invoice;
+import com.englishcenter.invoice.InvoiceBillingSnapshotService;
 import com.englishcenter.invoice.InvoiceRepository;
 import com.englishcenter.invoice.InvoiceStatus;
 import com.englishcenter.invoice.mapper.InvoiceMapper;
@@ -48,6 +49,7 @@ public class PackageChangeService {
     private final EnrollmentRepository enrollmentRepository;
     private final EnrollmentProgressService enrollmentProgressService;
     private final InvoiceMapper invoiceMapper;
+    private final InvoiceBillingSnapshotService invoiceBillingSnapshotService;
 
     public PackageChangeService(
             StudentPackageRepository studentPackageRepository,
@@ -59,7 +61,8 @@ public class PackageChangeService {
             PackageChangeLogRepository packageChangeLogRepository,
             EnrollmentRepository enrollmentRepository,
             EnrollmentProgressService enrollmentProgressService,
-            InvoiceMapper invoiceMapper
+            InvoiceMapper invoiceMapper,
+            InvoiceBillingSnapshotService invoiceBillingSnapshotService
     ) {
         this.studentPackageRepository = studentPackageRepository;
         this.tuitionPackageRepository = tuitionPackageRepository;
@@ -71,6 +74,7 @@ public class PackageChangeService {
         this.enrollmentRepository = enrollmentRepository;
         this.enrollmentProgressService = enrollmentProgressService;
         this.invoiceMapper = invoiceMapper;
+        this.invoiceBillingSnapshotService = invoiceBillingSnapshotService;
     }
 
     @Transactional(readOnly = true)
@@ -289,17 +293,20 @@ public class PackageChangeService {
         invoice.setClassroom(oldStudentPackage.getClassroom());
         invoice.setEnrollment(oldStudentPackage.getEnrollment());
         invoice.setStudentPackage(newStudentPackage);
-        invoice.setPackageNameSnapshot(newTuitionPackage.getName());
-        invoice.setTotalSessionsSnapshot(newTuitionPackage.getTotalSessions());
         invoice.setAmount(newTuitionPackage.getPrice());
         invoice.setDiscountAmount(ZERO);
         invoice.setAdjustmentAmount(money(amountToPay.subtract(newTuitionPackage.getPrice())));
         invoice.setFinalAmount(amountToPay);
         invoice.setPaidAmount(ZERO);
         invoice.setRemainingAmount(amountToPay);
-        invoice.setDueDate(changeDate);
         invoice.setStatus(InvoiceStatus.UNPAID);
         invoice.setNote("Đổi gói: " + reason);
+        invoiceBillingSnapshotService.applyBillingSnapshot(
+                invoice,
+                newStudentPackage,
+                newTuitionPackage,
+                changeDate
+        );
         return invoice;
     }
 

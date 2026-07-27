@@ -1,21 +1,14 @@
 import { Button, Drawer, Space, Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
+import { Link } from 'react-router-dom'
 import { formatStudentLabel } from '../../../components/common/studentDisplay'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
 import { useInvoices } from '../../invoices/invoiceQueries'
-import type { Invoice } from '../../invoices/invoiceTypes'
+import { INVOICE_STATUS_LABELS, type Invoice } from '../../invoices/invoiceTypes'
 import { InvoiceDetailModal } from '../../invoices/components/InvoiceDetailModal'
 import { useMemo, useState } from 'react'
-
-const invoiceStatusLabels = {
-  UNPAID: 'Chưa đóng',
-  PARTIALLY_PAID: 'Đóng một phần',
-  PAID: 'Đã đóng',
-  CANCELED: 'Đã hủy',
-  REPLACED: 'Đã thay thế do đổi gói',
-}
 
 interface StudentInvoiceListDrawerProps {
   open: boolean
@@ -58,19 +51,20 @@ export function StudentInvoiceListDrawer({
 
   const columns: ColumnsType<Invoice> = [
     {
-      title: 'Mã học phí',
+      title: 'Mã HĐ',
       dataIndex: 'invoiceCode',
       key: 'invoiceCode',
+    },
+    {
+      title: 'Kỳ học phí',
+      dataIndex: 'billingLabel',
+      key: 'billingLabel',
+      render: (value?: string | null) => value || '-',
     },
     {
       title: 'Gói học',
       dataIndex: 'packageNameSnapshot',
       key: 'packageNameSnapshot',
-    },
-    {
-      title: 'Số buổi',
-      dataIndex: 'totalSessionsSnapshot',
-      key: 'totalSessionsSnapshot',
     },
     {
       title: 'Phải đóng',
@@ -79,7 +73,7 @@ export function StudentInvoiceListDrawer({
       render: (value: number) => <MoneyText value={value} />,
     },
     {
-      title: 'Đã đóng',
+      title: 'Đã TT',
       dataIndex: 'paidAmount',
       key: 'paidAmount',
       render: (value: number) => <MoneyText value={value} />,
@@ -91,16 +85,16 @@ export function StudentInvoiceListDrawer({
       render: (value: number) => <MoneyText value={value} />,
     },
     {
+      title: 'Hạn TT',
+      dataIndex: 'dueDate',
+      key: 'dueDate',
+      render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
+    },
+    {
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => <StatusTag status={status} labels={invoiceStatusLabels} />,
-    },
-    {
-      title: 'Ngày tạo',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
+      render: (status: string) => <StatusTag status={status} labels={INVOICE_STATUS_LABELS} />,
     },
     {
       title: 'Thao tác',
@@ -109,16 +103,20 @@ export function StudentInvoiceListDrawer({
         <Space size="small">
           {(invoice.status === 'UNPAID' || invoice.status === 'PARTIALLY_PAID') && onCollect ? (
             <Button type="link" onClick={() => onCollect(invoice)}>
-              {invoice.status === 'UNPAID' ? 'Thu tiền' : 'Thu tiếp'}
+              Thu tiền
             </Button>
           ) : null}
           <Button type="link" onClick={() => setDetailInvoice(invoice)}>
             Xem chi tiết
           </Button>
+          <Link to={`/print/invoices/${invoice.id}`}>
+            In phiếu
+          </Link>
         </Space>
       ),
     },
   ]
+
 
   return (
     <>

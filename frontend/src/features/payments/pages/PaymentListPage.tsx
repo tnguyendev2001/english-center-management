@@ -20,11 +20,11 @@ import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
 import { isAxiosError } from 'axios'
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
 import {
   STUDENT_SEARCH_PLACEHOLDER,
-  studentCodeColumn,
   studentKeywordFields,
   studentNameColumn,
 } from '../../../components/common/studentDisplay'
@@ -34,29 +34,20 @@ import { StudentPaymentHistoryDrawer } from '../../financial/components/StudentP
 import type { StudentPaymentSummary } from '../../financial/financialSummaryTypes'
 import { CancelPaymentModal } from '../components/CancelPaymentModal'
 import { useCancelPayment, usePayments, usePaymentStudentSummaries } from '../paymentQueries'
-import type {
-  CancelPaymentPayload,
-  Payment,
-  PaymentMethod,
-  PaymentSearchParams,
-  PaymentStatus,
+import {
+  PAYMENT_METHOD_LABELS,
+  PAYMENT_STATUS_LABELS,
+  type CancelPaymentPayload,
+  type Payment,
+  type PaymentMethod,
+  type PaymentSearchParams,
+  type PaymentStatus,
 } from '../paymentTypes'
 
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
 
 type PaymentTab = 'valid' | 'by-student' | 'canceled' | 'all'
-
-const paymentMethodLabels: Record<PaymentMethod, string> = {
-  CASH: 'Tiền mặt',
-  BANK_TRANSFER: 'Chuyển khoản',
-  OTHER: 'Khác',
-}
-
-const paymentStatusLabels = {
-  VALID: 'Hợp lệ',
-  CANCELED: 'Đã hủy',
-}
 
 const FETCH_SIZE = 100
 
@@ -125,7 +116,15 @@ export function PaymentListPage() {
         return false
       }
 
-      if (!matchesKeyword(keyword, ...studentKeywordFields(payment), payment.invoiceCode)) {
+      if (
+        !matchesKeyword(
+          keyword,
+          ...studentKeywordFields(payment),
+          payment.invoiceCode,
+          payment.paymentCode,
+          payment.billingLabel ?? '',
+        )
+      ) {
         return false
       }
 
@@ -174,7 +173,7 @@ export function PaymentListPage() {
   }, [filteredPayments])
 
   const studentSummaryColumns: ColumnsType<StudentPaymentSummary> = [
-    studentCodeColumn(),
+    { title: 'Mã HV', dataIndex: 'studentCode', key: 'studentCode' },
     studentNameColumn(),
     {
       title: 'Lớp',
@@ -202,7 +201,7 @@ export function PaymentListPage() {
       title: 'Phương thức gần nhất',
       dataIndex: 'lastPaymentMethod',
       key: 'lastPaymentMethod',
-      render: (method?: PaymentMethod | null) => (method ? paymentMethodLabels[method] : '-'),
+      render: (method?: PaymentMethod | null) => (method ? PAYMENT_METHOD_LABELS[method] : '-'),
     },
     {
       title: 'Thao tác',
@@ -222,15 +221,34 @@ export function PaymentListPage() {
       key: 'paymentDate',
       render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
     },
-    studentCodeColumn(),
-    studentNameColumn(),
     {
-      title: 'Lớp học',
-      dataIndex: 'classroomName',
-      key: 'classroomName',
+      title: 'Mã phiếu',
+      dataIndex: 'paymentCode',
+      key: 'paymentCode',
     },
     {
-      title: 'Mã học phí',
+      title: 'Học viên',
+      key: 'student',
+      render: (_, payment) => (
+        <Space direction="vertical" size={0}>
+          <Text>{payment.studentName}</Text>
+          <Text type="secondary">{payment.studentCode}</Text>
+        </Space>
+      ),
+    },
+    {
+      title: 'Lớp',
+      key: 'classroom',
+      render: (_, payment) => payment.classroomCode || payment.classroomName,
+    },
+    {
+      title: 'Kỳ học phí',
+      dataIndex: 'billingLabel',
+      key: 'billingLabel',
+      render: (value?: string | null) => value || '-',
+    },
+    {
+      title: 'Mã HĐ',
       dataIndex: 'invoiceCode',
       key: 'invoiceCode',
     },
@@ -244,27 +262,33 @@ export function PaymentListPage() {
       title: 'Phương thức',
       dataIndex: 'method',
       key: 'method',
-      render: (method: PaymentMethod) => paymentMethodLabels[method],
+      render: (method: PaymentMethod) => PAYMENT_METHOD_LABELS[method],
     },
     {
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => <StatusTag status={status} labels={paymentStatusLabels} />,
+      render: (status: string) => <StatusTag status={status} labels={PAYMENT_STATUS_LABELS} />,
     },
     {
       title: 'Thao tác',
       key: 'actions',
-      render: (_, payment) =>
-        payment.status === 'VALID' ? (
-          <Button type="link" danger onClick={() => setCancelingPayment(payment)}>
-            Hủy
-          </Button>
-        ) : (
-          <Button type="link" onClick={() => showCancelReason(payment)}>
-            Xem lý do hủy
-          </Button>
-        ),
+      render: (_, payment) => (
+        <Space size="small" wrap>
+          <Link to={`/print/payments/${payment.id}`}>
+            In phiếu thu
+          </Link>
+          {payment.status === 'VALID' ? (
+            <Button type="link" danger onClick={() => setCancelingPayment(payment)}>
+              Hủy
+            </Button>
+          ) : (
+            <Button type="link" onClick={() => showCancelReason(payment)}>
+              Xem lý do hủy
+            </Button>
+          )}
+        </Space>
+      ),
     },
   ]
 
@@ -280,6 +304,7 @@ export function PaymentListPage() {
               Thời gian hủy: {dayjs(payment.canceledAt).format('DD/MM/YYYY HH:mm')}
             </Text>
           ) : null}
+          {payment.canceledBy ? <Text type="secondary">Người hủy: {payment.canceledBy}</Text> : null}
         </Space>
       ),
       okText: 'Đóng',
@@ -352,13 +377,15 @@ export function PaymentListPage() {
     message.error('Có lỗi xảy ra')
   }
 
+  const moneyFormatter = (value: number | string) => `${Number(value).toLocaleString('vi-VN')} VND`
+
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       <Space direction="vertical" size={4}>
         <Title level={2} style={{ margin: 0 }}>
           Thanh toán
         </Title>
-        <Text type="secondary">Lịch sử thu tiền và đối soát thanh toán theo phiếu thu hoặc học viên.</Text>
+        <Text type="secondary">Lịch sử thu tiền và in phiếu thu theo kỳ học phí.</Text>
       </Space>
 
       <Row gutter={[16, 16]}>
@@ -367,7 +394,7 @@ export function PaymentListPage() {
             <Statistic
               title="Tổng đã thu"
               value={rangeSummary.totalCollected}
-              formatter={(value) => `${Number(value).toLocaleString('en-US')} VND`}
+              formatter={(value) => moneyFormatter(value as number)}
             />
           </Card>
         </Col>
@@ -381,7 +408,7 @@ export function PaymentListPage() {
             <Statistic
               title="Tiền mặt"
               value={rangeSummary.cash}
-              formatter={(value) => `${Number(value).toLocaleString('en-US')} VND`}
+              formatter={(value) => moneyFormatter(value as number)}
             />
           </Card>
         </Col>
@@ -390,7 +417,7 @@ export function PaymentListPage() {
             <Statistic
               title="Chuyển khoản"
               value={rangeSummary.bankTransfer}
-              formatter={(value) => `${Number(value).toLocaleString('en-US')} VND`}
+              formatter={(value) => moneyFormatter(value as number)}
             />
           </Card>
         </Col>
@@ -419,7 +446,9 @@ export function PaymentListPage() {
             />
             <Input.Search
               allowClear
-              placeholder={isStudentTab ? STUDENT_SEARCH_PLACEHOLDER : 'Tìm theo mã hoặc tên học viên, mã học phí'}
+              placeholder={
+                isStudentTab ? STUDENT_SEARCH_PLACEHOLDER : 'Tìm học viên, mã HĐ, kỳ học phí...'
+              }
               style={{ width: 280 }}
               value={keyword}
               onChange={(event) => handleKeywordChange(event.target.value)}
@@ -477,7 +506,7 @@ export function PaymentListPage() {
                 showSizeChanger: true,
               }}
               onChange={handleTableChange}
-              locale={{ emptyText: 'Chưa có thanh toán' }}
+              locale={{ emptyText: 'Chưa có giao dịch thanh toán.' }}
               scroll={{ x: 900 }}
             />
           ) : (
@@ -493,7 +522,8 @@ export function PaymentListPage() {
                 showSizeChanger: true,
               }}
               onChange={handleTableChange}
-              locale={{ emptyText: 'Chưa có thanh toán' }}
+              locale={{ emptyText: 'Chưa có giao dịch thanh toán.' }}
+              scroll={{ x: 1200 }}
             />
           )}
         </Space>

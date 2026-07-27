@@ -206,6 +206,16 @@ public class MeService {
                         null,
                         studentId,
                         null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        LocalDate.now(),
                         PageRequest.of(0, 200, Sort.by(Sort.Direction.DESC, "createdAt"))
                 )
                 .map(invoiceMapper::toResponse)

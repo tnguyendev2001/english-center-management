@@ -18,6 +18,7 @@ import com.englishcenter.invoice.Invoice;
 import com.englishcenter.invoice.InvoiceRepository;
 import com.englishcenter.invoice.InvoiceService;
 import com.englishcenter.invoice.InvoiceStatus;
+import com.englishcenter.invoice.InvoiceTestSupport;
 import com.englishcenter.payment.dto.CancelPaymentRequest;
 import com.englishcenter.payment.dto.CreatePaymentRequest;
 import com.englishcenter.payment.dto.PaymentResponse;
@@ -49,7 +50,7 @@ class PaymentServiceTest {
     @Mock
     private FinancePeriodRangeService financePeriodRangeService;
 
-    private final PaymentMapper paymentMapper = new PaymentMapper();
+    private final PaymentMapper paymentMapper = InvoiceTestSupport.paymentMapper();
 
     @Test
     void createPaymentSavesValidPaymentAndRecalculatesInvoice() {

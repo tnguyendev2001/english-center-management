@@ -5,6 +5,7 @@ import type {
   CancelPaymentPayload,
   CreatePaymentPayload,
   Payment,
+  PaymentReceiptDocument,
   PaymentSearchParams,
 } from './paymentTypes'
 
@@ -14,6 +15,18 @@ export async function getPayments(params: PaymentSearchParams) {
   })
 
   return response.data
+}
+
+export async function getPayment(id: number) {
+  const response = await httpClient.get<ApiResponse<Payment>>(`/payments/${id}`)
+
+  return response.data.data
+}
+
+export async function getPaymentReceipt(id: number) {
+  const response = await httpClient.get<ApiResponse<PaymentReceiptDocument>>(`/payments/${id}/receipt`)
+
+  return response.data.data
 }
 
 export async function getPaymentStudentSummaries(params?: StudentSummarySearchParams) {

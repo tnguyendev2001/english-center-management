@@ -3,9 +3,11 @@ package com.englishcenter.invoice;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.englishcenter.common.config.AppTimeProperties;
 import com.englishcenter.invoice.mapper.InvoiceMapper;
 import com.englishcenter.payment.PaymentRepository;
 import java.math.BigDecimal;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -19,10 +21,33 @@ class InvoiceServiceTest {
     @Mock
     private PaymentRepository paymentRepository;
 
+    @Mock
+    private BillingCycleLabelService billingCycleLabelService;
+
+    @Mock
+    private InvoiceEffectivePeriodService effectivePeriodService;
+
+    private InvoiceService invoiceService;
+
+    @BeforeEach
+    void setUp() {
+        AppTimeProperties appTimeProperties = new AppTimeProperties();
+        InvoiceMapper invoiceMapper = new InvoiceMapper(
+                billingCycleLabelService,
+                effectivePeriodService,
+                appTimeProperties
+        );
+        invoiceService = new InvoiceService(
+                invoiceRepository,
+                paymentRepository,
+                invoiceMapper,
+                appTimeProperties
+        );
+    }
+
     @Test
     void recalculateSetsPartiallyPaidFromValidPayments() {
         Invoice invoice = invoice(new BigDecimal("500000"));
-        InvoiceService invoiceService = new InvoiceService(invoiceRepository, paymentRepository, new InvoiceMapper());
 
         when(paymentRepository.sumValidAmountByInvoiceId(1L)).thenReturn(new BigDecimal("200000"));
         when(invoiceRepository.save(invoice)).thenReturn(invoice);
@@ -37,7 +62,6 @@ class InvoiceServiceTest {
     @Test
     void recalculateSetsPaidWhenValidPaymentsEqualFinalAmount() {
         Invoice invoice = invoice(new BigDecimal("500000"));
-        InvoiceService invoiceService = new InvoiceService(invoiceRepository, paymentRepository, new InvoiceMapper());
 
         when(paymentRepository.sumValidAmountByInvoiceId(1L)).thenReturn(new BigDecimal("500000"));
         when(invoiceRepository.save(invoice)).thenReturn(invoice);
@@ -55,7 +79,6 @@ class InvoiceServiceTest {
         invoice.setPaidAmount(new BigDecimal("200000"));
         invoice.setRemainingAmount(new BigDecimal("300000"));
         invoice.setStatus(InvoiceStatus.PARTIALLY_PAID);
-        InvoiceService invoiceService = new InvoiceService(invoiceRepository, paymentRepository, new InvoiceMapper());
 
         when(paymentRepository.sumValidAmountByInvoiceId(1L)).thenReturn(BigDecimal.ZERO);
         when(invoiceRepository.save(invoice)).thenReturn(invoice);

@@ -1,248 +1,281 @@
-import { Button, Card, Col, Input, Row, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd'
+import {
+  Button,
+  Card,
+  Col,
+  Collapse,
+  DatePicker,
+  Input,
+  InputNumber,
+  Row,
+  Select,
+  Space,
+  Statistic,
+  Switch,
+  Table,
+  Typography,
+  message,
+} from 'antd'
 import type { TablePaginationConfig } from 'antd/es/table'
 import type { ColumnsType } from 'antd/es/table'
+import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
 import { isAxiosError } from 'axios'
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useMemo, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ActiveFilterTags } from '../../../components/common/ActiveFilterTags'
 import { MoneyText } from '../../../components/common/MoneyText'
-import {
-  STUDENT_SEARCH_PLACEHOLDER,
-  studentCodeColumn,
-  studentKeywordFields,
-  studentNameColumn,
-} from '../../../components/common/studentDisplay'
-import { useUrlEnumParam } from '../../../hooks/useUrlEnumParam'
-import { matchesKeyword, paginateItems } from '../../../utils/clientPagination'
+import { StatusTag } from '../../../components/common/StatusTag'
 import { useClassrooms } from '../../classrooms/classroomQueries'
-import { StudentInvoiceListDrawer } from '../../financial/components/StudentInvoiceListDrawer'
-import type { StudentDebtSummary } from '../../financial/financialSummaryTypes'
-import type { Invoice } from '../../invoices/invoiceTypes'
+import {
+  DEBT_STATUS_LABELS,
+  INVOICE_STATUS_LABELS,
+  type Invoice,
+} from '../../invoices/invoiceTypes'
+import { InvoiceDetailModal } from '../../invoices/components/InvoiceDetailModal'
 import { PaymentFormModal } from '../../payments/components/PaymentFormModal'
 import { useCreatePayment } from '../../payments/paymentQueries'
-import type { CreatePaymentPayload } from '../../payments/paymentTypes'
-import { useRevenueSummary } from '../../revenue/revenueQueries'
-import { useDebts, useDebtStudentSummaries } from '../debtQueries'
+import type { CreatePaymentPayload, Payment } from '../../payments/paymentTypes'
+import { useTuitionPackages } from '../../tuitionPackages/tuitionPackageQueries'
+import { useDebts } from '../debtQueries'
 
 const { Title, Text } = Typography
+const { RangePicker } = DatePicker
 
 const FETCH_SIZE = 100
 
-const DEBT_STATUS_OPTIONS = ['OUTSTANDING', 'OVERDUE', 'MULTIPLE_UNPAID'] as const
+const DEBT_STATUS_OPTIONS = ['OUTSTANDING', 'OVERDUE', 'DUE_TODAY', 'NOT_DUE', 'PARTIALLY_PAID'] as const
 type DebtStatusFilter = (typeof DEBT_STATUS_OPTIONS)[number]
 
-const DEBT_STATUS_LABELS: Record<DebtStatusFilter, string> = {
+const DEBT_FILTER_LABELS: Record<DebtStatusFilter, string> = {
   OUTSTANDING: 'Còn nợ',
   OVERDUE: 'Quá hạn',
-  MULTIPLE_UNPAID: 'Nợ nhiều hóa đơn',
+  DUE_TODAY: 'Đến hạn hôm nay',
+  NOT_DUE: 'Chưa đến hạn',
+  PARTIALLY_PAID: 'Thanh toán một phần',
 }
 
-function summaryRowKey(summary: StudentDebtSummary) {
-  return `${summary.studentId}-${summary.classroomId}`
+function parseOptionalBoolean(value: string | null): boolean | undefined {
+  if (value === 'true') return true
+  if (value === 'false') return false
+  return undefined
 }
 
-function findCollectibleInvoice(invoices: Invoice[], studentId: number, classroomId: number) {
-  return invoices
-    .filter(
-      (invoice) =>
-        invoice.studentId === studentId &&
-        invoice.classroomId === classroomId &&
-        (invoice.status === 'UNPAID' || invoice.status === 'PARTIALLY_PAID'),
-    )
-    .sort((left, right) => dayjs(left.dueDate).valueOf() - dayjs(right.dueDate).valueOf())[0]
+function parseOptionalNumber(value: string | null): number | undefined {
+  if (value == null || value === '') return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
 }
 
 export function DebtPage() {
   const navigate = useNavigate()
-  const statusParam = useUrlEnumParam('status', DEBT_STATUS_OPTIONS)
-  const statusFilter = statusParam.value
+  const [searchParams, setSearchParams] = useSearchParams()
+  const statusRaw = searchParams.get('status')
+  const statusFilter =
+    statusRaw && (DEBT_STATUS_OPTIONS as readonly string[]).includes(statusRaw)
+      ? (statusRaw as DebtStatusFilter)
+      : undefined
+  const keyword = searchParams.get('keyword') ?? ''
+  const classroomId = parseOptionalNumber(searchParams.get('classroomId'))
+  const packageId = parseOptionalNumber(searchParams.get('packageId'))
+  const cycleNo = parseOptionalNumber(searchParams.get('cycleNo'))
+  const overdue = parseOptionalBoolean(searchParams.get('overdue'))
+  const multipleInvoices = parseOptionalBoolean(searchParams.get('multipleInvoices'))
+  const dueFrom = searchParams.get('dueFrom') ?? undefined
+  const dueTo = searchParams.get('dueTo') ?? undefined
+  const remainingFrom = parseOptionalNumber(searchParams.get('remainingFrom'))
+  const remainingTo = parseOptionalNumber(searchParams.get('remainingTo'))
+
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(10)
-  const [keyword, setKeyword] = useState('')
-  const [classroomId, setClassroomId] = useState<number>()
   const [collectingInvoice, setCollectingInvoice] = useState<Invoice>()
-  const [detailSummary, setDetailSummary] = useState<StudentDebtSummary>()
+  const [successPayment, setSuccessPayment] = useState<Payment>()
+  const [detailInvoice, setDetailInvoice] = useState<Invoice>()
 
-  const summaryParams = useMemo(() => ({ classroomId }), [classroomId])
-  const debtsParams = useMemo(() => ({ page: 0, size: FETCH_SIZE }), [])
+  const patchParams = useCallback(
+    (updates: Record<string, string | undefined | null>) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          for (const [key, value] of Object.entries(updates)) {
+            if (value == null || value === '') {
+              next.delete(key)
+            } else {
+              next.set(key, value)
+            }
+          }
+          return next
+        },
+        { replace: true },
+      )
+      setPage(0)
+    },
+    [setSearchParams],
+  )
 
-  const summariesQuery = useDebtStudentSummaries(summaryParams)
+  const debtsParams = useMemo(
+    () => ({
+      keyword: keyword || undefined,
+      classroomId,
+      packageId,
+      cycleNo,
+      overdue,
+      multipleInvoices,
+      dueFrom,
+      dueTo,
+      remainingFrom,
+      remainingTo,
+      status: statusFilter,
+      page: 0,
+      size: FETCH_SIZE,
+    }),
+    [
+      classroomId,
+      cycleNo,
+      dueFrom,
+      dueTo,
+      keyword,
+      multipleInvoices,
+      overdue,
+      packageId,
+      remainingFrom,
+      remainingTo,
+      statusFilter,
+    ],
+  )
+
   const debtsQuery = useDebts(debtsParams)
-  const revenueQuery = useRevenueSummary()
   const classroomsQuery = useClassrooms({ page: 0, size: 100 })
+  const packagesQuery = useTuitionPackages({ page: 0, size: 100 })
   const createPayment = useCreatePayment()
 
-  const filteredSummaries = useMemo(() => {
-    const today = dayjs().startOf('day')
-    const allSummaries = summariesQuery.data?.data ?? []
-
-    const multiUnpaidStudentIds = new Set<number>()
-    if (statusFilter === 'MULTIPLE_UNPAID') {
-      const invoiceCountByStudent = new Map<number, number>()
-      for (const summary of allSummaries) {
-        invoiceCountByStudent.set(
-          summary.studentId,
-          (invoiceCountByStudent.get(summary.studentId) ?? 0) + summary.debtInvoiceCount,
-        )
-      }
-      for (const [studentId, count] of invoiceCountByStudent) {
-        if (count >= 2) {
-          multiUnpaidStudentIds.add(studentId)
-        }
-      }
-    }
-
-    return allSummaries.filter((summary) => {
-      if (classroomId && summary.classroomId !== classroomId) {
-        return false
-      }
-
-      if (statusFilter === 'OVERDUE') {
-        if (!summary.nearestDueDate || !dayjs(summary.nearestDueDate).isBefore(today)) {
-          return false
-        }
-      }
-
-      if (statusFilter === 'OUTSTANDING' && summary.totalRemainingDebt <= 0) {
-        return false
-      }
-
-      if (statusFilter === 'MULTIPLE_UNPAID' && !multiUnpaidStudentIds.has(summary.studentId)) {
-        return false
-      }
-
-      return matchesKeyword(keyword, ...studentKeywordFields(summary), summary.classroomName)
-    })
-  }, [classroomId, keyword, statusFilter, summariesQuery.data?.data])
-
-  const pagedSummaries = useMemo(
-    () => paginateItems(filteredSummaries, page, size),
-    [filteredSummaries, page, size],
-  )
+  const debts = debtsQuery.data?.data ?? []
+  const pagedDebts = useMemo(() => {
+    const from = page * size
+    return debts.slice(from, from + size)
+  }, [debts, page, size])
 
   const debtTotals = useMemo(() => {
     return {
-      totalRemaining: filteredSummaries.reduce((sum, summary) => sum + summary.totalRemainingDebt, 0),
-      studentCount: filteredSummaries.length,
+      totalRemaining: debts.reduce((sum, invoice) => sum + Number(invoice.remainingAmount ?? 0), 0),
+      invoiceCount: debts.length,
+      overdueCount: debts.filter((invoice) => (invoice.overdueDays ?? 0) > 0).length,
     }
-  }, [filteredSummaries])
+  }, [debts])
 
-  function handleStatusChange(value: DebtStatusFilter | undefined) {
-    statusParam.setValue(value)
-    setPage(0)
-  }
+  const dueRange: [Dayjs, Dayjs] | null =
+    dueFrom && dueTo ? [dayjs(dueFrom), dayjs(dueTo)] : null
 
   const classroomName = classroomsQuery.data?.data?.find((item) => item.id === classroomId)?.className
+  const packageName = packagesQuery.data?.data?.find((item) => item.id === packageId)?.name
 
-  const columns: ColumnsType<StudentDebtSummary> = [
-    studentCodeColumn(),
-    studentNameColumn(),
+  const columns: ColumnsType<Invoice> = [
+    { title: 'Mã HĐ', dataIndex: 'invoiceCode', key: 'invoiceCode', fixed: 'left' },
     {
-      title: 'Lớp',
-      dataIndex: 'classroomName',
-      key: 'classroomName',
+      title: 'Học viên',
+      key: 'student',
+      render: (_, invoice) => (
+        <Space direction="vertical" size={0}>
+          <Text>{invoice.studentName}</Text>
+          <Text type="secondary">{invoice.studentCode}</Text>
+        </Space>
+      ),
     },
     {
-      title: 'Tổng còn nợ',
-      dataIndex: 'totalRemainingDebt',
-      key: 'totalRemainingDebt',
+      title: 'Lớp',
+      key: 'classroom',
+      render: (_, invoice) => invoice.classroomCode || invoice.classroomName,
+    },
+    {
+      title: 'Kỳ học phí',
+      dataIndex: 'billingLabel',
+      key: 'billingLabel',
+      render: (value?: string | null) => value || '-',
+    },
+    {
+      title: 'Gói học',
+      dataIndex: 'packageNameSnapshot',
+      key: 'packageNameSnapshot',
+    },
+    {
+      title: 'Hạn TT',
+      dataIndex: 'dueDate',
+      key: 'dueDate',
+      render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
+    },
+    {
+      title: 'Số ngày quá hạn',
+      dataIndex: 'overdueDays',
+      key: 'overdueDays',
+      render: (value?: number | null) => (value && value > 0 ? value : '-'),
+    },
+    {
+      title: 'Còn lại',
+      dataIndex: 'remainingAmount',
+      key: 'remainingAmount',
       render: (value: number) => <MoneyText value={value} />,
     },
     {
-      title: 'Số hóa đơn nợ',
-      dataIndex: 'debtInvoiceCount',
-      key: 'debtInvoiceCount',
-    },
-    {
-      title: 'Hóa đơn chưa đóng',
-      dataIndex: 'unpaidCount',
-      key: 'unpaidCount',
-    },
-    {
-      title: 'Hóa đơn đóng một phần',
-      dataIndex: 'partialCount',
-      key: 'partialCount',
-    },
-    {
-      title: 'Hạn đóng gần nhất',
-      dataIndex: 'nearestDueDate',
-      key: 'nearestDueDate',
-      render: (value?: string | null) => (value ? dayjs(value).format('DD/MM/YYYY') : '-'),
-    },
-    {
-      title: 'Trạng thái',
-      key: 'status',
-      render: (_, summary) => {
-        const overdue =
-          summary.nearestDueDate != null && dayjs(summary.nearestDueDate).isBefore(dayjs().startOf('day'))
-        return <Tag color={overdue ? 'red' : 'orange'}>{overdue ? 'Quá hạn' : 'Còn nợ'}</Tag>
+      title: 'Trạng thái công nợ',
+      key: 'debtStatus',
+      render: (_, invoice) => {
+        const status = invoice.debtStatus
+        if (!status) {
+          return <StatusTag status={invoice.status} labels={INVOICE_STATUS_LABELS} />
+        }
+        return (
+          <StatusTag
+            status={status}
+            labels={DEBT_STATUS_LABELS}
+          />
+        )
       },
     },
     {
       title: 'Thao tác',
       key: 'actions',
-      render: (_, summary) => (
-        <Space size="small">
-          <Button type="link" onClick={() => handleCollectFromSummary(summary)}>
+      fixed: 'right',
+      render: (_, invoice) => (
+        <Space size="small" wrap>
+          <Button type="link" onClick={() => setCollectingInvoice(invoice)}>
             Thu tiền
           </Button>
-          <Button type="link" onClick={() => setDetailSummary(summary)}>
-            Xem chi tiết công nợ
+          <Button type="link" onClick={() => setDetailInvoice(invoice)}>
+            Xem chi tiết
           </Button>
-          <Button type="link" onClick={() => navigate(`/students/${summary.studentId}`)}>
+          <Button type="link" onClick={() => navigate(`/students/${invoice.studentId}`)}>
             Xem học viên
           </Button>
+          <Link to={`/print/invoices/${invoice.id}`}>
+            In phiếu học phí
+          </Link>
         </Space>
       ),
     },
   ]
-
-  function handleCollectFromSummary(summary: StudentDebtSummary) {
-    const invoice = findCollectibleInvoice(
-      debtsQuery.data?.data ?? [],
-      summary.studentId,
-      summary.classroomId,
-    )
-
-    if (!invoice) {
-      message.warning('Không tìm thấy hóa đơn cần thu')
-      return
-    }
-
-    setCollectingInvoice(invoice)
-  }
 
   function handleTableChange(pagination: TablePaginationConfig) {
     setPage((pagination.current ?? 1) - 1)
     setSize(pagination.pageSize ?? 10)
   }
 
-  function handleKeywordChange(value: string) {
-    setKeyword(value)
-    setPage(0)
-  }
-
-  function handleClassroomChange(value?: number) {
-    setClassroomId(value)
-    setPage(0)
-  }
-
   function handleCreatePayment(payload: CreatePaymentPayload) {
-    if (!collectingInvoice) {
-      return
-    }
+    if (!collectingInvoice) return
 
     createPayment.mutate(
       { invoiceId: collectingInvoice.id, payload },
       {
-        onSuccess: () => {
+        onSuccess: (payment) => {
           message.success('Đã thu tiền')
-          setCollectingInvoice(undefined)
+          setSuccessPayment(payment)
         },
         onError: showErrorMessage,
       },
     )
+  }
+
+  function closePaymentModal() {
+    setCollectingInvoice(undefined)
+    setSuccessPayment(undefined)
   }
 
   function showErrorMessage(error: unknown) {
@@ -250,13 +283,13 @@ export function DebtPage() {
       message.error(error.response?.data?.message ?? 'Có lỗi xảy ra')
       return
     }
-
     message.error('Có lỗi xảy ra')
   }
 
+  const moneyFormatter = (value: number | string) => `${Number(value).toLocaleString('vi-VN')} VND`
   const subtitle = statusFilter
-    ? `Công nợ – ${DEBT_STATUS_LABELS[statusFilter]}`
-    : 'Theo dõi công nợ theo học viên và lớp học.'
+    ? `Công nợ – ${DEBT_FILTER_LABELS[statusFilter]}`
+    : 'Theo dõi các hóa đơn học phí còn phải thu.'
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -269,26 +302,22 @@ export function DebtPage() {
 
       <Row gutter={16}>
         <Col xs={24} md={8}>
-          <Card loading={summariesQuery.isLoading}>
+          <Card loading={debtsQuery.isLoading}>
             <Statistic
-              title="Tổng còn nợ"
+              title="Tổng còn phải thu"
               value={debtTotals.totalRemaining}
-              formatter={(value) => `${Number(value).toLocaleString('en-US')} VND`}
+              formatter={(value) => moneyFormatter(value as number)}
             />
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card loading={summariesQuery.isLoading}>
-            <Statistic title="Số học viên còn nợ" value={debtTotals.studentCount} />
+          <Card loading={debtsQuery.isLoading}>
+            <Statistic title="Số hóa đơn còn nợ" value={debtTotals.invoiceCount} />
           </Card>
         </Col>
         <Col xs={24} md={8}>
-          <Card loading={revenueQuery.isLoading}>
-            <Statistic
-              title="Doanh thu tháng này"
-              value={revenueQuery.data?.monthRevenue ?? 0}
-              formatter={(value) => `${Number(value).toLocaleString('en-US')} VND`}
-            />
+          <Card loading={debtsQuery.isLoading}>
+            <Statistic title="Hóa đơn quá hạn" value={debtTotals.overdueCount} />
           </Card>
         </Col>
       </Row>
@@ -298,35 +327,120 @@ export function DebtPage() {
           <Space wrap>
             <Input.Search
               allowClear
-              placeholder={STUDENT_SEARCH_PLACEHOLDER}
-              style={{ width: 320 }}
+              placeholder="Tìm mã HĐ, học viên..."
+              style={{ width: 280 }}
               value={keyword}
-              onChange={(event) => handleKeywordChange(event.target.value)}
+              onChange={(event) => patchParams({ keyword: event.target.value || undefined })}
             />
             <Select
               allowClear
               placeholder="Trạng thái công nợ"
               style={{ width: 200 }}
               value={statusFilter}
-              onChange={(value) => handleStatusChange(value)}
-              options={[
-                { value: 'OUTSTANDING', label: 'Còn nợ' },
-                { value: 'OVERDUE', label: 'Quá hạn' },
-                { value: 'MULTIPLE_UNPAID', label: 'Nợ nhiều hóa đơn' },
-              ]}
+              onChange={(value) => patchParams({ status: value })}
+              options={DEBT_STATUS_OPTIONS.map((value) => ({
+                value,
+                label: DEBT_FILTER_LABELS[value],
+              }))}
             />
             <Select
               allowClear
               placeholder="Lớp học"
               style={{ width: 220 }}
               value={classroomId}
-              onChange={handleClassroomChange}
+              onChange={(value) =>
+                patchParams({ classroomId: value != null ? String(value) : undefined })
+              }
               options={(classroomsQuery.data?.data ?? []).map((classroom) => ({
                 label: classroom.className,
                 value: classroom.id,
               }))}
             />
+            <Space>
+              <Text>Nợ nhiều hóa đơn</Text>
+              <Switch
+                checked={multipleInvoices === true}
+                onChange={(checked) =>
+                  patchParams({ multipleInvoices: checked ? 'true' : undefined })
+                }
+              />
+            </Space>
           </Space>
+
+          <Collapse
+            items={[
+              {
+                key: 'advanced',
+                label: 'Bộ lọc nâng cao',
+                children: (
+                  <Space wrap>
+                    <RangePicker
+                      allowClear
+                      format="DD/MM/YYYY"
+                      placeholder={['Hạn TT từ', 'Hạn TT đến']}
+                      value={dueRange}
+                      onChange={(values) =>
+                        patchParams({
+                          dueFrom: values?.[0]?.format('YYYY-MM-DD'),
+                          dueTo: values?.[1]?.format('YYYY-MM-DD'),
+                        })
+                      }
+                    />
+                    <Select
+                      allowClear
+                      placeholder="Gói học"
+                      style={{ width: 200 }}
+                      value={packageId}
+                      onChange={(value) =>
+                        patchParams({ packageId: value != null ? String(value) : undefined })
+                      }
+                      options={(packagesQuery.data?.data ?? []).map((item) => ({
+                        label: item.name,
+                        value: item.id,
+                      }))}
+                    />
+                    <InputNumber
+                      min={1}
+                      placeholder="Số kỳ"
+                      value={cycleNo}
+                      onChange={(value) =>
+                        patchParams({ cycleNo: value != null ? String(value) : undefined })
+                      }
+                    />
+                    <InputNumber
+                      min={0}
+                      placeholder="Còn lại từ"
+                      value={remainingFrom}
+                      onChange={(value) =>
+                        patchParams({
+                          remainingFrom: value != null ? String(value) : undefined,
+                        })
+                      }
+                    />
+                    <InputNumber
+                      min={0}
+                      placeholder="Còn lại đến"
+                      value={remainingTo}
+                      onChange={(value) =>
+                        patchParams({
+                          remainingTo: value != null ? String(value) : undefined,
+                        })
+                      }
+                    />
+                    <Space>
+                      <Text>Quá hạn</Text>
+                      <Switch
+                        checked={overdue === true}
+                        onChange={(checked) =>
+                          patchParams({ overdue: checked ? 'true' : undefined })
+                        }
+                      />
+                    </Space>
+                  </Space>
+                ),
+              },
+            ]}
+          />
 
           <ActiveFilterTags
             tags={[
@@ -334,9 +448,29 @@ export function DebtPage() {
                 ? [
                     {
                       key: 'status',
-                      label: DEBT_STATUS_LABELS[statusFilter],
+                      label: DEBT_FILTER_LABELS[statusFilter],
                       color: statusFilter === 'OVERDUE' ? 'red' : 'orange',
-                      onClose: () => handleStatusChange(undefined),
+                      onClose: () => patchParams({ status: undefined }),
+                    },
+                  ]
+                : []),
+              ...(multipleInvoices
+                ? [
+                    {
+                      key: 'multipleInvoices',
+                      label: 'Nợ nhiều hóa đơn',
+                      color: 'orange',
+                      onClose: () => patchParams({ multipleInvoices: undefined }),
+                    },
+                  ]
+                : []),
+              ...(overdue
+                ? [
+                    {
+                      key: 'overdue',
+                      label: 'Quá hạn',
+                      color: 'red',
+                      onClose: () => patchParams({ overdue: undefined }),
                     },
                   ]
                 : []),
@@ -345,31 +479,51 @@ export function DebtPage() {
                     {
                       key: 'classroom',
                       label: `Lớp: ${classroomName}`,
-                      onClose: () => handleClassroomChange(undefined),
+                      onClose: () => patchParams({ classroomId: undefined }),
+                    },
+                  ]
+                : []),
+              ...(packageId && packageName
+                ? [
+                    {
+                      key: 'package',
+                      label: `Gói: ${packageName}`,
+                      onClose: () => patchParams({ packageId: undefined }),
                     },
                   ]
                 : []),
             ]}
-            onClearAll={() => {
-              handleStatusChange(undefined)
-              handleClassroomChange(undefined)
-            }}
+            onClearAll={() =>
+              patchParams({
+                status: undefined,
+                multipleInvoices: undefined,
+                overdue: undefined,
+                classroomId: undefined,
+                packageId: undefined,
+                cycleNo: undefined,
+                dueFrom: undefined,
+                dueTo: undefined,
+                remainingFrom: undefined,
+                remainingTo: undefined,
+                keyword: undefined,
+              })
+            }
           />
 
           <Table
-            rowKey={summaryRowKey}
+            rowKey="id"
             columns={columns}
-            dataSource={pagedSummaries}
-            loading={summariesQuery.isLoading}
+            dataSource={pagedDebts}
+            loading={debtsQuery.isLoading}
             pagination={{
               current: page + 1,
               pageSize: size,
-              total: filteredSummaries.length,
+              total: debts.length,
               showSizeChanger: true,
             }}
             onChange={handleTableChange}
-            locale={{ emptyText: 'Không có công nợ' }}
-            scroll={{ x: 1100 }}
+            locale={{ emptyText: 'Không có khoản học phí chưa thanh toán.' }}
+            scroll={{ x: 1400 }}
           />
         </Space>
       </Card>
@@ -378,22 +532,23 @@ export function DebtPage() {
         open={Boolean(collectingInvoice)}
         invoice={collectingInvoice}
         submitting={createPayment.isPending}
-        onCancel={() => setCollectingInvoice(undefined)}
+        successPayment={successPayment}
+        onCancel={closePaymentModal}
         onSubmit={handleCreatePayment}
+        onCloseSuccess={closePaymentModal}
+        onViewInvoice={(invoiceId) => {
+          const invoice = debts.find((item) => item.id === invoiceId) ?? collectingInvoice
+          if (invoice) {
+            setDetailInvoice(invoice)
+          }
+        }}
       />
 
-      <StudentInvoiceListDrawer
-        open={Boolean(detailSummary)}
-        studentId={detailSummary?.studentId}
-        classroomId={detailSummary?.classroomId}
-        studentCode={detailSummary?.studentCode}
-        studentName={detailSummary?.studentName}
-        classroomName={detailSummary?.classroomName}
-        onClose={() => setDetailSummary(undefined)}
-        onCollect={(invoice) => {
-          setDetailSummary(undefined)
-          setCollectingInvoice(invoice)
-        }}
+      <InvoiceDetailModal
+        open={Boolean(detailInvoice)}
+        invoice={detailInvoice}
+        onClose={() => setDetailInvoice(undefined)}
+        onCollect={(invoice) => setCollectingInvoice(invoice)}
       />
     </Space>
   )

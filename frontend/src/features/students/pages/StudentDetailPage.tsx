@@ -1,7 +1,7 @@
 import { Button, Card, Descriptions, Empty, Space, Spin, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
@@ -16,6 +16,13 @@ import {
   type EnrollmentLifecycleAction,
 } from '../../enrollments/components/EnrollmentLifecycleModal'
 import { EnrollmentStatusHistoryDrawer } from '../../enrollments/components/EnrollmentStatusHistoryDrawer'
+import {
+  DEBT_STATUS_LABELS,
+  INVOICE_STATUS_LABELS,
+  formatEstimatedEffectiveTo,
+  type Invoice,
+} from '../../invoices/invoiceTypes'
+import { useInvoices } from '../../invoices/invoiceQueries'
 import { useStudentPackages } from '../../studentPackages/studentPackageQueries'
 import type { EnrollmentLearningProgress } from '../../studentPackages/studentPackageTypes'
 import { useStudentDetail } from '../studentQueries'
@@ -30,6 +37,10 @@ export function StudentDetailPage() {
   const studentQuery = useStudentDetail(studentId)
   const studentPackagesQuery = useStudentPackages(studentId)
   const makeupCreditsQuery = useMakeupCredits()
+  const invoicesQuery = useInvoices(
+    { studentId, page: 0, size: 50 },
+    isAdmin && Number.isFinite(studentId),
+  )
   const [lifecycleAction, setLifecycleAction] = useState<{
     action: EnrollmentLifecycleAction
     enrollment: EnrollmentLearningProgress
@@ -37,6 +48,18 @@ export function StudentDetailPage() {
   const [historyEnrollment, setHistoryEnrollment] = useState<EnrollmentLearningProgress>()
   const [renewingProgress, setRenewingProgress] = useState<EnrollmentLearningProgress>()
   const classPackagesQuery = useClassPackages(renewingProgress?.classroomId ?? Number.NaN)
+
+  const teacherTuitionRows = useMemo(() => {
+    return (studentPackagesQuery.data ?? [])
+      .filter((item) => item.latestStudentPackageId != null)
+      .map((item) => ({
+        key: String(item.enrollmentId),
+        classroomName: item.classroomName,
+        packageName: item.latestPackageName ?? '-',
+        packagePrice: item.latestPackagePrice,
+        totalSessions: item.latestPackageTotalSessions ?? item.totalSessions,
+      }))
+  }, [studentPackagesQuery.data])
 
   if (!Number.isFinite(studentId)) {
     return <Empty description="Không tìm thấy học viên" />
@@ -222,6 +245,105 @@ export function StudentDetailPage() {
           }
         />
       </Card>
+
+      {isAdmin ? (
+        <Card title="Học phí / hóa đơn">
+          <Table<Invoice>
+            rowKey="id"
+            dataSource={invoicesQuery.data?.data ?? []}
+            loading={invoicesQuery.isLoading}
+            pagination={false}
+            locale={{ emptyText: 'Chưa có hóa đơn học phí.' }}
+            scroll={{ x: 1000 }}
+            columns={[
+              { title: 'Mã HĐ', dataIndex: 'invoiceCode', key: 'invoiceCode' },
+              {
+                title: 'Kỳ học phí',
+                dataIndex: 'billingLabel',
+                key: 'billingLabel',
+                render: (value?: string | null) => value || '-',
+              },
+              {
+                title: 'Gói học',
+                dataIndex: 'packageNameSnapshot',
+                key: 'packageNameSnapshot',
+              },
+              {
+                title: 'Áp dụng từ',
+                dataIndex: 'effectiveFrom',
+                key: 'effectiveFrom',
+                render: (value?: string | null) =>
+                  value ? dayjs(value).format('DD/MM/YYYY') : '-',
+              },
+              {
+                title: 'Dự kiến đến',
+                key: 'estimatedEffectiveTo',
+                render: (_, invoice) =>
+                  formatEstimatedEffectiveTo(
+                    invoice.estimatedEffectiveTo,
+                    invoice.totalSessionsSnapshot,
+                  ),
+              },
+              {
+                title: 'Hạn TT',
+                dataIndex: 'dueDate',
+                key: 'dueDate',
+                render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
+              },
+              {
+                title: 'Còn lại',
+                dataIndex: 'remainingAmount',
+                key: 'remainingAmount',
+                render: (value: number) => <MoneyText value={value} />,
+              },
+              {
+                title: 'Trạng thái',
+                key: 'status',
+                render: (_, invoice) =>
+                  invoice.debtStatus ? (
+                    <StatusTag status={invoice.debtStatus} labels={DEBT_STATUS_LABELS} />
+                  ) : (
+                    <StatusTag status={invoice.status} labels={INVOICE_STATUS_LABELS} />
+                  ),
+              },
+              {
+                title: 'Thao tác',
+                key: 'actions',
+                render: (_, invoice) => (
+                  <Link to={`/print/invoices/${invoice.id}`}>
+                    Xem phiếu học phí
+                  </Link>
+                ),
+              },
+            ]}
+          />
+        </Card>
+      ) : (
+        <Card title="Tóm tắt học phí (chỉ xem)">
+          <Table
+            rowKey="key"
+            dataSource={teacherTuitionRows}
+            loading={studentPackagesQuery.isLoading}
+            pagination={false}
+            locale={{ emptyText: 'Chưa có thông tin gói học phí.' }}
+            columns={[
+              { title: 'Lớp', dataIndex: 'classroomName', key: 'classroomName' },
+              { title: 'Gói học', dataIndex: 'packageName', key: 'packageName' },
+              {
+                title: 'Học phí gói',
+                dataIndex: 'packagePrice',
+                key: 'packagePrice',
+                render: (value?: number | null) =>
+                  value != null ? <MoneyText value={value} /> : '-',
+              },
+              { title: 'Số buổi', dataIndex: 'totalSessions', key: 'totalSessions' },
+            ]}
+          />
+          <Text type="secondary">
+            Giáo viên xem tóm tắt gói học. Phiếu học phí chi tiết mở khi có mã hóa đơn được cấp quyền.
+          </Text>
+        </Card>
+      )}
 
       <Card title="Buổi bù">
         <Table

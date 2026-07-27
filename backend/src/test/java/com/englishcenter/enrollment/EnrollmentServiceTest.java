@@ -32,6 +32,7 @@ import com.englishcenter.enrollment.mapper.EnrollmentMapper;
 import com.englishcenter.invoice.Invoice;
 import com.englishcenter.invoice.InvoiceRepository;
 import com.englishcenter.invoice.InvoiceStatus;
+import com.englishcenter.invoice.InvoiceTestSupport;
 import com.englishcenter.invoice.mapper.InvoiceMapper;
 import com.englishcenter.payment.PaymentRepository;
 import com.englishcenter.student.Student;
@@ -94,7 +95,7 @@ class EnrollmentServiceTest {
 
     private final EnrollmentMapper enrollmentMapper = new EnrollmentMapper(
             new StudentPackageMapper(),
-            new InvoiceMapper()
+            InvoiceTestSupport.invoiceMapper()
     );
     private final StudentMapper studentMapper = new StudentMapper();
 
@@ -692,7 +693,8 @@ class EnrollmentServiceTest {
                 attendanceRepository,
                 paymentRepository,
                 enrollmentMapper,
-                studentMapper
+                studentMapper,
+                InvoiceTestSupport.billingSnapshotService()
         );
     }
 

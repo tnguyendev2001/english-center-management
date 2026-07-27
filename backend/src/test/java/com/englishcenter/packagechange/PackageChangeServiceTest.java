@@ -19,6 +19,7 @@ import com.englishcenter.enrollment.dto.EnrollmentLearningProgressResponse;
 import com.englishcenter.invoice.Invoice;
 import com.englishcenter.invoice.InvoiceRepository;
 import com.englishcenter.invoice.InvoiceStatus;
+import com.englishcenter.invoice.InvoiceTestSupport;
 import com.englishcenter.invoice.mapper.InvoiceMapper;
 import com.englishcenter.makeupcredit.MakeupCreditRepository;
 import com.englishcenter.makeupcredit.MakeupCreditStatus;
@@ -72,7 +73,7 @@ class PackageChangeServiceTest {
     @Mock
     private EnrollmentProgressService enrollmentProgressService;
 
-    private final InvoiceMapper invoiceMapper = new InvoiceMapper();
+    private final InvoiceMapper invoiceMapper = InvoiceTestSupport.invoiceMapper();
 
     @Test
     void previewDoesNotCreateInvoiceStudentPackageOrLog() {
@@ -448,7 +449,8 @@ class PackageChangeServiceTest {
                 packageChangeLogRepository,
                 enrollmentRepository,
                 enrollmentProgressService,
-                invoiceMapper
+                invoiceMapper,
+                InvoiceTestSupport.billingSnapshotService()
         );
     }
 

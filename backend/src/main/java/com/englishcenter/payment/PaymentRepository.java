@@ -14,6 +14,8 @@ import org.springframework.data.repository.query.Param;
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
     boolean existsByInvoiceIdAndStatus(Long invoiceId, PaymentStatus status);
 
+    java.util.List<Payment> findByInvoiceIdOrderByPaymentDateDescCreatedAtDesc(Long invoiceId);
+
     @Query("""
             SELECT COUNT(payment)
             FROM Payment payment

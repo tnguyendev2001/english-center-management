@@ -23,9 +23,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class PaymentController {
     private final PaymentService paymentService;
+    private final PaymentReceiptDocumentService paymentReceiptDocumentService;
 
-    public PaymentController(PaymentService paymentService) {
+    public PaymentController(
+            PaymentService paymentService,
+            PaymentReceiptDocumentService paymentReceiptDocumentService
+    ) {
         this.paymentService = paymentService;
+        this.paymentReceiptDocumentService = paymentReceiptDocumentService;
     }
 
     @GetMapping("/api/payments/student-summaries")
@@ -52,6 +57,20 @@ public class PaymentController {
         );
 
         return ApiResponse.success(payments.getContent(), meta);
+    }
+
+    @GetMapping("/api/payments/{paymentId}")
+    @PreAuthorize("hasRole('ADMIN') or @authorizationService.canAccessPayment(authentication, #paymentId)")
+    public ApiResponse<PaymentResponse> getPayment(@PathVariable Long paymentId) {
+        return ApiResponse.success(paymentService.getById(paymentId));
+    }
+
+    @GetMapping("/api/payments/{paymentId}/receipt")
+    @PreAuthorize("hasRole('ADMIN') or @authorizationService.canAccessPayment(authentication, #paymentId)")
+    public ApiResponse<com.englishcenter.payment.dto.PaymentReceiptDocumentResponse> getReceipt(
+            @PathVariable Long paymentId
+    ) {
+        return ApiResponse.success(paymentReceiptDocumentService.getReceipt(paymentId));
     }
 
     @PostMapping("/api/invoices/{invoiceId}/payments")

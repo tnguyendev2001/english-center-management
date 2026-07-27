@@ -1,7 +1,8 @@
-import { Alert, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Select } from 'antd'
+import { Alert, Button, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Select, Space } from 'antd'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import { useEffect, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { formatStudentLabel } from '../../../components/common/studentDisplay'
 import {
@@ -10,7 +11,7 @@ import {
   useFinancialPeriods,
 } from '../../finance/financeQueries'
 import type { Invoice } from '../../invoices/invoiceTypes'
-import type { CreatePaymentPayload, PaymentMethod } from '../paymentTypes'
+import type { CreatePaymentPayload, Payment, PaymentMethod } from '../paymentTypes'
 
 interface PaymentFormValues {
   amount: number
@@ -24,8 +25,11 @@ interface PaymentFormModalProps {
   open: boolean
   invoice?: Invoice
   submitting: boolean
+  successPayment?: Payment | null
   onCancel: () => void
   onSubmit: (payload: CreatePaymentPayload) => void
+  onCloseSuccess?: () => void
+  onViewInvoice?: (invoiceId: number) => void
 }
 
 const methodOptions: { label: string; value: PaymentMethod }[] = [
@@ -38,8 +42,11 @@ export function PaymentFormModal({
   open,
   invoice,
   submitting,
+  successPayment,
   onCancel,
   onSubmit,
+  onCloseSuccess,
+  onViewInvoice,
 }: PaymentFormModalProps) {
   const [form] = Form.useForm<PaymentFormValues>()
   const method = Form.useWatch('method', form)
@@ -48,6 +55,7 @@ export function PaymentFormModal({
   const periodsQuery = useFinancialPeriods(open)
   const configQuery = useFinanceConfig(open)
   const showAccountSelect = method === 'BANK_TRANSFER' || method === 'OTHER'
+  const isSuccess = Boolean(successPayment)
 
   const closedPeriodKeys = useMemo(() => {
     const keys = new Set<string>()
@@ -92,7 +100,7 @@ export function PaymentFormModal({
   }, [accountsQuery.data, method])
 
   useEffect(() => {
-    if (open) {
+    if (open && !successPayment) {
       form.resetFields()
       const todayClosed = closedPeriodKeys.has(`${businessDate.year()}-${businessDate.month() + 1}`)
       form.setFieldsValue({
@@ -101,7 +109,7 @@ export function PaymentFormModal({
         method: 'CASH',
       })
     }
-  }, [form, invoice, open, closedPeriodKeys, businessDate])
+  }, [form, invoice, open, closedPeriodKeys, businessDate, successPayment])
 
   useEffect(() => {
     if (!showAccountSelect) {
@@ -117,6 +125,44 @@ export function PaymentFormModal({
       financialAccountId: values.financialAccountId ?? null,
       note: values.note ?? null,
     })
+  }
+
+  if (isSuccess && successPayment) {
+    return (
+      <Modal
+        title="Thu tiền thành công"
+        open={open}
+        onCancel={onCloseSuccess ?? onCancel}
+        footer={
+          <Space>
+            <Link to={`/print/payments/${successPayment.id}`}>
+              <Button type="primary">In phiếu thu</Button>
+            </Link>
+            <Button
+              onClick={() => {
+                onViewInvoice?.(successPayment.invoiceId)
+                ;(onCloseSuccess ?? onCancel)()
+              }}
+            >
+              Xem hóa đơn
+            </Button>
+            <Button onClick={onCloseSuccess ?? onCancel}>Đóng</Button>
+          </Space>
+        }
+        destroyOnHidden
+      >
+        <Descriptions column={1} size="small">
+          <Descriptions.Item label="Mã phiếu thu">{successPayment.paymentCode}</Descriptions.Item>
+          <Descriptions.Item label="Số tiền">
+            <MoneyText value={successPayment.amount} />
+          </Descriptions.Item>
+          <Descriptions.Item label="Hóa đơn">{successPayment.invoiceCode}</Descriptions.Item>
+          {successPayment.billingLabel ? (
+            <Descriptions.Item label="Kỳ học phí">{successPayment.billingLabel}</Descriptions.Item>
+          ) : null}
+        </Descriptions>
+      </Modal>
+    )
   }
 
   return (
@@ -137,6 +183,9 @@ export function PaymentFormModal({
             {formatStudentLabel(invoice.studentCode, invoice.studentName)}
           </Descriptions.Item>
           <Descriptions.Item label="Lớp học">{invoice.classroomName}</Descriptions.Item>
+          {invoice.billingLabel ? (
+            <Descriptions.Item label="Kỳ học phí">{invoice.billingLabel}</Descriptions.Item>
+          ) : null}
           <Descriptions.Item label="Còn phải đóng">
             <MoneyText value={invoice.remainingAmount} />
           </Descriptions.Item>
@@ -161,7 +210,7 @@ export function PaymentFormModal({
         <Form.Item
           label="Ngày thu"
           name="paymentDate"
-          rules={[{ required: true, message: 'Vui lòng chọn ngày thu' }]}
+          rules={[{ required: true, message: 'Vui lòng nhập ngày thu' }]}
           extra="Ngày thu quyết định kỳ sổ thu chi. Hóa đơn cũ vẫn thu được nếu ngày thu thuộc tháng đang mở."
         >
           <DatePicker

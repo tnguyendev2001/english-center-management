@@ -18,6 +18,7 @@ import com.englishcenter.enrollment.EnrollmentRepository;
 import com.englishcenter.enrollment.EnrollmentSessionService;
 import com.englishcenter.enrollment.EnrollmentStatus;
 import com.englishcenter.invoice.Invoice;
+import com.englishcenter.invoice.InvoiceBillingSnapshotService;
 import com.englishcenter.invoice.InvoiceRepository;
 import com.englishcenter.invoice.InvoiceStatus;
 import com.englishcenter.studentpackage.StudentPackage;
@@ -51,6 +52,7 @@ public class ClassroomRenewalService {
     private final ClassPackageRepository classPackageRepository;
     private final InvoiceRepository invoiceRepository;
     private final EnrollmentSessionService enrollmentSessionService;
+    private final InvoiceBillingSnapshotService invoiceBillingSnapshotService;
 
     public ClassroomRenewalService(
             ClassroomRepository classroomRepository,
@@ -59,7 +61,8 @@ public class ClassroomRenewalService {
             TuitionPackageRepository tuitionPackageRepository,
             ClassPackageRepository classPackageRepository,
             InvoiceRepository invoiceRepository,
-            EnrollmentSessionService enrollmentSessionService
+            EnrollmentSessionService enrollmentSessionService,
+            InvoiceBillingSnapshotService invoiceBillingSnapshotService
     ) {
         this.classroomRepository = classroomRepository;
         this.enrollmentRepository = enrollmentRepository;
@@ -68,6 +71,7 @@ public class ClassroomRenewalService {
         this.classPackageRepository = classPackageRepository;
         this.invoiceRepository = invoiceRepository;
         this.enrollmentSessionService = enrollmentSessionService;
+        this.invoiceBillingSnapshotService = invoiceBillingSnapshotService;
     }
 
     @Transactional(readOnly = true)
@@ -277,17 +281,25 @@ public class ClassroomRenewalService {
             invoice.setClassroom(enrollment.getClassroom());
             invoice.setEnrollment(enrollment);
             invoice.setStudentPackage(newStudentPackage);
-            invoice.setPackageNameSnapshot(tuitionPackage.getName());
-            invoice.setTotalSessionsSnapshot(tuitionPackage.getTotalSessions());
             invoice.setAmount(tuitionPackage.getPrice());
             invoice.setDiscountAmount(ZERO);
             invoice.setAdjustmentAmount(ZERO);
             invoice.setFinalAmount(tuitionPackage.getPrice());
             invoice.setPaidAmount(ZERO);
             invoice.setRemainingAmount(tuitionPackage.getPrice());
-            invoice.setDueDate(effectiveDate);
             invoice.setStatus(InvoiceStatus.UNPAID);
             invoice.setNote(command.invoiceNote() != null ? command.invoiceNote() : "Gia hạn gói học phí");
+            LocalDate issueDate = LocalDate.now();
+            LocalDate overrideDueDate = command.sourceType() == StudentPackageSourceType.LEGACY_IMPORT
+                    ? effectiveDate
+                    : null;
+            invoiceBillingSnapshotService.applyBillingSnapshot(
+                    invoice,
+                    newStudentPackage,
+                    tuitionPackage,
+                    issueDate,
+                    overrideDueDate
+            );
             invoice = invoiceRepository.save(invoice);
             invoiceId = invoice.getId();
         }

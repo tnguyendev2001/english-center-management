@@ -57,6 +57,18 @@ public class Invoice {
     @Column(name = "total_sessions_snapshot", nullable = false)
     private Integer totalSessionsSnapshot;
 
+    @Column(name = "package_price_snapshot", precision = 19, scale = 2)
+    private BigDecimal packagePriceSnapshot;
+
+    @Column(name = "package_id")
+    private Long packageId;
+
+    @Column(name = "cycle_no")
+    private Integer cycleNo;
+
+    @Column(name = "effective_from")
+    private LocalDate effectiveFrom;
+
     @Column(name = "amount", nullable = false, precision = 19, scale = 2)
     private BigDecimal amount;
 
