@@ -166,4 +166,71 @@ public interface ClassSessionRepository extends JpaRepository<ClassSession, Long
             WHERE session.id = :id
             """)
     Optional<ClassSession> findByIdWithClassroom(@Param("id") Long id);
+
+    @Query("""
+            SELECT DISTINCT session
+            FROM ClassSession session
+            JOIN FETCH session.classroom classroom
+            JOIN Enrollment enrollment ON enrollment.classroom.id = classroom.id
+            WHERE enrollment.student.id = :studentId
+            ORDER BY session.sessionDate ASC, session.startTime ASC
+            """)
+    List<ClassSession> findByEnrolledStudentId(@Param("studentId") Long studentId);
+
+    @Query("""
+            SELECT session
+            FROM ClassSession session
+            JOIN FETCH session.classroom classroom
+            WHERE classroom.teacherId = :teacherId
+            ORDER BY session.sessionDate ASC, session.startTime ASC
+            """)
+    List<ClassSession> findByClassroomTeacherId(@Param("teacherId") Long teacherId);
+
+    @Query("""
+            SELECT session
+            FROM ClassSession session
+            JOIN FETCH session.classroom classroom
+            WHERE classroom.teacherId = :teacherId
+              AND session.sessionDate = :sessionDate
+              AND session.status <> com.englishcenter.classsession.ClassSessionStatus.CANCELED
+            ORDER BY session.startTime ASC
+            """)
+    List<ClassSession> findTodayByTeacherId(
+            @Param("teacherId") Long teacherId,
+            @Param("sessionDate") LocalDate sessionDate
+    );
+
+    @Query("""
+            SELECT session
+            FROM ClassSession session
+            JOIN FETCH session.classroom classroom
+            WHERE classroom.teacherId = :teacherId
+              AND session.sessionDate >= :fromDate
+              AND session.status <> com.englishcenter.classsession.ClassSessionStatus.CANCELED
+            ORDER BY session.sessionDate ASC, session.startTime ASC
+            """)
+    List<ClassSession> findUpcomingByTeacherId(
+            @Param("teacherId") Long teacherId,
+            @Param("fromDate") LocalDate fromDate
+    );
+
+    @Query("""
+            SELECT session
+            FROM ClassSession session
+            JOIN FETCH session.classroom classroom
+            WHERE classroom.teacherId = :teacherId
+              AND session.sessionDate < :beforeDate
+              AND session.status <> com.englishcenter.classsession.ClassSessionStatus.CANCELED
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM Attendance attendance
+                  WHERE attendance.session = session
+                    AND attendance.valid = true
+              )
+            ORDER BY session.sessionDate DESC, session.startTime DESC
+            """)
+    List<ClassSession> findIncompleteAttendanceByTeacherId(
+            @Param("teacherId") Long teacherId,
+            @Param("beforeDate") LocalDate beforeDate
+    );
 }

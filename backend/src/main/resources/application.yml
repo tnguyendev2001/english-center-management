@@ -11,6 +11,18 @@ spring:
 app:
   time:
     zone-id: Asia/Ho_Chi_Minh
+  cors:
+    allowed-origins: ${APP_ALLOWED_ORIGINS:${CORS_ALLOWED_ORIGINS:http://localhost:5173}}
+
+security:
+  jwt:
+    issuer: ${JWT_ISSUER:school-management}
+    audience: ${JWT_AUDIENCE:school-management-web}
+    expiration-minutes: ${JWT_EXPIRATION_MINUTES:240}
+    secret: ${JWT_SECRET:}
+  admin:
+    username: ${APP_ADMIN_USERNAME:}
+    password: ${APP_ADMIN_PASSWORD:}
 
 management:
   endpoints:

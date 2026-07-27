@@ -1,9 +1,11 @@
 import { Button, Card, Descriptions, Empty, Space, Spin, Table, Typography } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
+import { useAuth } from '../../auth/AuthContext'
 import { useClassPackages } from '../../classPackages/classPackageQueries'
 import { RenewAllPackagesModal } from '../../classrooms/components/RenewAllPackagesModal'
 import { classroomDetailPath } from '../../classrooms/classroomRoutes'
@@ -21,6 +23,8 @@ import { useStudentDetail } from '../studentQueries'
 const { Title, Text } = Typography
 
 export function StudentDetailPage() {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'ADMIN'
   const { id } = useParams()
   const studentId = Number(id)
   const studentQuery = useStudentDetail(studentId)
@@ -79,93 +83,123 @@ export function StudentDetailPage() {
           dataSource={studentPackagesQuery.data ?? []}
           loading={studentPackagesQuery.isLoading}
           pagination={false}
-          columns={[
-            {
-              title: 'Lớp học',
-              dataIndex: 'classroomName',
-              key: 'classroomName',
-              render: (classroomName: string, record: EnrollmentLearningProgress) => (
-                <Link to={classroomDetailPath(record.classroomId)}>{classroomName}</Link>
-              ),
-            },
-            {
-              title: 'Gói gần nhất',
-              dataIndex: 'latestPackageName',
-              key: 'latestPackageName',
-            },
-            {
-              title: 'Học phí',
-              key: 'latestPackagePrice',
-              render: (_: unknown, record: EnrollmentLearningProgress) =>
-                record.latestPackagePrice != null ? (
-                  <MoneyText value={record.latestPackagePrice} />
-                ) : (
-                  '-'
+          columns={
+            [
+              {
+                title: 'Lớp học',
+                dataIndex: 'classroomName',
+                key: 'classroomName',
+                render: (classroomName: string, record: EnrollmentLearningProgress) => (
+                  <Link to={classroomDetailPath(record.classroomId)}>{classroomName}</Link>
                 ),
-            },
-            { title: 'Tổng buổi', dataIndex: 'totalSessions', key: 'totalSessions' },
-            { title: 'Đã học', dataIndex: 'usedSessions', key: 'usedSessions' },
-            {
-              title: 'Còn lại',
-              key: 'remainingSessions',
-              render: (_: unknown, record: EnrollmentLearningProgress) => record.remainingSessions,
-            },
-            { title: 'Buổi bù', dataIndex: 'makeupAvailableSessions', key: 'makeupAvailableSessions' },
-            {
-              title: 'Thời gian học',
-              key: 'learningDates',
-              render: (_: unknown, record: EnrollmentLearningProgress) =>
-                `${dayjs(record.startDate).format('DD/MM/YYYY')} - ${
-                  record.endDate ? dayjs(record.endDate).format('DD/MM/YYYY') : 'nay'
-                }`,
-            },
-            {
-              title: 'Trạng thái',
-              dataIndex: 'status',
-              key: 'status',
-              render: (status: string) => (
-                <StatusTag status={status} labels={{ CANCELED: 'Đã hủy ghi danh' }} />
-              ),
-            },
-            {
-              title: 'Thao tác',
-              key: 'actions',
-              render: (_: unknown, record: EnrollmentLearningProgress) => (
-                <Space wrap size={0}>
-                  {record.status === 'ACTIVE' ? (
-                    <>
-                      <Button
-                        type="link"
-                        onClick={() => setLifecycleAction({ action: 'hold', enrollment: record })}
-                      >
-                        Bảo lưu
-                      </Button>
-                      <Button
-                        type="link"
-                        onClick={() => setLifecycleAction({ action: 'stop', enrollment: record })}
-                      >
-                        Ngừng học
-                      </Button>
-                      <Button
-                        type="link"
-                        onClick={() => setLifecycleAction({ action: 'transfer', enrollment: record })}
-                      >
-                        Chuyển lớp
-                      </Button>
-                      <Button type="link" onClick={() => setRenewingProgress(record)}>
-                        Gia hạn học
-                      </Button>
-                      <Button
-                        type="link"
-                        danger
-                        onClick={() => setLifecycleAction({ action: 'cancel', enrollment: record })}
-                      >
-                        Hủy ghi danh
-                      </Button>
-                    </>
-                  ) : null}
-                  {record.status === 'ON_HOLD' ? (
-                    <>
+              },
+              {
+                title: 'Gói gần nhất',
+                dataIndex: 'latestPackageName',
+                key: 'latestPackageName',
+              },
+              ...(isAdmin
+                ? [
+                    {
+                      title: 'Học phí',
+                      key: 'latestPackagePrice',
+                      render: (_: unknown, record: EnrollmentLearningProgress) =>
+                        record.latestPackagePrice != null ? (
+                          <MoneyText value={record.latestPackagePrice} />
+                        ) : (
+                          '-'
+                        ),
+                    },
+                  ]
+                : []),
+              { title: 'Tổng buổi', dataIndex: 'totalSessions', key: 'totalSessions' },
+              { title: 'Đã học', dataIndex: 'usedSessions', key: 'usedSessions' },
+              {
+                title: 'Còn lại',
+                key: 'remainingSessions',
+                render: (_: unknown, record: EnrollmentLearningProgress) => record.remainingSessions,
+              },
+              {
+                title: 'Buổi bù',
+                dataIndex: 'makeupAvailableSessions',
+                key: 'makeupAvailableSessions',
+              },
+              {
+                title: 'Thời gian học',
+                key: 'learningDates',
+                render: (_: unknown, record: EnrollmentLearningProgress) =>
+                  `${dayjs(record.startDate).format('DD/MM/YYYY')} - ${
+                    record.endDate ? dayjs(record.endDate).format('DD/MM/YYYY') : 'nay'
+                  }`,
+              },
+              {
+                title: 'Trạng thái',
+                dataIndex: 'status',
+                key: 'status',
+                render: (status: string) => (
+                  <StatusTag status={status} labels={{ CANCELED: 'Đã hủy ghi danh' }} />
+                ),
+              },
+              {
+                title: 'Thao tác',
+                key: 'actions',
+                render: (_: unknown, record: EnrollmentLearningProgress) => (
+                  <Space wrap size={0}>
+                    {isAdmin && record.status === 'ACTIVE' ? (
+                      <>
+                        <Button
+                          type="link"
+                          onClick={() => setLifecycleAction({ action: 'hold', enrollment: record })}
+                        >
+                          Bảo lưu
+                        </Button>
+                        <Button
+                          type="link"
+                          onClick={() => setLifecycleAction({ action: 'stop', enrollment: record })}
+                        >
+                          Ngừng học
+                        </Button>
+                        <Button
+                          type="link"
+                          onClick={() =>
+                            setLifecycleAction({ action: 'transfer', enrollment: record })
+                          }
+                        >
+                          Chuyển lớp
+                        </Button>
+                        <Button type="link" onClick={() => setRenewingProgress(record)}>
+                          Gia hạn học
+                        </Button>
+                        <Button
+                          type="link"
+                          danger
+                          onClick={() =>
+                            setLifecycleAction({ action: 'cancel', enrollment: record })
+                          }
+                        >
+                          Hủy ghi danh
+                        </Button>
+                      </>
+                    ) : null}
+                    {isAdmin && record.status === 'ON_HOLD' ? (
+                      <>
+                        <Button
+                          type="link"
+                          onClick={() =>
+                            setLifecycleAction({ action: 'reactivate', enrollment: record })
+                          }
+                        >
+                          Học lại
+                        </Button>
+                        <Button
+                          type="link"
+                          onClick={() => setLifecycleAction({ action: 'stop', enrollment: record })}
+                        >
+                          Ngừng học
+                        </Button>
+                      </>
+                    ) : null}
+                    {isAdmin && record.status === 'STOPPED' ? (
                       <Button
                         type="link"
                         onClick={() =>
@@ -174,31 +208,18 @@ export function StudentDetailPage() {
                       >
                         Học lại
                       </Button>
-                      <Button
-                        type="link"
-                        onClick={() => setLifecycleAction({ action: 'stop', enrollment: record })}
-                      >
-                        Ngừng học
-                      </Button>
-                    </>
-                  ) : null}
-                  {record.status === 'STOPPED' ? (
-                    <Button
-                      type="link"
-                      onClick={() =>
-                        setLifecycleAction({ action: 'reactivate', enrollment: record })
-                      }
-                    >
-                      Học lại
+                    ) : null}
+                    <Button type="link" onClick={() => setHistoryEnrollment(record)}>
+                      Lịch sử
                     </Button>
-                  ) : null}
-                  <Button type="link" onClick={() => setHistoryEnrollment(record)}>
-                    Lịch sử
-                  </Button>
-                </Space>
-              ),
-            },
-          ]}
+                    <Link to={classroomDetailPath(record.classroomId, { tab: 'attendance' })}>
+                      Điểm danh lớp
+                    </Link>
+                  </Space>
+                ),
+              },
+            ] as ColumnsType<EnrollmentLearningProgress>
+          }
         />
       </Card>
 

@@ -339,20 +339,31 @@ export function AttendanceMarkPanel({
                           {student.blockedReason}
                         </Typography.Text>
                       ) : null}
-                      <Space wrap size={0}>
-                        <Button type="link" onClick={() => onRenewNow?.(student.enrollmentId)}>
-                          Gia hạn
-                        </Button>
-                        <Button type="link" onClick={() => onStopEnrollment?.(student.enrollmentId)}>
-                          Ngừng học
-                        </Button>
-                        <Button
-                          type="link"
-                          onClick={() => onTransferEnrollment?.(student.enrollmentId)}
-                        >
-                          Chuyển lớp
-                        </Button>
-                      </Space>
+                      {onRenewNow || onStopEnrollment || onTransferEnrollment ? (
+                        <Space wrap size={0}>
+                          {onRenewNow ? (
+                            <Button type="link" onClick={() => onRenewNow(student.enrollmentId)}>
+                              Gia hạn
+                            </Button>
+                          ) : null}
+                          {onStopEnrollment ? (
+                            <Button
+                              type="link"
+                              onClick={() => onStopEnrollment(student.enrollmentId)}
+                            >
+                              Ngừng học
+                            </Button>
+                          ) : null}
+                          {onTransferEnrollment ? (
+                            <Button
+                              type="link"
+                              onClick={() => onTransferEnrollment(student.enrollmentId)}
+                            >
+                              Chuyển lớp
+                            </Button>
+                          ) : null}
+                        </Space>
+                      ) : null}
                     </Space>
                   ) : (
                     '-'

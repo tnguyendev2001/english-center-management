@@ -58,6 +58,7 @@ import type {
 } from '../../studentPackages/studentPackageTypes'
 import { useTuitionPackages } from '../../tuitionPackages/tuitionPackageQueries'
 import type { TuitionPackageSearchParams } from '../../tuitionPackages/tuitionPackageTypes'
+import { useAuth } from '../../auth/AuthContext'
 import { useClassroomDetail, useEligibleStudents } from '../classroomQueries'
 import { parseClassroomDetailSearchParams } from '../classroomRoutes'
 import { formatDaysOfWeek } from '../classroomTypes'
@@ -65,6 +66,8 @@ import { formatDaysOfWeek } from '../classroomTypes'
 const { Title, Text } = Typography
 
 export function ClassroomDetailPage() {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'ADMIN'
   const { id } = useParams()
   const [searchParams] = useSearchParams()
   const classroomId = Number(id)
@@ -136,7 +139,7 @@ export function ClassroomDetailPage() {
 
   const classroom = classroomQuery.data
   const classPackages = classPackagesQuery.data ?? []
-  const canEnroll = classroom.status === 'PLANNED' || classroom.status === 'ONGOING'
+  const canEnroll = isAdmin && (classroom.status === 'PLANNED' || classroom.status === 'ONGOING')
   const canMarkAttendance = classroom.status === 'ONGOING'
   const currentEnrollments = dedupeCurrentEnrollments(
     (enrollmentsQuery.data?.data ?? []).filter(
@@ -249,7 +252,11 @@ export function ClassroomDetailPage() {
       <Descriptions.Item label="Mã lớp">{classroom.classCode}</Descriptions.Item>
       <Descriptions.Item label="Tên lớp">{classroom.className}</Descriptions.Item>
       <Descriptions.Item label="Trình độ">{classroom.level}</Descriptions.Item>
-      <Descriptions.Item label="Giáo viên">{classroom.teacherName}</Descriptions.Item>
+      <Descriptions.Item label="Giáo viên">
+        {classroom.teacherAssigned && classroom.teacherName
+          ? classroom.teacherName
+          : 'Chưa phân công'}
+      </Descriptions.Item>
       <Descriptions.Item label="Phòng học">{classroom.room || '-'}</Descriptions.Item>
       <Descriptions.Item label="Ngày bắt đầu">
         {dayjs(classroom.startDate).format('DD/MM/YYYY')}
@@ -291,7 +298,12 @@ export function ClassroomDetailPage() {
   const sessionsTab = (
     <ClassroomSessionsPanel
       classroomId={classroomId}
+      classroom={classroom}
       canMarkAttendance={canMarkAttendance}
+      canManageSessions={isAdmin}
+      canCreateSession={
+        !isAdmin && (classroom.status === 'PLANNED' || classroom.status === 'ONGOING')
+      }
       onOpenAttendance={openAttendance}
     />
   )
@@ -304,9 +316,13 @@ export function ClassroomDetailPage() {
       loadingSessions={sessionsQuery.isLoading}
       selectedSessionId={attendanceSessionId}
       onSelectedSessionIdChange={setAttendanceSessionId}
-      onRenewNow={() => setRenewalModalOpen(true)}
-      onStopEnrollment={(enrollmentId) => openLifecycleAction('stop', enrollmentId)}
-      onTransferEnrollment={(enrollmentId) => openLifecycleAction('transfer', enrollmentId)}
+      onRenewNow={isAdmin ? () => setRenewalModalOpen(true) : undefined}
+      onStopEnrollment={
+        isAdmin ? (enrollmentId) => openLifecycleAction('stop', enrollmentId) : undefined
+      }
+      onTransferEnrollment={
+        isAdmin ? (enrollmentId) => openLifecycleAction('transfer', enrollmentId) : undefined
+      }
       isActive={activeTab === 'attendance'}
     />
   )
@@ -431,18 +447,20 @@ export function ClassroomDetailPage() {
         />
       ) : null}
 
-      <Space>
-        {canEnroll ? (
-          <Button type="primary" onClick={() => setEnrollModalOpen(true)}>
-            Ghi danh học viên
+      {isAdmin ? (
+        <Space>
+          {canEnroll ? (
+            <Button type="primary" onClick={() => setEnrollModalOpen(true)}>
+              Ghi danh học viên
+            </Button>
+          ) : (
+            <Text type="secondary">Không thể ghi danh khi lớp đã kết thúc hoặc đã hủy.</Text>
+          )}
+          <Button onClick={() => setRenewalModalOpen(true)} disabled={classPackages.length === 0}>
+            Gia hạn hàng loạt
           </Button>
-        ) : (
-          <Text type="secondary">Không thể ghi danh khi lớp đã kết thúc hoặc đã hủy.</Text>
-        )}
-        <Button onClick={() => setRenewalModalOpen(true)} disabled={classPackages.length === 0}>
-          Gia hạn hàng loạt
-        </Button>
-      </Space>
+        </Space>
+      ) : null}
 
       <Card>
         <Tabs
@@ -454,11 +472,15 @@ export function ClassroomDetailPage() {
               label: 'Thông tin lớp',
               children: infoTab,
             },
-            {
-              key: 'packages',
-              label: 'Gói học phí',
-              children: packagesTab,
-            },
+            ...(isAdmin
+              ? [
+                  {
+                    key: 'packages',
+                    label: 'Gói học phí',
+                    children: packagesTab,
+                  },
+                ]
+              : []),
             {
               key: 'students',
               label: 'Học viên',
@@ -478,16 +500,21 @@ export function ClassroomDetailPage() {
                         progressByEnrollmentId.get(enrollment.id)?.latestPackageName
                         ?? enrollment.packageNameSnapshot,
                     },
-                    {
-                      title: 'Học phí',
-                      key: 'latestPackagePrice',
-                      render: (_, enrollment) => {
-                        const progress = progressByEnrollmentId.get(enrollment.id)
-                        const price = progress?.latestPackagePrice ?? enrollment.packagePriceSnapshot
+                    ...(isAdmin
+                      ? [
+                          {
+                            title: 'Học phí',
+                            key: 'latestPackagePrice',
+                            render: (_: unknown, enrollment: Enrollment) => {
+                              const progress = progressByEnrollmentId.get(enrollment.id)
+                              const price =
+                                progress?.latestPackagePrice ?? enrollment.packagePriceSnapshot
 
-                        return price != null ? <MoneyText value={price} /> : '-'
-                      },
-                    },
+                              return price != null ? <MoneyText value={price} /> : '-'
+                            },
+                          },
+                        ]
+                      : []),
                     {
                       title: 'Tổng buổi',
                       key: 'totalSessions',
@@ -529,90 +556,101 @@ export function ClassroomDetailPage() {
                         <StatusTag status={status} labels={{ CANCELED: 'Đã hủy ghi danh' }} />
                       ),
                     },
-                    {
-                      title: 'Thao tác',
-                      key: 'actions',
-                      render: (_, enrollment) => {
-                        const progress = progressByEnrollmentId.get(enrollment.id)
-                        const disabledReason = getChangePackageDisabledReason(progress)
+                    ...(isAdmin
+                      ? [
+                          {
+                            title: 'Thao tác',
+                            key: 'actions',
+                            render: (_: unknown, enrollment: Enrollment) => {
+                              const progress = progressByEnrollmentId.get(enrollment.id)
+                              const disabledReason = getChangePackageDisabledReason(progress)
 
-                        return (
-                          <Space wrap size={0}>
-                            {enrollment.status === 'ACTIVE' ? (
-                              <>
-                                <Tooltip title={disabledReason}>
-                                  <span>
+                              return (
+                                <Space wrap size={0}>
+                                  {enrollment.status === 'ACTIVE' ? (
+                                    <>
+                                      <Tooltip title={disabledReason}>
+                                        <span>
+                                          <Button
+                                            type="link"
+                                            disabled={Boolean(disabledReason)}
+                                            onClick={() => {
+                                              if (progress) {
+                                                setChangingPackage(progress)
+                                              }
+                                            }}
+                                          >
+                                            Đổi gói
+                                          </Button>
+                                        </span>
+                                      </Tooltip>
+                                      <Button
+                                        type="link"
+                                        onClick={() => openLifecycleAction('hold', enrollment.id)}
+                                      >
+                                        Bảo lưu
+                                      </Button>
+                                      <Button
+                                        type="link"
+                                        onClick={() => openLifecycleAction('stop', enrollment.id)}
+                                      >
+                                        Ngừng học
+                                      </Button>
+                                      <Button
+                                        type="link"
+                                        onClick={() => openLifecycleAction('transfer', enrollment.id)}
+                                      >
+                                        Chuyển lớp
+                                      </Button>
+                                      <Button
+                                        type="link"
+                                        danger
+                                        onClick={() => openLifecycleAction('cancel', enrollment.id)}
+                                      >
+                                        Hủy ghi danh
+                                      </Button>
+                                    </>
+                                  ) : null}
+                                  {enrollment.status === 'ON_HOLD' ? (
+                                    <>
+                                      <Button
+                                        type="link"
+                                        onClick={() =>
+                                          openLifecycleAction('reactivate', enrollment.id)
+                                        }
+                                      >
+                                        Học lại
+                                      </Button>
+                                      <Button
+                                        type="link"
+                                        onClick={() => openLifecycleAction('stop', enrollment.id)}
+                                      >
+                                        Ngừng học
+                                      </Button>
+                                    </>
+                                  ) : null}
+                                  {enrollment.status === 'STOPPED' ? (
                                     <Button
                                       type="link"
-                                      disabled={Boolean(disabledReason)}
-                                      onClick={() => {
-                                        if (progress) {
-                                          setChangingPackage(progress)
-                                        }
-                                      }}
+                                      onClick={() =>
+                                        openLifecycleAction('reactivate', enrollment.id)
+                                      }
                                     >
-                                      Đổi gói
+                                      Học lại
                                     </Button>
-                                  </span>
-                                </Tooltip>
-                                <Button
-                                  type="link"
-                                  onClick={() => openLifecycleAction('hold', enrollment.id)}
-                                >
-                                  Bảo lưu
-                                </Button>
-                                <Button
-                                  type="link"
-                                  onClick={() => openLifecycleAction('stop', enrollment.id)}
-                                >
-                                  Ngừng học
-                                </Button>
-                                <Button
-                                  type="link"
-                                  onClick={() => openLifecycleAction('transfer', enrollment.id)}
-                                >
-                                  Chuyển lớp
-                                </Button>
-                                <Button
-                                  type="link"
-                                  danger
-                                  onClick={() => openLifecycleAction('cancel', enrollment.id)}
-                                >
-                                  Hủy ghi danh
-                                </Button>
-                              </>
-                            ) : null}
-                            {enrollment.status === 'ON_HOLD' ? (
-                              <>
-                                <Button
-                                  type="link"
-                                  onClick={() => openLifecycleAction('reactivate', enrollment.id)}
-                                >
-                                  Học lại
-                                </Button>
-                                <Button
-                                  type="link"
-                                  onClick={() => openLifecycleAction('stop', enrollment.id)}
-                                >
-                                  Ngừng học
-                                </Button>
-                              </>
-                            ) : null}
-                            {enrollment.status === 'STOPPED' ? (
-                              <Button
-                                type="link"
-                                onClick={() => openLifecycleAction('reactivate', enrollment.id)}
-                              >
-                                Học lại
-                              </Button>
-                            ) : null}
-                            <Button type="link" onClick={() => setHistoryEnrollment(enrollment)}>
-                              Lịch sử
-                            </Button>
-                          </Space>
-                        )
-                      },
-                    },
+                                  ) : null}
+                                  <Button
+                                    type="link"
+                                    onClick={() => setHistoryEnrollment(enrollment)}
+                                  >
+                                    Lịch sử
+                                  </Button>
+                                </Space>
+                              )
+                            },
+                          } as ColumnsType<Enrollment>[number],
+                        ]
+                      : []),
                   ]}
                 />
               ),

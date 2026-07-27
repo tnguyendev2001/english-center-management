@@ -8,16 +8,20 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.englishcenter.attendance.AttendanceRepository;
-import com.englishcenter.enrollment.EnrollmentRepository;
-import com.englishcenter.enrollment.EnrollmentSessionService;
-import com.englishcenter.enrollment.EnrollmentStatusHistoryRepository;
+import com.englishcenter.classroom.dto.ClassroomCreateRequest;
 import com.englishcenter.classroom.dto.ClassroomResponse;
 import com.englishcenter.classroom.dto.ClassroomUpdateRequest;
 import com.englishcenter.classroom.mapper.ClassroomMapper;
 import com.englishcenter.common.exception.BusinessException;
-import com.englishcenter.classroom.dto.ClassroomCreateRequest;
+import com.englishcenter.enrollment.EnrollmentRepository;
+import com.englishcenter.enrollment.EnrollmentSessionService;
+import com.englishcenter.enrollment.EnrollmentStatusHistoryRepository;
+import com.englishcenter.teacher.Teacher;
+import com.englishcenter.teacher.TeacherRepository;
+import com.englishcenter.teacher.TeacherStatus;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -42,7 +46,11 @@ class ClassroomServiceTest {
     @Mock
     private ClassroomScheduleUpdateService classroomScheduleUpdateService;
 
+    @Mock
+    private TeacherRepository teacherRepository;
+
     private final ClassroomMapper classroomMapper = new ClassroomMapper();
+
     @Test
     void createRejectsDuplicateClassCode() {
         ClassroomService classroomService = newService();
@@ -63,6 +71,8 @@ class ClassroomServiceTest {
         ClassroomCreateRequest request = validCreateRequest();
 
         when(classroomRepository.existsByClassCode("CLS001")).thenReturn(false);
+        when(teacherRepository.findById(10L)).thenReturn(Optional.of(activeTeacher()));
+        when(enrollmentRepository.findByClassroomIdAndStatus(any(), any())).thenReturn(List.of());
         when(classroomRepository.save(any(Classroom.class))).thenAnswer(invocation -> {
             Classroom classroom = invocation.getArgument(0);
             classroom.setId(1L);
@@ -74,12 +84,39 @@ class ClassroomServiceTest {
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.classCode()).isEqualTo("CLS001");
         assertThat(response.className()).isEqualTo("Starter A");
+        assertThat(response.teacherId()).isEqualTo(10L);
+        assertThat(response.teacherName()).isEqualTo("Ms Hoa");
         assertThat(response.status()).isEqualTo(ClassroomStatus.PLANNED);
         assertThat(response.daysOfWeek()).containsExactly(
                 ClassDayOfWeek.MONDAY,
                 ClassDayOfWeek.WEDNESDAY
         );
         verify(classroomRepository).save(any(Classroom.class));
+    }
+
+    @Test
+    void createRejectsMissingTeacherForActiveClassroom() {
+        ClassroomService classroomService = newService();
+        ClassroomCreateRequest request = new ClassroomCreateRequest(
+                "CLS001",
+                "Starter A",
+                "Starter",
+                "Room 1",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 9, 1),
+                Set.of(ClassDayOfWeek.MONDAY, ClassDayOfWeek.WEDNESDAY),
+                LocalTime.of(18, 0),
+                LocalTime.of(19, 30),
+                ClassroomStatus.PLANNED,
+                null,
+                null
+        );
+
+        when(classroomRepository.existsByClassCode("CLS001")).thenReturn(false);
+
+        assertThatThrownBy(() -> classroomService.create(request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Vui lòng chọn giáo viên phụ trách lớp.");
     }
 
     @Test
@@ -107,6 +144,8 @@ class ClassroomServiceTest {
 
         when(classroomRepository.findById(1L)).thenReturn(Optional.of(classroom));
         when(classroomRepository.existsByClassCodeAndIdNot("CLS002", 1L)).thenReturn(false);
+        when(teacherRepository.findById(11L)).thenReturn(Optional.of(activeTeacher(11L, "Ms Lan")));
+        when(enrollmentRepository.findByClassroomIdAndStatus(any(), any())).thenReturn(List.of());
         when(classroomRepository.save(classroom)).thenReturn(classroom);
 
         ClassroomResponse response = classroomService.update(1L, request);
@@ -129,7 +168,6 @@ class ClassroomServiceTest {
                 "CLS001",
                 "Starter A",
                 "Starter",
-                "Ms Hoa",
                 "Room 1",
                 LocalDate.of(2026, 6, 30),
                 LocalDate.of(2026, 9, 1),
@@ -137,7 +175,8 @@ class ClassroomServiceTest {
                 LocalTime.of(18, 0),
                 LocalTime.of(19, 30),
                 ClassroomStatus.PLANNED,
-                null
+                null,
+                10L
         );
 
         when(classroomRepository.existsByClassCode("CLS001")).thenReturn(false);
@@ -156,7 +195,6 @@ class ClassroomServiceTest {
                 "CLS001",
                 "Starter A",
                 "Starter",
-                "Ms Hoa",
                 "Room 1",
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 9, 1),
@@ -164,7 +202,8 @@ class ClassroomServiceTest {
                 LocalTime.of(19, 30),
                 LocalTime.of(18, 0),
                 ClassroomStatus.PLANNED,
-                null
+                null,
+                10L
         );
 
         when(classroomRepository.existsByClassCode("CLS001")).thenReturn(false);
@@ -182,7 +221,6 @@ class ClassroomServiceTest {
                 "CLS001",
                 "Starter A",
                 "Starter",
-                "Ms Hoa",
                 "Room 1",
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 9, 1),
@@ -190,7 +228,8 @@ class ClassroomServiceTest {
                 LocalTime.of(18, 0),
                 LocalTime.of(19, 30),
                 ClassroomStatus.PLANNED,
-                "Evening class"
+                "Evening class",
+                10L
         );
     }
 
@@ -200,7 +239,8 @@ class ClassroomServiceTest {
                 classroomMapper,
                 enrollmentRepository,
                 new EnrollmentSessionService(statusHistoryRepository, enrollmentRepository, attendanceRepository),
-                classroomScheduleUpdateService
+                classroomScheduleUpdateService,
+                teacherRepository
         );
     }
 
@@ -209,7 +249,6 @@ class ClassroomServiceTest {
                 "CLS002",
                 "Starter B",
                 "Starter",
-                "Ms Lan",
                 "Room 2",
                 LocalDate.of(2026, 7, 2),
                 LocalDate.of(2026, 9, 2),
@@ -217,7 +256,8 @@ class ClassroomServiceTest {
                 LocalTime.of(18, 30),
                 LocalTime.of(20, 0),
                 ClassroomStatus.ONGOING,
-                "Updated class"
+                "Updated class",
+                11L
         );
     }
 
@@ -228,6 +268,7 @@ class ClassroomServiceTest {
         classroom.setClassName("Starter A");
         classroom.setLevel("Starter");
         classroom.setTeacherName("Ms Hoa");
+        classroom.setTeacherId(10L);
         classroom.setRoom("Room 1");
         classroom.setStartDate(LocalDate.of(2026, 7, 1));
         classroom.setExpectedEndDate(LocalDate.of(2026, 9, 1));
@@ -236,5 +277,18 @@ class ClassroomServiceTest {
         classroom.setEndTime(LocalTime.of(19, 30));
         classroom.setStatus(ClassroomStatus.PLANNED);
         return classroom;
+    }
+
+    private Teacher activeTeacher() {
+        return activeTeacher(10L, "Ms Hoa");
+    }
+
+    private Teacher activeTeacher(Long id, String name) {
+        Teacher teacher = new Teacher();
+        teacher.setId(id);
+        teacher.setTeacherCode("GV" + id);
+        teacher.setFullName(name);
+        teacher.setStatus(TeacherStatus.ACTIVE);
+        return teacher;
     }
 }

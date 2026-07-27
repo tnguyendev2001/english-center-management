@@ -3,18 +3,23 @@ package com.englishcenter.classsession;
 import com.englishcenter.attendance.Attendance;
 import com.englishcenter.attendance.AttendanceRepository;
 import com.englishcenter.attendance.AttendanceStatus;
+import com.englishcenter.auth.AccountRole;
+import com.englishcenter.auth.security.AccountPrincipal;
 import com.englishcenter.classroom.ClassDayOfWeek;
 import com.englishcenter.classroom.Classroom;
 import com.englishcenter.classroom.ClassroomRepository;
+import com.englishcenter.classroom.ClassroomStatus;
 import com.englishcenter.classsession.dto.CancelClassSessionRequest;
 import com.englishcenter.classsession.dto.ClassSessionResponse;
 import com.englishcenter.classsession.dto.ClassSessionSearchResponse;
+import com.englishcenter.classsession.dto.CreateClassSessionRequest;
 import com.englishcenter.classsession.dto.FocusSessionTargetResponse;
 import com.englishcenter.classsession.dto.FocusSessionTargetsResponse;
 import com.englishcenter.classsession.dto.GenerateClassSessionsRequest;
 import com.englishcenter.classsession.dto.GenerateClassSessionsResponse;
 import com.englishcenter.classsession.dto.SessionGenerationPlan;
 import com.englishcenter.classsession.mapper.ClassSessionMapper;
+import com.englishcenter.common.config.AppTimeProperties;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
 import com.englishcenter.enrollment.Enrollment;
@@ -24,9 +29,11 @@ import com.englishcenter.enrollment.EnrollmentStatus;
 import com.englishcenter.makeupcredit.MakeupCredit;
 import com.englishcenter.makeupcredit.MakeupCreditRepository;
 import com.englishcenter.makeupcredit.MakeupCreditStatus;
+import com.englishcenter.security.SecurityUtils;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -35,6 +42,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,6 +57,7 @@ public class ClassSessionService {
     private final EnrollmentRepository enrollmentRepository;
     private final EnrollmentSessionService enrollmentSessionService;
     private final ClassSessionMapper classSessionMapper;
+    private final AppTimeProperties appTimeProperties;
 
     public ClassSessionService(
             ClassSessionRepository classSessionRepository,
@@ -57,7 +66,8 @@ public class ClassSessionService {
             MakeupCreditRepository makeupCreditRepository,
             EnrollmentRepository enrollmentRepository,
             EnrollmentSessionService enrollmentSessionService,
-            ClassSessionMapper classSessionMapper
+            ClassSessionMapper classSessionMapper,
+            AppTimeProperties appTimeProperties
     ) {
         this.classSessionRepository = classSessionRepository;
         this.classroomRepository = classroomRepository;
@@ -66,6 +76,87 @@ public class ClassSessionService {
         this.enrollmentRepository = enrollmentRepository;
         this.enrollmentSessionService = enrollmentSessionService;
         this.classSessionMapper = classSessionMapper;
+        this.appTimeProperties = appTimeProperties;
+    }
+
+    /**
+     * Shared single-session creation for ADMIN and TEACHER.
+     * Does not create Attendance rows; roster is loaded later by existing attendance rules.
+     */
+    @Transactional
+    public ClassSessionResponse create(CreateClassSessionRequest request) {
+        AccountPrincipal principal = SecurityUtils.requirePrincipal();
+        Classroom classroom = classroomRepository.findById(request.classroomId())
+                .orElseThrow(() -> new NotFoundException("Classroom not found"));
+
+        assertCanCreateSession(principal, classroom);
+
+        if (classroom.getStatus() == ClassroomStatus.COMPLETED
+                || classroom.getStatus() == ClassroomStatus.CANCELED) {
+            throw new BusinessException("Không thể tạo buổi học cho lớp đã ngừng hoạt động.");
+        }
+
+        LocalDate sessionDate = request.sessionDate();
+        LocalDate today = LocalDate.now(appTimeProperties.zoneId());
+        if (principal.role() == AccountRole.TEACHER && sessionDate.isBefore(today)) {
+            throw new BusinessException("Không thể tạo buổi học trong quá khứ.");
+        }
+        if (sessionDate.isBefore(classroom.getStartDate())) {
+            throw new BusinessException("Ngày học không được trước ngày bắt đầu của lớp.");
+        }
+        if (!ClassDayOfWeek.isDateMatchingDaysOfWeek(sessionDate, classroom.getDaysOfWeek())) {
+            throw new BusinessException(
+                    "Ngày học không khớp với lịch học của lớp. Vui lòng sử dụng chức năng Buổi bù nếu đây là buổi học bổ sung."
+            );
+        }
+
+        LocalTime startTime = request.startTime() != null ? request.startTime() : classroom.getStartTime();
+        LocalTime endTime = request.endTime() != null ? request.endTime() : classroom.getEndTime();
+        if (startTime == null || endTime == null) {
+            throw new BusinessException("Giờ bắt đầu và giờ kết thúc là bắt buộc.");
+        }
+        if (!endTime.isAfter(startTime)) {
+            throw new BusinessException("Giờ kết thúc phải sau giờ bắt đầu.");
+        }
+
+        if (classSessionRepository.existsByClassroomIdAndSessionDateAndStartTimeAndEndTime(
+                classroom.getId(),
+                sessionDate,
+                startTime,
+                endTime
+        )) {
+            throw new BusinessException("Lớp đã có buổi học vào thời gian này.");
+        }
+
+        int nextSessionNo = classSessionRepository.countByClassroomId(classroom.getId()) + 1;
+        ClassSession session = new ClassSession();
+        session.setClassroom(classroom);
+        session.setSessionNo(nextSessionNo);
+        session.setSessionDate(sessionDate);
+        session.setStartTime(startTime);
+        session.setEndTime(endTime);
+        session.setStatus(ClassSessionStatus.SCHEDULED);
+        session.setNote(blankToNull(request.note()));
+        return classSessionMapper.toResponse(classSessionRepository.save(session));
+    }
+
+    private void assertCanCreateSession(AccountPrincipal principal, Classroom classroom) {
+        if (principal.role() == AccountRole.ADMIN) {
+            return;
+        }
+        if (principal.role() == AccountRole.TEACHER
+                && principal.teacherId() != null
+                && principal.teacherId().equals(classroom.getTeacherId())) {
+            return;
+        }
+        throw new AccessDeniedException("Bạn không có quyền tạo buổi học cho lớp này.");
+    }
+
+    private String blankToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     /**

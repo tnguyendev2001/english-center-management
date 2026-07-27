@@ -18,6 +18,17 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
 
     Page<Attendance> findAllByOrderByMarkedAtDesc(Pageable pageable);
 
+    @Query("""
+            SELECT attendance
+            FROM Attendance attendance
+            JOIN FETCH attendance.session session
+            JOIN FETCH session.classroom
+            JOIN FETCH attendance.student
+            WHERE attendance.student.id = :studentId
+            ORDER BY attendance.markedAt DESC
+            """)
+    List<Attendance> findByStudentIdOrderByMarkedAtDesc(@Param("studentId") Long studentId, Pageable pageable);
+
     boolean existsBySessionId(Long sessionId);
 
     long countBySessionIdAndValidTrue(Long sessionId);

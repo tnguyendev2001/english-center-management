@@ -9,6 +9,7 @@ public record ClassSessionResponse(
         Long id,
         Long classroomId,
         String classroomName,
+        String room,
         Integer sessionNo,
         LocalDate sessionDate,
         LocalTime startTime,

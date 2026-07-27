@@ -5,6 +5,9 @@ import com.englishcenter.common.api.ErrorResponse;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -21,6 +24,27 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFoundException(NotFoundException exception) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ErrorResponse.of(exception.getMessage()));
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException exception) {
+        String message = exception.getMessage();
+        if (message == null || message.isBlank()) {
+            message = "Tên đăng nhập hoặc mật khẩu không đúng.";
+        }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ErrorResponse.of(message));
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthenticationException(AuthenticationException exception) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ErrorResponse.of("Thông tin xác thực không hợp lệ."));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException exception) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("Bạn không có quyền thực hiện chức năng này."));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

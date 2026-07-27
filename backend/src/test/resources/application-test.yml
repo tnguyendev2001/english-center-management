@@ -19,3 +19,13 @@ app:
     zone-id: Asia/Ho_Chi_Minh
   finance:
     finance-start-date: 2026-05-01
+
+security:
+  jwt:
+    issuer: school-management
+    audience: school-management-web
+    expiration-minutes: 240
+    secret: test-only-jwt-secret-value-with-32b-min
+  admin:
+    username: admin
+    password: Admin12345

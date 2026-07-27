@@ -1,4 +1,4 @@
-import { Button, Card, Input, message, Space, Table, Typography } from 'antd'
+import { Button, Card, Input, message, Select, Space, Table, Tag, Typography } from 'antd'
 import type { TablePaginationConfig } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { isAxiosError } from 'axios'
@@ -7,14 +7,23 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { StatusTag } from '../../../components/common/StatusTag'
 import { ClassroomFormModal } from '../components/ClassroomFormModal'
-import { useClassrooms, useCreateClassroom, useUpdateClassroom } from '../classroomQueries'
+import {
+  useActiveTeachers,
+  useClassrooms,
+  useCreateClassroom,
+  useUpdateClassroom,
+} from '../classroomQueries'
 import type { Classroom, ClassroomPayload, ClassroomSearchParams } from '../classroomTypes'
 import { formatDaysOfWeek } from '../classroomTypes'
 
 const { Title, Text } = Typography
 
+type AssignmentFilter = 'ALL' | 'ASSIGNED' | 'UNASSIGNED'
+
 export function ClassroomListPage() {
   const [keyword, setKeyword] = useState('')
+  const [teacherId, setTeacherId] = useState<number>()
+  const [assignmentFilter, setAssignmentFilter] = useState<AssignmentFilter>('ALL')
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(10)
   const [modalOpen, setModalOpen] = useState(false)
@@ -23,13 +32,17 @@ export function ClassroomListPage() {
   const params: ClassroomSearchParams = useMemo(
     () => ({
       keyword: keyword || undefined,
+      teacherId: assignmentFilter === 'UNASSIGNED' ? undefined : teacherId,
+      unassignedOnly: assignmentFilter === 'UNASSIGNED' ? true : undefined,
+      assignedOnly: assignmentFilter === 'ASSIGNED' ? true : undefined,
       page,
       size,
     }),
-    [keyword, page, size],
+    [assignmentFilter, keyword, page, size, teacherId],
   )
 
   const classroomsQuery = useClassrooms(params)
+  const teachersQuery = useActiveTeachers()
   const createClassroom = useCreateClassroom()
   const updateClassroom = useUpdateClassroom()
 
@@ -54,8 +67,19 @@ export function ClassroomListPage() {
     },
     {
       title: 'Giáo viên',
-      dataIndex: 'teacherName',
-      key: 'teacherName',
+      key: 'teacher',
+      render: (_, classroom) => {
+        if (!classroom.teacherAssigned || !classroom.teacherId) {
+          return <Tag color="warning">Chưa phân công</Tag>
+        }
+
+        return (
+          <Space size={4} wrap>
+            <span>{classroom.teacherName}</span>
+            {classroom.teacherStatus === 'INACTIVE' ? <Tag>Ngừng</Tag> : null}
+          </Space>
+        )
+      },
     },
     {
       title: 'Phòng',
@@ -85,9 +109,14 @@ export function ClassroomListPage() {
       title: 'Thao tác',
       key: 'actions',
       render: (_, classroom) => (
-        <Button type="link" onClick={() => openEditModal(classroom)}>
-          Sửa
-        </Button>
+        <Space size={0}>
+          <Button type="link" onClick={() => openEditModal(classroom)}>
+            {classroom.teacherAssigned ? 'Đổi giáo viên' : 'Phân công giáo viên'}
+          </Button>
+          <Button type="link" onClick={() => openEditModal(classroom)}>
+            Sửa
+          </Button>
+        </Space>
       ),
     },
   ]
@@ -156,18 +185,52 @@ export function ClassroomListPage() {
         <Title level={2} style={{ margin: 0 }}>
           Lớp học
         </Title>
-        <Text type="secondary">Quản lý lớp tiếng Anh, giáo viên, phòng học và lịch học.</Text>
+        <Text type="secondary">Quản lý lớp tiếng Anh, phân công giáo viên, phòng học và lịch học.</Text>
       </Space>
 
       <Card>
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
-            <Input.Search
-              allowClear
-              placeholder="Tìm theo mã lớp, tên lớp, giáo viên hoặc phòng"
-              style={{ width: 420 }}
-              onSearch={handleSearch}
-            />
+            <Space wrap>
+              <Input.Search
+                allowClear
+                placeholder="Tìm theo mã lớp, tên lớp, giáo viên hoặc phòng"
+                style={{ width: 360 }}
+                onSearch={handleSearch}
+              />
+              <Select
+                allowClear
+                placeholder="Lọc theo giáo viên"
+                style={{ width: 240 }}
+                loading={teachersQuery.isLoading}
+                disabled={assignmentFilter === 'UNASSIGNED'}
+                value={teacherId}
+                onChange={(value) => {
+                  setTeacherId(value)
+                  setPage(0)
+                }}
+                options={(teachersQuery.data ?? []).map((teacher) => ({
+                  value: teacher.id,
+                  label: `${teacher.fullName} (${teacher.teacherCode})`,
+                }))}
+              />
+              <Select
+                style={{ width: 200 }}
+                value={assignmentFilter}
+                onChange={(value: AssignmentFilter) => {
+                  setAssignmentFilter(value)
+                  if (value === 'UNASSIGNED') {
+                    setTeacherId(undefined)
+                  }
+                  setPage(0)
+                }}
+                options={[
+                  { value: 'ALL', label: 'Tất cả phân công' },
+                  { value: 'ASSIGNED', label: 'Đã phân công' },
+                  { value: 'UNASSIGNED', label: 'Chưa phân công' },
+                ]}
+              />
+            </Space>
             <Button type="primary" onClick={openCreateModal}>
               Thêm lớp học
             </Button>

@@ -1,5 +1,6 @@
 package com.englishcenter.classroom;
 
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,6 +15,8 @@ public interface ClassroomRepository extends JpaRepository<Classroom, Long> {
 
     boolean existsByClassCodeAndIdNot(String classCode, Long id);
 
+    boolean existsByIdAndTeacherId(Long id, Long teacherId);
+
     Optional<Classroom> findFirstByClassCodeIgnoreCase(String classCode);
 
     @Query("""
@@ -22,15 +25,39 @@ public interface ClassroomRepository extends JpaRepository<Classroom, Long> {
             WHERE LOWER(REPLACE(classroom.className, ' ', '')) = LOWER(:normalizedName)
             ORDER BY classroom.id ASC
             """)
-    java.util.List<Classroom> findByNormalizedClassName(@Param("normalizedName") String normalizedName);
+    List<Classroom> findByNormalizedClassName(@Param("normalizedName") String normalizedName);
 
     @Query("""
             SELECT classroom
             FROM Classroom classroom
             WHERE LOWER(classroom.classCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
                OR LOWER(classroom.className) LIKE LOWER(CONCAT('%', :keyword, '%'))
-               OR LOWER(classroom.teacherName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-               OR LOWER(classroom.room) LIKE LOWER(CONCAT('%', :keyword, '%'))
+               OR (classroom.teacherName IS NOT NULL
+                   AND LOWER(classroom.teacherName) LIKE LOWER(CONCAT('%', :keyword, '%')))
+               OR (classroom.room IS NOT NULL
+                   AND LOWER(classroom.room) LIKE LOWER(CONCAT('%', :keyword, '%')))
             """)
     Page<Classroom> search(@Param("keyword") String keyword, Pageable pageable);
+
+    Page<Classroom> findByTeacherId(Long teacherId, Pageable pageable);
+
+    List<Classroom> findByTeacherIdOrderByClassNameAsc(Long teacherId);
+
+    List<Classroom> findByTeacherIdIsNullOrderByClassNameAsc();
+
+    long countByTeacherId(Long teacherId);
+
+    @Query("""
+            SELECT classroom
+            FROM Classroom classroom
+            WHERE (:teacherId IS NULL OR classroom.teacherId = :teacherId)
+              AND (:unassignedOnly = FALSE OR classroom.teacherId IS NULL)
+              AND (:assignedOnly = FALSE OR classroom.teacherId IS NOT NULL)
+            """)
+    Page<Classroom> searchFiltered(
+            @Param("teacherId") Long teacherId,
+            @Param("unassignedOnly") boolean unassignedOnly,
+            @Param("assignedOnly") boolean assignedOnly,
+            Pageable pageable
+    );
 }

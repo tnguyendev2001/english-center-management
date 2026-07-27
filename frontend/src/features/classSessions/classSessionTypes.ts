@@ -6,6 +6,7 @@ export interface ClassSession {
   id: number
   classroomId: number
   classroomName: string
+  room?: string | null
   sessionNo: number
   sessionDate: string
   startTime: string
@@ -40,6 +41,14 @@ export interface ClassSessionSearchResult {
   content: ClassSession[]
   focusSession: FocusSessionTarget
   focusTargets: FocusSessionTargets
+}
+
+export interface CreateClassSessionPayload {
+  classroomId: number
+  sessionDate: string
+  startTime: string
+  endTime: string
+  note?: string | null
 }
 
 export interface GenerateClassSessionsPayload {

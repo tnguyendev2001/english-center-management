@@ -6,12 +6,15 @@ import { invoiceKeys } from '../invoices/invoiceQueries'
 import { reportKeys } from '../reports/reportQueries'
 import { studentPackageKeys } from '../studentPackages/studentPackageQueries'
 import {
+  assignClassroomTeacher,
   confirmClassroomRenewals,
   createClassroom,
+  getActiveTeachers,
   getClassroom,
   getClassrooms,
   getEligibleStudents,
   getRenewalCandidates,
+  getUnassignedClassrooms,
   previewClassroomRenewals,
   updateClassroom,
 } from './classroomApi'
@@ -80,13 +83,39 @@ export function useConfirmClassroomRenewals(classroomId: number) {
   })
 }
 
+export function useActiveTeachers(enabled = true) {
+  return useQuery({
+    queryKey: ['teachers', 'active'],
+    queryFn: getActiveTeachers,
+    enabled,
+  })
+}
+
+export function useUnassignedClassrooms(enabled = true) {
+  return useQuery({
+    queryKey: ['classrooms', 'unassigned'],
+    queryFn: getUnassignedClassrooms,
+    enabled,
+  })
+}
+
+function invalidateTeacherRelated(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: classroomKeys.all })
+  queryClient.invalidateQueries({ queryKey: ['teachers'] })
+  queryClient.invalidateQueries({ queryKey: ['me'] })
+  queryClient.invalidateQueries({ queryKey: ['me-classrooms'] })
+  queryClient.invalidateQueries({ queryKey: ['me-teacher-dashboard'] })
+  queryClient.invalidateQueries({ queryKey: ['me-students'] })
+  queryClient.invalidateQueries({ queryKey: ['me-sessions'] })
+}
+
 export function useCreateClassroom() {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: createClassroom,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: classroomKeys.all })
+      invalidateTeacherRelated(queryClient)
     },
   })
 }
@@ -98,7 +127,20 @@ export function useUpdateClassroom() {
     mutationFn: ({ id, payload }: { id: number; payload: ClassroomPayload }) =>
       updateClassroom(id, payload),
     onSuccess: (classroom) => {
-      queryClient.invalidateQueries({ queryKey: classroomKeys.all })
+      invalidateTeacherRelated(queryClient)
+      queryClient.invalidateQueries({ queryKey: classroomKeys.detail(classroom.id) })
+    },
+  })
+}
+
+export function useAssignClassroomTeacher() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, teacherId }: { id: number; teacherId: number }) =>
+      assignClassroomTeacher(id, teacherId),
+    onSuccess: (classroom) => {
+      invalidateTeacherRelated(queryClient)
       queryClient.invalidateQueries({ queryKey: classroomKeys.detail(classroom.id) })
     },
   })

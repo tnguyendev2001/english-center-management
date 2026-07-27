@@ -174,4 +174,24 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     @EntityGraph(attributePaths = {"student", "classroom", "selectedPackage"})
     List<Enrollment> findByStudentIdOrderByStartDateDescIdDesc(Long studentId);
+
+    @Query("""
+            SELECT CASE WHEN COUNT(enrollment) > 0 THEN TRUE ELSE FALSE END
+            FROM Enrollment enrollment
+            WHERE enrollment.student.id = :studentId
+              AND enrollment.classroom.teacherId = :teacherId
+            """)
+    boolean existsByStudentIdAndClassroomTeacherId(
+            @Param("studentId") Long studentId,
+            @Param("teacherId") Long teacherId
+    );
+
+    @EntityGraph(attributePaths = {"student", "classroom", "selectedPackage"})
+    @Query("""
+            SELECT enrollment
+            FROM Enrollment enrollment
+            WHERE enrollment.classroom.teacherId = :teacherId
+            ORDER BY enrollment.classroom.className ASC, enrollment.student.fullName ASC
+            """)
+    List<Enrollment> findByClassroomTeacherId(@Param("teacherId") Long teacherId);
 }

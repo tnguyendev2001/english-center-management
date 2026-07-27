@@ -11,6 +11,7 @@ public class ClassSessionMapper {
                 session.getId(),
                 session.getClassroom().getId(),
                 session.getClassroom().getClassName(),
+                session.getClassroom().getRoom(),
                 session.getSessionNo(),
                 session.getSessionDate(),
                 session.getStartTime(),

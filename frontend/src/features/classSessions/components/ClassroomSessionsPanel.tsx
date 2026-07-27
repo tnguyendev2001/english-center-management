@@ -18,10 +18,12 @@ import { isAxiosError } from 'axios'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { StatusTag } from '../../../components/common/StatusTag'
+import type { Classroom } from '../../classrooms/classroomTypes'
 import {
   useCancelClassSession,
   useClassSessions,
   useCorrectionCancelClassSession,
+  useCreateClassSession,
   useGenerateClassSessions,
   useRestoreClassSession,
 } from '../classSessionQueries'
@@ -29,6 +31,7 @@ import type {
   CancelClassSessionPayload,
   ClassSession,
   ClassSessionStatus,
+  CreateClassSessionPayload,
   FocusSessionTarget,
   GenerateClassSessionsPayload,
 } from '../classSessionTypes'
@@ -38,6 +41,7 @@ import {
   getSessionRowClassName,
 } from '../sessionDisplay'
 import { CancelSessionModal } from './CancelSessionModal'
+import { CreateClassSessionModal } from './CreateClassSessionModal'
 import { GenerateSessionsModal } from './GenerateSessionsModal'
 
 const { Text } = Typography
@@ -48,13 +52,19 @@ type QuickNavKey = 'today' | 'next' | 'latest' | 'all'
 
 interface ClassroomSessionsPanelProps {
   classroomId: number
+  classroom?: Classroom
   canMarkAttendance: boolean
+  canManageSessions?: boolean
+  canCreateSession?: boolean
   onOpenAttendance: (sessionId: number) => void
 }
 
 export function ClassroomSessionsPanel({
   classroomId,
+  classroom,
   canMarkAttendance,
+  canManageSessions = true,
+  canCreateSession = false,
   onOpenAttendance,
 }: ClassroomSessionsPanelProps) {
   const [page, setPage] = useState(0)
@@ -64,6 +74,7 @@ export function ClassroomSessionsPanel({
   const [status, setStatus] = useState<ClassSessionStatus>()
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null)
   const [generateSessionsOpen, setGenerateSessionsOpen] = useState(false)
+  const [createSessionOpen, setCreateSessionOpen] = useState(false)
   const [cancelingSession, setCancelingSession] = useState<ClassSession>()
   const [cancelSessionMode, setCancelSessionMode] = useState<CancelSessionMode>('normal')
   const [focusedSessionId, setFocusedSessionId] = useState<number>()
@@ -91,6 +102,7 @@ export function ClassroomSessionsPanel({
 
   const sessionsQuery = useClassSessions(params)
   const generateSessions = useGenerateClassSessions()
+  const createClassSession = useCreateClassSession()
   const cancelClassSession = useCancelClassSession()
   const correctionCancelClassSession = useCorrectionCancelClassSession()
   const restoreClassSession = useRestoreClassSession()
@@ -249,6 +261,19 @@ export function ClassroomSessionsPanel({
     })
   }
 
+  function handleCreateSession(payload: CreateClassSessionPayload) {
+    createClassSession.mutate(payload, {
+      onSuccess: (session) => {
+        setCreateSessionOpen(false)
+        message.success('Tạo buổi học thành công.')
+        autoFocusEnabledRef.current = true
+        scrolledSessionRef.current = null
+        onOpenAttendance(session.id)
+      },
+      onError: showErrorMessage,
+    })
+  }
+
   function handleRestoreSession(sessionId: number) {
     restoreClassSession.mutate(sessionId, {
       onSuccess: () => {
@@ -382,16 +407,18 @@ export function ClassroomSessionsPanel({
           <Button type="link" onClick={() => handleOpenAttendance(session.id)}>
             Chỉnh sửa
           </Button>
-          <Button
-            type="link"
-            danger
-            onClick={() => {
-              setCancelSessionMode('correction')
-              setCancelingSession(session)
-            }}
-          >
-            Hoàn tác điểm danh & hủy buổi
-          </Button>
+          {canManageSessions ? (
+            <Button
+              type="link"
+              danger
+              onClick={() => {
+                setCancelSessionMode('correction')
+                setCancelingSession(session)
+              }}
+            >
+              Hoàn tác điểm danh & hủy buổi
+            </Button>
+          ) : null}
         </Space>
       )
     }
@@ -405,16 +432,18 @@ export function ClassroomSessionsPanel({
         <Button type="link" onClick={() => handleOpenAttendance(session.id)}>
           Điểm danh
         </Button>
-        <Button
-          type="link"
-          danger
-          onClick={() => {
-            setCancelSessionMode('normal')
-            setCancelingSession(session)
-          }}
-        >
-          Hủy buổi
-        </Button>
+        {canManageSessions ? (
+          <Button
+            type="link"
+            danger
+            onClick={() => {
+              setCancelSessionMode('normal')
+              setCancelingSession(session)
+            }}
+          >
+            Hủy buổi
+          </Button>
+        ) : null}
       </Space>
     )
   }
@@ -444,9 +473,16 @@ export function ClassroomSessionsPanel({
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
         <Text type="secondary">Tạo lịch học từ lịch tuần của lớp và điểm danh từng buổi.</Text>
-        <Button type="primary" onClick={() => setGenerateSessionsOpen(true)}>
-          Tạo lịch học
-        </Button>
+        <Space wrap>
+          {canCreateSession ? (
+            <Button type="primary" onClick={() => setCreateSessionOpen(true)}>
+              Tạo buổi học
+            </Button>
+          ) : null}
+          {canManageSessions ? (
+            <Button onClick={() => setGenerateSessionsOpen(true)}>Tạo lịch học</Button>
+          ) : null}
+        </Space>
       </Space>
 
       {noTodayMessage}
@@ -583,6 +619,14 @@ export function ClassroomSessionsPanel({
         submitting={generateSessions.isPending}
         onCancel={() => setGenerateSessionsOpen(false)}
         onSubmit={handleGenerateSessions}
+      />
+
+      <CreateClassSessionModal
+        open={createSessionOpen}
+        classroom={classroom}
+        submitting={createClassSession.isPending}
+        onCancel={() => setCreateSessionOpen(false)}
+        onSubmit={handleCreateSession}
       />
 
       <CancelSessionModal

@@ -10,6 +10,7 @@ import com.englishcenter.common.api.PageMeta;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.data.domain.Page;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,11 +26,13 @@ public class AttendanceController {
     }
 
     @PostMapping("/api/attendance/mark")
+    @PreAuthorize("@authorizationService.canManageAttendance(authentication, #request.sessionId())")
     public ApiResponse<List<AttendanceResponse>> mark(@Valid @RequestBody MarkAttendanceRequest request) {
         return ApiResponse.success(attendanceService.mark(request));
     }
 
     @PostMapping("/api/attendance/readiness")
+    @PreAuthorize("@authorizationService.canManageAttendance(authentication, #request.sessionId())")
     public ApiResponse<AttendanceReadinessResponse> checkReadiness(
             @Valid @RequestBody AttendanceReadinessRequest request
     ) {
@@ -37,11 +40,13 @@ public class AttendanceController {
     }
 
     @GetMapping("/api/attendance/roster")
+    @PreAuthorize("@authorizationService.canManageAttendance(authentication, #sessionId)")
     public ApiResponse<AttendanceRosterResponse> getRoster(@RequestParam Long sessionId) {
         return ApiResponse.success(attendanceService.getRoster(sessionId));
     }
 
     @GetMapping("/api/attendance")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER')")
     public ApiResponse<List<AttendanceResponse>> getAttendance(
             @RequestParam(required = false) Long sessionId,
             @RequestParam(defaultValue = "0") int page,

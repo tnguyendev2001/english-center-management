@@ -10,7 +10,9 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import com.englishcenter.teacher.Teacher;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -40,8 +42,15 @@ public class Classroom {
     @Column(name = "level", nullable = false, length = 100)
     private String level;
 
-    @Column(name = "teacher_name", nullable = false)
+    @Column(name = "teacher_name")
     private String teacherName;
+
+    @Column(name = "teacher_id")
+    private Long teacherId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "teacher_id", insertable = false, updatable = false)
+    private Teacher teacher;
 
     @Column(name = "room", length = 100)
     private String room;

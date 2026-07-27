@@ -27,6 +27,14 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     @Query("""
             SELECT payment
             FROM Payment payment
+            WHERE payment.student.id = :studentId
+            ORDER BY payment.paymentDate DESC, payment.createdAt DESC
+            """)
+    java.util.List<Payment> findByStudentIdOrderByPaymentDateDescCreatedAtDesc(@Param("studentId") Long studentId);
+
+    @Query("""
+            SELECT payment
+            FROM Payment payment
             WHERE (:status IS NULL OR payment.status = :status)
               AND (:fromDate IS NULL OR payment.paymentDate >= :fromDate)
               AND (:toDate IS NULL OR payment.paymentDate <= :toDate)

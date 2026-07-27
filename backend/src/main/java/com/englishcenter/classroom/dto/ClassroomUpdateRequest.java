@@ -23,10 +23,6 @@ public record ClassroomUpdateRequest(
         @Size(max = 100, message = "Level must not exceed 100 characters")
         String level,
 
-        @NotBlank(message = "Teacher name is required")
-        @Size(max = 255, message = "Teacher name must not exceed 255 characters")
-        String teacherName,
-
         @Size(max = 100, message = "Room must not exceed 100 characters")
         String room,
 
@@ -48,6 +44,8 @@ public record ClassroomUpdateRequest(
         ClassroomStatus status,
 
         @Size(max = 1000, message = "Note must not exceed 1000 characters")
-        String note
+        String note,
+
+        Long teacherId
 ) {
 }

@@ -1,5 +1,6 @@
 package com.englishcenter.classroom;
 
+import com.englishcenter.classroom.dto.AssignTeacherRequest;
 import com.englishcenter.classroom.dto.ClassroomCreateRequest;
 import com.englishcenter.classroom.dto.ClassroomResponse;
 import com.englishcenter.classroom.dto.ClassroomUpdateRequest;
@@ -10,10 +11,15 @@ import com.englishcenter.enrollment.Enrollment;
 import com.englishcenter.enrollment.EnrollmentRepository;
 import com.englishcenter.enrollment.EnrollmentSessionService;
 import com.englishcenter.enrollment.EnrollmentStatus;
+import com.englishcenter.teacher.Teacher;
+import com.englishcenter.teacher.TeacherRepository;
+import com.englishcenter.teacher.TeacherStatus;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -23,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ClassroomService {
+    private static final Logger log = LoggerFactory.getLogger(ClassroomService.class);
     private static final int MAX_PAGE_SIZE = 100;
 
     private final ClassroomRepository classroomRepository;
@@ -30,32 +37,54 @@ public class ClassroomService {
     private final EnrollmentRepository enrollmentRepository;
     private final EnrollmentSessionService enrollmentSessionService;
     private final ClassroomScheduleUpdateService classroomScheduleUpdateService;
+    private final TeacherRepository teacherRepository;
 
     public ClassroomService(
             ClassroomRepository classroomRepository,
             ClassroomMapper classroomMapper,
             EnrollmentRepository enrollmentRepository,
             EnrollmentSessionService enrollmentSessionService,
-            ClassroomScheduleUpdateService classroomScheduleUpdateService
+            ClassroomScheduleUpdateService classroomScheduleUpdateService,
+            TeacherRepository teacherRepository
     ) {
         this.classroomRepository = classroomRepository;
         this.classroomMapper = classroomMapper;
         this.enrollmentRepository = enrollmentRepository;
         this.enrollmentSessionService = enrollmentSessionService;
         this.classroomScheduleUpdateService = classroomScheduleUpdateService;
+        this.teacherRepository = teacherRepository;
     }
 
     @Transactional(readOnly = true)
-    public Page<ClassroomResponse> search(String keyword, int page, int size) {
+    public Page<ClassroomResponse> search(
+            String keyword,
+            Long teacherId,
+            Boolean unassignedOnly,
+            Boolean assignedOnly,
+            int page,
+            int size
+    ) {
         Pageable pageable = PageRequest.of(
                 Math.max(page, 0),
                 normalizePageSize(size),
                 Sort.by(Sort.Direction.DESC, "createdAt")
         );
 
-        Page<Classroom> classrooms = isBlank(keyword)
-                ? classroomRepository.findAll(pageable)
-                : classroomRepository.search(keyword.trim(), pageable);
+        boolean onlyUnassigned = Boolean.TRUE.equals(unassignedOnly);
+        boolean onlyAssigned = Boolean.TRUE.equals(assignedOnly);
+        Page<Classroom> classrooms;
+        if (!isBlank(keyword)) {
+            classrooms = classroomRepository.search(keyword.trim(), pageable);
+        } else if (teacherId != null || onlyUnassigned || onlyAssigned) {
+            classrooms = classroomRepository.searchFiltered(
+                    teacherId,
+                    onlyUnassigned,
+                    onlyAssigned,
+                    pageable
+            );
+        } else {
+            classrooms = classroomRepository.findAll(pageable);
+        }
 
         return classrooms.map(this::toResponseWithLearningProgressWarnings);
     }
@@ -63,6 +92,20 @@ public class ClassroomService {
     @Transactional(readOnly = true)
     public ClassroomResponse getById(Long id) {
         return toResponseWithLearningProgressWarnings(findClassroom(id));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ClassroomResponse> listByTeacherId(Long teacherId) {
+        return classroomRepository.findByTeacherIdOrderByClassNameAsc(teacherId).stream()
+                .map(this::toResponseWithLearningProgressWarnings)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ClassroomResponse> listUnassigned() {
+        return classroomRepository.findByTeacherIdIsNullOrderByClassNameAsc().stream()
+                .map(this::toResponseWithLearningProgressWarnings)
+                .toList();
     }
 
     @Transactional
@@ -80,8 +123,10 @@ public class ClassroomService {
                 request.endTime()
         );
 
+        Teacher teacher = requireAssignableTeacher(request.teacherId(), request.status());
         Classroom classroom = classroomMapper.toEntity(request);
-        return classroomMapper.toResponse(classroomRepository.save(classroom));
+        classroomMapper.applyTeacher(classroom, teacher);
+        return toResponseWithLearningProgressWarnings(classroomRepository.save(classroom));
     }
 
     @Transactional
@@ -118,8 +163,60 @@ public class ClassroomService {
                 request.endTime()
         );
 
+        Long previousTeacherId = classroom.getTeacherId();
+        Teacher teacher = requireAssignableTeacher(request.teacherId(), request.status());
         classroomMapper.updateEntity(classroom, request);
-        return classroomMapper.toResponse(classroomRepository.save(classroom));
+        classroomMapper.applyTeacher(classroom, teacher);
+        Classroom saved = classroomRepository.save(classroom);
+
+        if (previousTeacherId == null
+                ? saved.getTeacherId() != null
+                : !previousTeacherId.equals(saved.getTeacherId())) {
+            log.info(
+                    "AUTH_AUDIT event=CLASSROOM_TEACHER_CHANGED classroomId={} fromTeacherId={} toTeacherId={}",
+                    saved.getId(),
+                    previousTeacherId,
+                    saved.getTeacherId()
+            );
+        }
+
+        return toResponseWithLearningProgressWarnings(saved);
+    }
+
+    @Transactional
+    public ClassroomResponse assignTeacher(Long classroomId, AssignTeacherRequest request) {
+        Classroom classroom = findClassroom(classroomId);
+        Teacher teacher = requireActiveTeacher(request.teacherId());
+        Long previousTeacherId = classroom.getTeacherId();
+        classroomMapper.applyTeacher(classroom, teacher);
+        Classroom saved = classroomRepository.save(classroom);
+        log.info(
+                "AUTH_AUDIT event=CLASSROOM_TEACHER_ASSIGNED classroomId={} fromTeacherId={} toTeacherId={}",
+                saved.getId(),
+                previousTeacherId,
+                saved.getTeacherId()
+        );
+        return toResponseWithLearningProgressWarnings(saved);
+    }
+
+    private Teacher requireAssignableTeacher(Long teacherId, ClassroomStatus status) {
+        boolean requiresTeacher = status == ClassroomStatus.PLANNED || status == ClassroomStatus.ONGOING;
+        if (teacherId == null) {
+            if (requiresTeacher) {
+                throw new BusinessException("Vui lòng chọn giáo viên phụ trách lớp.");
+            }
+            return null;
+        }
+        return requireActiveTeacher(teacherId);
+    }
+
+    private Teacher requireActiveTeacher(Long teacherId) {
+        Teacher teacher = teacherRepository.findById(teacherId)
+                .orElseThrow(() -> new BusinessException("Giáo viên không hợp lệ."));
+        if (teacher.getStatus() != TeacherStatus.ACTIVE) {
+            throw new BusinessException("Chỉ được phân công giáo viên đang hoạt động.");
+        }
+        return teacher;
     }
 
     private Classroom findClassroom(Long id) {
@@ -150,7 +247,13 @@ public class ClassroomService {
             }
         }
 
-        return classroomMapper.toResponse(classroom, overusedCount, outOfSessionsCount, lowSessionsCount);
+        return classroomMapper.toResponse(
+                classroom,
+                overusedCount,
+                outOfSessionsCount,
+                lowSessionsCount,
+                enrollments.size()
+        );
     }
 
     private void validateSchedule(
@@ -173,7 +276,6 @@ public class ClassroomService {
         if (size <= 0) {
             return 20;
         }
-
         return Math.min(size, MAX_PAGE_SIZE);
     }
 

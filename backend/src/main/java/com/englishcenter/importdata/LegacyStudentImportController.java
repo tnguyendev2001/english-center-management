@@ -5,6 +5,7 @@ import com.englishcenter.importdata.dto.LegacyImportConfirmResponse;
 import com.englishcenter.importdata.dto.LegacyImportPreviewResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -14,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/imports/legacy-students")
+@PreAuthorize("hasRole('ADMIN')")
 public class LegacyStudentImportController {
     private final LegacyStudentImportService legacyStudentImportService;
 

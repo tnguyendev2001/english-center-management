@@ -215,7 +215,8 @@ class ClassSessionFocusSearchTest {
                 makeupCreditRepository,
                 enrollmentRepository,
                 new EnrollmentSessionService(statusHistoryRepository, enrollmentRepository, attendanceRepository),
-                classSessionMapper
+                classSessionMapper,
+                new com.englishcenter.common.config.AppTimeProperties()
         );
     }
 

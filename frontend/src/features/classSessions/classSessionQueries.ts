@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   cancelClassSession,
   correctionCancelClassSession,
+  createClassSession,
   generateClassSessions,
   getClassSession,
   getClassSessions,
@@ -11,6 +12,7 @@ import {
 import type {
   CancelClassSessionPayload,
   ClassSessionSearchParams,
+  CreateClassSessionPayload,
 } from './classSessionTypes'
 import { dashboardKeys } from '../dashboard/dashboardQueries'
 import { makeupCreditKeys } from '../makeupCredits/makeupCreditQueries'
@@ -54,6 +56,26 @@ export function useGenerateClassSessions() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: classSessionKeys.all })
       queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
+    },
+  })
+}
+
+function invalidateAfterSessionCreate(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: classSessionKeys.all })
+  queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
+  queryClient.invalidateQueries({ queryKey: ['me-sessions'] })
+  queryClient.invalidateQueries({ queryKey: ['me-classrooms'] })
+  queryClient.invalidateQueries({ queryKey: ['me-teacher-dashboard'] })
+  queryClient.invalidateQueries({ queryKey: ['classrooms'] })
+}
+
+export function useCreateClassSession() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (payload: CreateClassSessionPayload) => createClassSession(payload),
+    onSuccess: () => {
+      invalidateAfterSessionCreate(queryClient)
     },
   })
 }

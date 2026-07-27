@@ -5,6 +5,7 @@ import type {
   ClassSession,
   ClassSessionSearchParams,
   ClassSessionSearchResult,
+  CreateClassSessionPayload,
   GenerateClassSessionsPayload,
   GenerateClassSessionsResponse,
 } from './classSessionTypes'
@@ -26,6 +27,11 @@ export async function getClassSession(id: number) {
 export async function getTodaySessions() {
   const response = await httpClient.get<ApiResponse<ClassSession[]>>('/dashboard/today-sessions')
 
+  return response.data.data
+}
+
+export async function createClassSession(payload: CreateClassSessionPayload) {
+  const response = await httpClient.post<ApiResponse<ClassSession>>('/class-sessions', payload)
   return response.data.data
 }
 

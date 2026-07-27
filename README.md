@@ -37,6 +37,13 @@ API runs at `http://localhost:8080`.
 
 Flyway applies migrations on startup. Hibernate validates the schema (`ddl-auto: validate`).
 
+Local profile bootstraps an ADMIN account when none exists:
+
+- username: `admin`
+- password: `Admin12345`
+
+Change this password immediately after first login.
+
 ### 3. Frontend
 
 ```bash
@@ -45,12 +52,16 @@ npm install
 npm run dev
 ```
 
+Open `http://localhost:5173` and sign in. JWT auth details: [docs/AUTH.md](docs/AUTH.md).
+
 ## Configuration
 
 | Profile | File | Purpose |
 |---------|------|---------|
 | `local` | `application-local.yml` | Local dev (PostgreSQL on localhost) |
 | `prod` | `application-prod.yml` | Production (`DATABASE_URL`, etc.) |
+
+Required production auth env vars: `JWT_SECRET`, `APP_ALLOWED_ORIGINS`, and optionally `APP_ADMIN_USERNAME` / `APP_ADMIN_PASSWORD` for first-admin bootstrap.
 
 ## Database
 

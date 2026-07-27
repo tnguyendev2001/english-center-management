@@ -121,6 +121,18 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     @Query("""
             SELECT invoice
             FROM Invoice invoice
+            WHERE invoice.student.id = :studentId
+              AND invoice.status IN (
+                com.englishcenter.invoice.InvoiceStatus.UNPAID,
+                com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
+              )
+            ORDER BY invoice.createdAt DESC
+            """)
+    java.util.List<Invoice> findDebtInvoicesByStudentId(@Param("studentId") Long studentId);
+
+    @Query("""
+            SELECT invoice
+            FROM Invoice invoice
             JOIN FETCH invoice.student student
             JOIN FETCH invoice.classroom classroom
             WHERE invoice.status <> com.englishcenter.invoice.InvoiceStatus.CANCELED

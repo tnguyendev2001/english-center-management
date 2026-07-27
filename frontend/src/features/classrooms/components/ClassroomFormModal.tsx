@@ -10,12 +10,13 @@ import {
   disableInvalidClassroomStartDates,
   isDateMatchingDaysOfWeek,
 } from '../classroomScheduleUtils'
+import { useActiveTeachers } from '../classroomQueries'
 
 interface ClassroomFormValues {
   classCode: string
   className: string
   level: string
-  teacherName: string
+  teacherId?: number
   room?: string
   startDate: Dayjs
   expectedEndDate?: Dayjs
@@ -52,6 +53,8 @@ export function ClassroomFormModal({
   const isEdit = Boolean(initialClassroom)
   const daysOfWeek = Form.useWatch('daysOfWeek', form) ?? []
   const startDate = Form.useWatch('startDate', form)
+  const status = Form.useWatch('status', form)
+  const teachersQuery = useActiveTeachers(open)
 
   const disableStartDate = useMemo(
     () => disableInvalidClassroomStartDates(daysOfWeek),
@@ -65,6 +68,39 @@ export function ClassroomFormModal({
     return !isDateMatchingDaysOfWeek(startDate, daysOfWeek)
   }, [daysOfWeek, startDate])
 
+  const teacherRequired = status === 'PLANNED' || status === 'ONGOING'
+
+  const teacherOptions = useMemo(() => {
+    const teachers = teachersQuery.data ?? []
+    const options = teachers.map((teacher) => ({
+      value: teacher.id,
+      label: `${teacher.fullName} (${teacher.teacherCode})`,
+      searchText: [
+        teacher.fullName,
+        teacher.teacherCode,
+        teacher.phone ?? '',
+        teacher.email ?? '',
+      ]
+        .join(' ')
+        .toLowerCase(),
+    }))
+
+    if (
+      initialClassroom?.teacherId &&
+      !options.some((option) => option.value === initialClassroom.teacherId)
+    ) {
+      options.unshift({
+        value: initialClassroom.teacherId,
+        label: initialClassroom.teacherName
+          ? `${initialClassroom.teacherName} (đã gán)`
+          : `Giáo viên #${initialClassroom.teacherId}`,
+        searchText: (initialClassroom.teacherName ?? '').toLowerCase(),
+      })
+    }
+
+    return options
+  }, [initialClassroom, teachersQuery.data])
+
   useEffect(() => {
     if (!open) {
       return
@@ -75,7 +111,7 @@ export function ClassroomFormModal({
         classCode: initialClassroom.classCode,
         className: initialClassroom.className,
         level: initialClassroom.level,
-        teacherName: initialClassroom.teacherName,
+        teacherId: initialClassroom.teacherId ?? undefined,
         room: initialClassroom.room ?? undefined,
         startDate: dayjs(initialClassroom.startDate),
         expectedEndDate: initialClassroom.expectedEndDate
@@ -109,7 +145,7 @@ export function ClassroomFormModal({
       classCode: values.classCode,
       className: values.className,
       level: values.level,
-      teacherName: values.teacherName,
+      teacherId: values.teacherId ?? null,
       room: values.room ?? null,
       startDate: values.startDate.format('YYYY-MM-DD'),
       expectedEndDate: values.expectedEndDate?.format('YYYY-MM-DD') ?? null,
@@ -170,12 +206,37 @@ export function ClassroomFormModal({
           </Form.Item>
 
           <Form.Item
-            label="Giáo viên"
-            name="teacherName"
-            rules={[{ required: true, message: 'Vui lòng nhập tên giáo viên' }]}
+            label="Giáo viên phụ trách"
+            name="teacherId"
+            rules={[
+              {
+                validator: async (_, value?: number) => {
+                  if (teacherRequired && !value) {
+                    throw new Error('Vui lòng chọn giáo viên phụ trách lớp.')
+                  }
+                },
+              },
+            ]}
             style={{ width: 320 }}
+            extra={
+              teacherRequired
+                ? 'Bắt buộc với lớp Dự kiến / Đang học'
+                : 'Có thể để trống với lớp đã kết thúc hoặc đã hủy'
+            }
           >
-            <Input placeholder="Nhập tên giáo viên" />
+            <Select
+              allowClear={!teacherRequired}
+              showSearch
+              loading={teachersQuery.isLoading}
+              placeholder="Chọn giáo viên đang hoạt động"
+              optionFilterProp="label"
+              filterOption={(input, option) => {
+                const search = input.trim().toLowerCase()
+                const meta = teacherOptions.find((item) => item.value === option?.value)
+                return Boolean(meta?.searchText.includes(search) || option?.label?.toString().toLowerCase().includes(search))
+              }}
+              options={teacherOptions.map(({ value, label }) => ({ value, label }))}
+            />
           </Form.Item>
         </Space>
 

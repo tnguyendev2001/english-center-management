@@ -6,6 +6,7 @@ import com.englishcenter.invoice.dto.InvoiceResponse;
 import com.englishcenter.invoice.dto.StudentTuitionSummaryResponse;
 import java.util.List;
 import org.springframework.data.domain.Page;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,6 +23,7 @@ public class InvoiceController {
     }
 
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<List<InvoiceResponse>> getInvoices(
             @RequestParam(required = false) InvoiceStatus status,
             @RequestParam(required = false) Long studentId,
@@ -41,6 +43,7 @@ public class InvoiceController {
     }
 
     @GetMapping("/student-summaries")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<List<StudentTuitionSummaryResponse>> getStudentSummaries(
             @RequestParam(required = false) Long classroomId
     ) {
@@ -48,6 +51,7 @@ public class InvoiceController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or @authorizationService.canAccessInvoice(authentication, #id)")
     public ApiResponse<InvoiceResponse> getById(@PathVariable Long id) {
         return ApiResponse.success(invoiceService.getById(id));
     }

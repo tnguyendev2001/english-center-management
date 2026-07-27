@@ -54,7 +54,10 @@ export interface Classroom {
   classCode: string
   className: string
   level: string
-  teacherName: string
+  teacherName?: string | null
+  teacherId?: number | null
+  teacherStatus?: 'ACTIVE' | 'INACTIVE' | null
+  teacherAssigned: boolean
   room?: string | null
   startDate: string
   expectedEndDate?: string | null
@@ -66,12 +69,16 @@ export interface Classroom {
   studentsOverusedSessionsCount: number
   studentsOutOfSessionsCount: number
   studentsLowSessionsCount: number
+  activeStudentCount?: number
   createdAt: string
   updatedAt: string
 }
 
 export interface ClassroomSearchParams {
   keyword?: string
+  teacherId?: number
+  unassignedOnly?: boolean
+  assignedOnly?: boolean
   page: number
   size: number
 }
@@ -80,7 +87,7 @@ export interface ClassroomPayload {
   classCode: string
   className: string
   level: string
-  teacherName: string
+  teacherId?: number | null
   room?: string | null
   startDate: string
   expectedEndDate?: string | null

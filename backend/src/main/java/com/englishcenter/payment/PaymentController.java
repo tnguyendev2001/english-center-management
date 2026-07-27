@@ -11,11 +11,11 @@ import java.time.LocalDate;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -29,6 +29,7 @@ public class PaymentController {
     }
 
     @GetMapping("/api/payments/student-summaries")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<List<StudentPaymentSummaryResponse>> getStudentSummaries(
             @RequestParam(required = false) LocalDate fromDate,
             @RequestParam(required = false) LocalDate toDate
@@ -37,6 +38,7 @@ public class PaymentController {
     }
 
     @GetMapping("/api/payments")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<List<PaymentResponse>> getPayments(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
@@ -54,6 +56,7 @@ public class PaymentController {
 
     @PostMapping("/api/invoices/{invoiceId}/payments")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<PaymentResponse> createPayment(
             @PathVariable Long invoiceId,
             @Valid @RequestBody CreatePaymentRequest request
@@ -62,6 +65,7 @@ public class PaymentController {
     }
 
     @PostMapping("/api/payments/{paymentId}/cancel")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<PaymentResponse> cancelPayment(
             @PathVariable Long paymentId,
             @Valid @RequestBody CancelPaymentRequest request

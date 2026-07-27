@@ -2,6 +2,7 @@ package com.englishcenter.classroom.dto;
 
 import com.englishcenter.classroom.ClassDayOfWeek;
 import com.englishcenter.classroom.ClassroomStatus;
+import com.englishcenter.teacher.TeacherStatus;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -13,6 +14,9 @@ public record ClassroomResponse(
         String className,
         String level,
         String teacherName,
+        Long teacherId,
+        TeacherStatus teacherStatus,
+        boolean teacherAssigned,
         String room,
         LocalDate startDate,
         LocalDate expectedEndDate,
@@ -24,6 +28,7 @@ public record ClassroomResponse(
         int studentsOverusedSessionsCount,
         int studentsOutOfSessionsCount,
         int studentsLowSessionsCount,
+        int activeStudentCount,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {

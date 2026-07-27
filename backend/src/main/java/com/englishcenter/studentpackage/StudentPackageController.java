@@ -10,6 +10,7 @@ import com.englishcenter.packagechange.dto.ChangePackageRequest;
 import com.englishcenter.packagechange.dto.ChangePackageResponse;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,16 +31,19 @@ public class StudentPackageController {
     }
 
     @GetMapping("/api/students/{studentId}/packages")
+    @PreAuthorize("@authorizationService.canAccessStudent(authentication, #studentId)")
     public ApiResponse<List<EnrollmentLearningProgressResponse>> getByStudentId(@PathVariable Long studentId) {
         return ApiResponse.success(enrollmentProgressService.getByStudentId(studentId));
     }
 
     @GetMapping("/api/classrooms/{classroomId}/student-packages")
+    @PreAuthorize("@authorizationService.canAccessClassroom(authentication, #classroomId)")
     public ApiResponse<List<EnrollmentLearningProgressResponse>> getByClassroomId(@PathVariable Long classroomId) {
         return ApiResponse.success(enrollmentProgressService.getByClassroomId(classroomId));
     }
 
     @PostMapping("/api/student-packages/{studentPackageId}/change-package/preview")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<ChangePackagePreviewResponse> previewChangePackage(
             @PathVariable Long studentPackageId,
             @Valid @RequestBody ChangePackagePreviewRequest request
@@ -52,6 +56,7 @@ public class StudentPackageController {
     }
 
     @PostMapping("/api/student-packages/{studentPackageId}/change-package")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<ChangePackageResponse> changePackage(
             @PathVariable Long studentPackageId,
             @Valid @RequestBody ChangePackageRequest request

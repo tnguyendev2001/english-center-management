@@ -79,3 +79,31 @@ export async function updateClassroom(id: number, payload: ClassroomPayload) {
 
   return response.data.data
 }
+
+export async function assignClassroomTeacher(id: number, teacherId: number) {
+  const response = await httpClient.patch<ApiResponse<Classroom>>(`/classrooms/${id}/teacher`, {
+    teacherId,
+  })
+  return response.data.data
+}
+
+export async function getUnassignedClassrooms() {
+  const response = await httpClient.get<ApiResponse<Classroom[]>>('/classrooms/unassigned')
+  return response.data.data
+}
+
+export async function getActiveTeachers() {
+  const response = await httpClient.get<
+    ApiResponse<
+      Array<{
+        id: number
+        teacherCode: string
+        fullName: string
+        email?: string | null
+        phone?: string | null
+        status: 'ACTIVE' | 'INACTIVE'
+      }>
+    >
+  >('/teachers/active')
+  return response.data.data
+}
