@@ -2,6 +2,7 @@ import type { ApiResponse } from '../../api/apiResponse'
 import { httpClient } from '../../api/httpClient'
 import type {
   CancelEnrollmentPayload,
+  CancelEnrollmentResult,
   Enrollment,
   EnrollmentSearchParams,
   EnrollmentStatusHistory,
@@ -70,7 +71,7 @@ export async function transferEnrollment(id: number, payload: TransferEnrollment
 }
 
 export async function cancelEnrollment(id: number, payload: CancelEnrollmentPayload) {
-  const response = await httpClient.post<ApiResponse<Enrollment>>(
+  const response = await httpClient.post<ApiResponse<CancelEnrollmentResult>>(
     `/enrollments/${id}/cancel`,
     payload,
   )

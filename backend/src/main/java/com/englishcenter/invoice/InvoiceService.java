@@ -126,7 +126,8 @@ public class InvoiceService {
 
     @Transactional
     public Invoice recalculateAndSave(Invoice invoice) {
-        if (invoice.getStatus() == InvoiceStatus.CANCELED) {
+        if (invoice.getStatus() == InvoiceStatus.CANCELED
+                || invoice.getStatus() == InvoiceStatus.REPLACED) {
             return invoiceRepository.save(invoice);
         }
 

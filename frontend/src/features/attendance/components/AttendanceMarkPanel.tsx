@@ -415,7 +415,7 @@ export function AttendanceMarkPanel({
             <Alert
               type="warning"
               showIcon
-              message="Buổi bù phát sinh từ lần xin nghỉ này sẽ bị hủy."
+              message="Ghi nhận nghỉ phép từ lần xin nghỉ này sẽ bị hủy."
               style={{ marginTop: 16 }}
             />
           ) : null}

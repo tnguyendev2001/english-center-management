@@ -81,7 +81,7 @@ export const APP_NAVIGATION: NavItem[] = [
       },
       {
         key: '/makeup-credits',
-        label: 'Buổi bù',
+        label: 'Nghỉ phép',
         route: '/makeup-credits',
         allowedRoles: ['ADMIN'],
       },

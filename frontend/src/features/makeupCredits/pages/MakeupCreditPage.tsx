@@ -13,8 +13,9 @@ const reasonLabels: Record<MakeupCreditReason, string> = {
   MANUAL_ADJUSTMENT: 'Điều chỉnh thủ công',
 }
 
-const makeupStatusLabels = {
-  AVAILABLE: 'Còn buổi bù',
+/** V1 leave-tracking statuses only. AVAILABLE = recorded leave; no USED workflow. */
+const leaveStatusLabels = {
+  AVAILABLE: 'Đã ghi nhận',
   CANCELED: 'Đã hủy',
 }
 
@@ -25,12 +26,14 @@ export function MakeupCreditPage() {
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       <Space direction="vertical" size={4}>
         <Title level={2} style={{ margin: 0 }}>
-          Buổi bù
+          Theo dõi nghỉ phép
         </Title>
-        <Text type="secondary">Theo dõi các buổi bù được tạo từ xin nghỉ hợp lệ.</Text>
+        <Text type="secondary">
+          Theo dõi các buổi học viên được phép nghỉ và không bị tính buổi học.
+        </Text>
       </Space>
 
-      <Card>
+      <Card title="Lịch sử nghỉ phép">
         <Table<MakeupCredit>
           rowKey="id"
           loading={makeupCreditsQuery.isLoading}
@@ -38,9 +41,17 @@ export function MakeupCreditPage() {
           columns={[
             studentCodeColumn(),
             studentNameColumn(),
-            { title: 'Lớp học', dataIndex: 'classroomName', key: 'classroomName' },
+            { title: 'Lớp', dataIndex: 'classroomName', key: 'classroomName' },
             {
-              title: 'Buổi nguồn',
+              title: 'Buổi học đã nghỉ',
+              key: 'missedSession',
+              render: (_: unknown, record: MakeupCredit) =>
+                record.sourceSessionDate
+                  ? `Buổi ngày ${dayjs(record.sourceSessionDate).format('DD/MM/YYYY')}`
+                  : '-',
+            },
+            {
+              title: 'Ngày nghỉ',
               dataIndex: 'sourceSessionDate',
               key: 'sourceSessionDate',
               render: (value?: string | null) => (value ? dayjs(value).format('DD/MM/YYYY') : '-'),
@@ -55,13 +66,18 @@ export function MakeupCreditPage() {
               title: 'Trạng thái',
               dataIndex: 'status',
               key: 'status',
-              render: (status: string) => <StatusTag status={status} labels={makeupStatusLabels} />,
+              render: (status: string) => <StatusTag status={status} labels={leaveStatusLabels} />,
             },
             {
               title: 'Ghi chú',
               dataIndex: 'note',
               key: 'note',
               render: (value?: string | null) => value || '-',
+            },
+            {
+              title: 'Thao tác',
+              key: 'actions',
+              render: () => '-',
             },
           ]}
         />

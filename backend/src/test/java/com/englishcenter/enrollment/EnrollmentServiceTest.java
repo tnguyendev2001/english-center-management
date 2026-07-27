@@ -18,10 +18,12 @@ import com.englishcenter.classroom.ClassroomStatus;
 import com.englishcenter.classsession.ClassSession;
 import com.englishcenter.classsession.ClassSessionRepository;
 import com.englishcenter.classsession.ClassSessionStatus;
+import com.englishcenter.common.config.AppTimeProperties;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.payment.Payment;
 import com.englishcenter.enrollment.dto.EnrollStudentRequest;
 import com.englishcenter.enrollment.dto.CancelEnrollmentRequest;
+import com.englishcenter.enrollment.dto.CancelEnrollmentResponse;
 import com.englishcenter.enrollment.dto.StopEnrollmentRequest;
 import com.englishcenter.enrollment.dto.TransferEnrollmentRequest;
 import com.englishcenter.enrollment.dto.TransferEnrollmentResponse;
@@ -507,12 +509,16 @@ class EnrollmentServiceTest {
         activeHistory.setEffectiveFrom(LocalDate.of(2026, 8, 3));
         when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
         when(statusHistoryRepository.latestForUpdate(10L)).thenReturn(Optional.of(activeHistory));
-        when(invoiceRepository.findAllByEnrollmentIdOrderByCreatedAtDesc(10L)).thenReturn(List.of());
+        when(invoiceRepository.findAllByEnrollmentIdForUpdate(10L)).thenReturn(List.of());
         when(studentPackageRepository.findAllByEnrollmentId(10L)).thenReturn(List.of());
 
-        EnrollmentResponse response = service.cancel(10L, new CancelEnrollmentRequest("Đổi ý trước khi vào học"));
+        CancelEnrollmentResponse response = service.cancel(
+                10L,
+                new CancelEnrollmentRequest(LocalDate.of(2026, 7, 27), "Đổi ý trước khi vào học")
+        );
 
         assertThat(response.status()).isEqualTo(EnrollmentStatus.CANCELED);
+        assertThat(response.canceledInvoiceCount()).isZero();
         assertThat(activeHistory.getEffectiveTo()).isEqualTo(LocalDate.of(2026, 8, 3));
     }
 
@@ -583,9 +589,12 @@ class EnrollmentServiceTest {
                 1L, 2L, enrollment.getStartDate(), null
         )).thenReturn(1L);
 
-        assertThatThrownBy(() -> service.cancel(10L, new CancelEnrollmentRequest("Tạo nhầm")))
+        assertThatThrownBy(() -> service.cancel(
+                10L,
+                new CancelEnrollmentRequest(LocalDate.of(2026, 7, 27), "Tạo nhầm")
+        ))
                 .isInstanceOf(BusinessException.class)
-                .hasMessage("Ghi danh đã có dữ liệu điểm danh. Vui lòng dùng Ngừng học.");
+                .hasMessage("Ghi danh đã có dữ liệu điểm danh. Vui lòng sử dụng chức năng Ngừng học.");
     }
 
     @Test
@@ -608,16 +617,52 @@ class EnrollmentServiceTest {
         invoice.setStudentPackage(studentPackage);
         invoice.setStatus(InvoiceStatus.UNPAID);
         when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
-        when(invoiceRepository.findAllByEnrollmentIdOrderByCreatedAtDesc(10L)).thenReturn(List.of(invoice));
+        when(invoiceRepository.findAllByEnrollmentIdForUpdate(10L)).thenReturn(List.of(invoice));
         when(studentPackageRepository.findAllByEnrollmentId(10L)).thenReturn(List.of(studentPackage));
 
-        EnrollmentResponse response = service.cancel(10L, new CancelEnrollmentRequest("Tạo nhầm"));
+        CancelEnrollmentResponse response = service.cancel(
+                10L,
+                new CancelEnrollmentRequest(LocalDate.of(2026, 7, 27), "Tạo nhầm")
+        );
 
         assertThat(response.status()).isEqualTo(EnrollmentStatus.CANCELED);
+        assertThat(response.canceledInvoiceIds()).containsExactly(30L);
+        assertThat(response.canceledInvoiceCount()).isEqualTo(1);
         assertThat(studentPackage.getStatus()).isEqualTo(StudentPackageStatus.CANCELED);
         assertThat(invoice.getStatus()).isEqualTo(InvoiceStatus.CANCELED);
         assertThat(invoice.getCancelReason()).isEqualTo("Tạo nhầm");
         assertThat(invoice.getCanceledAt()).isNotNull();
+    }
+
+    @Test
+    void cancelCancelsCollectibleInvoiceRegardlessOfPackageSourceType() {
+        EnrollmentService service = newService();
+        Enrollment enrollment = activeEnrollment(8, 0);
+        StudentPackage renewalPackage = new StudentPackage();
+        renewalPackage.setId(21L);
+        renewalPackage.setStudent(enrollment.getStudent());
+        renewalPackage.setClassroom(enrollment.getClassroom());
+        renewalPackage.setEnrollment(enrollment);
+        renewalPackage.setTuitionPackage(enrollment.getSelectedPackage());
+        renewalPackage.setStatus(StudentPackageStatus.CONFIRMED);
+        renewalPackage.setSourceType(com.englishcenter.studentpackage.StudentPackageSourceType.RENEWAL);
+        Invoice renewalInvoice = new Invoice();
+        renewalInvoice.setId(31L);
+        renewalInvoice.setEnrollment(enrollment);
+        renewalInvoice.setStudentPackage(renewalPackage);
+        renewalInvoice.setStatus(InvoiceStatus.UNPAID);
+        renewalInvoice.setRemainingAmount(new BigDecimal("500000"));
+        when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
+        when(invoiceRepository.findAllByEnrollmentIdForUpdate(10L)).thenReturn(List.of(renewalInvoice));
+        when(studentPackageRepository.findAllByEnrollmentId(10L)).thenReturn(List.of(renewalPackage));
+
+        CancelEnrollmentResponse response = service.cancel(
+                10L,
+                new CancelEnrollmentRequest(LocalDate.of(2026, 7, 27), "Tạo nhầm")
+        );
+
+        assertThat(response.canceledInvoiceIds()).containsExactly(31L);
+        assertThat(renewalInvoice.getStatus()).isEqualTo(InvoiceStatus.CANCELED);
     }
 
     @Test
@@ -627,18 +672,81 @@ class EnrollmentServiceTest {
         Invoice invoice = new Invoice();
         invoice.setId(30L);
         when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
-        when(invoiceRepository.findAllByEnrollmentIdOrderByCreatedAtDesc(10L)).thenReturn(List.of(invoice));
+        when(invoiceRepository.findAllByEnrollmentIdForUpdate(10L)).thenReturn(List.of(invoice));
         when(paymentRepository.existsByInvoiceIdAndStatus(
                 30L,
                 com.englishcenter.payment.PaymentStatus.VALID
         )).thenReturn(true);
 
-        assertThatThrownBy(() -> service.cancel(10L, new CancelEnrollmentRequest("Tạo nhầm")))
+        assertThatThrownBy(() -> service.cancel(
+                10L,
+                new CancelEnrollmentRequest(LocalDate.of(2026, 7, 27), "Tạo nhầm")
+        ))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("Ghi danh đã có thanh toán hợp lệ. Không thể hủy ghi danh.");
 
         verify(enrollmentRepository, never()).save(any(Enrollment.class));
         verify(statusHistoryRepository, never()).save(any(EnrollmentStatusHistory.class));
+    }
+
+    @Test
+    void cancelAlreadyCanceledIsIdempotent() {
+        EnrollmentService service = newService();
+        Enrollment enrollment = activeEnrollment(8, 0);
+        enrollment.setStatus(EnrollmentStatus.CANCELED);
+        when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
+
+        CancelEnrollmentResponse response = service.cancel(
+                10L,
+                new CancelEnrollmentRequest(LocalDate.of(2026, 7, 27), "Tạo nhầm lần 2")
+        );
+
+        assertThat(response.status()).isEqualTo(EnrollmentStatus.CANCELED);
+        assertThat(response.canceledInvoiceCount()).isZero();
+        verify(invoiceRepository, never()).findAllByEnrollmentIdForUpdate(anyLong());
+        verify(statusHistoryRepository, never()).save(any(EnrollmentStatusHistory.class));
+        verify(enrollmentRepository, never()).save(any(Enrollment.class));
+    }
+
+    @Test
+    void stopDoesNotCancelInvoice() {
+        EnrollmentService service = newService();
+        Enrollment enrollment = activeEnrollment(8, 0);
+        Invoice invoice = new Invoice();
+        invoice.setId(30L);
+        invoice.setStatus(InvoiceStatus.UNPAID);
+        when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
+
+        EnrollmentResponse response = service.stop(
+                10L,
+                new StopEnrollmentRequest(LocalDate.of(2026, 7, 20), "Nghỉ học")
+        );
+
+        assertThat(response.status()).isEqualTo(EnrollmentStatus.STOPPED);
+        assertThat(invoice.getStatus()).isEqualTo(InvoiceStatus.UNPAID);
+        verify(invoiceRepository, never()).saveAll(any());
+        verify(invoiceRepository, never()).save(any(Invoice.class));
+        verify(invoiceRepository, never()).findAllByEnrollmentIdForUpdate(anyLong());
+    }
+
+    @Test
+    void holdDoesNotCancelInvoice() {
+        EnrollmentService service = newService();
+        Enrollment enrollment = activeEnrollment(8, 0);
+        Invoice invoice = new Invoice();
+        invoice.setId(30L);
+        invoice.setStatus(InvoiceStatus.UNPAID);
+        when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
+
+        EnrollmentResponse response = service.hold(
+                10L,
+                new HoldEnrollmentRequest(LocalDate.of(2026, 7, 20), LocalDate.of(2026, 8, 20), "Bảo lưu")
+        );
+
+        assertThat(response.status()).isEqualTo(EnrollmentStatus.ON_HOLD);
+        assertThat(invoice.getStatus()).isEqualTo(InvoiceStatus.UNPAID);
+        verify(invoiceRepository, never()).saveAll(any());
+        verify(invoiceRepository, never()).findAllByEnrollmentIdForUpdate(anyLong());
     }
 
     @Test
@@ -694,7 +802,8 @@ class EnrollmentServiceTest {
                 paymentRepository,
                 enrollmentMapper,
                 studentMapper,
-                InvoiceTestSupport.billingSnapshotService()
+                InvoiceTestSupport.billingSnapshotService(),
+                new AppTimeProperties()
         );
     }
 

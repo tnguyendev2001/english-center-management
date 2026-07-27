@@ -20,6 +20,16 @@ import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Leave-tracking record for V1 (user-facing: "Nghỉ phép").
+ *
+ * <p>Historically named MakeupCredit / "buổi bù", but V1 does <strong>not</strong> represent an
+ * actual makeup/replacement class. When Attendance is EXCUSED, one AVAILABLE record is kept to
+ * show approved leave; Enrollment usedSessions / remainingSessions / totalSessions are unchanged.
+ *
+ * <p>A future real replacement class should be a separate ClassSession-based feature named
+ * "Buổi học bổ sung", not this entity. Table {@code makeup_credits} is retained for compatibility.
+ */
 @Getter
 @Setter
 @Entity

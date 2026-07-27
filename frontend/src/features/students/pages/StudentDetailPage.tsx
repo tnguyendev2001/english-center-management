@@ -143,7 +143,7 @@ export function StudentDetailPage() {
                 render: (_: unknown, record: EnrollmentLearningProgress) => record.remainingSessions,
               },
               {
-                title: 'Buổi bù',
+                title: 'Nghỉ phép',
                 dataIndex: 'makeupAvailableSessions',
                 key: 'makeupAvailableSessions',
               },
@@ -345,7 +345,7 @@ export function StudentDetailPage() {
         </Card>
       )}
 
-      <Card title="Buổi bù">
+      <Card title="Lịch sử nghỉ phép">
         <Table
           rowKey="id"
           dataSource={makeupCredits}
@@ -353,7 +353,7 @@ export function StudentDetailPage() {
           pagination={false}
           columns={[
             {
-              title: 'Lớp học',
+              title: 'Lớp',
               dataIndex: 'classroomName',
               key: 'classroomName',
               render: (classroomName: string, record: MakeupCredit) => (
@@ -361,24 +361,53 @@ export function StudentDetailPage() {
               ),
             },
             {
-              title: 'Nguồn',
+              title: 'Buổi học đã nghỉ',
+              key: 'missedSession',
+              render: (_: unknown, record: MakeupCredit) =>
+                record.sourceSessionDate
+                  ? `Buổi ngày ${dayjs(record.sourceSessionDate).format('DD/MM/YYYY')}`
+                  : '-',
+            },
+            {
+              title: 'Ngày nghỉ',
+              dataIndex: 'sourceSessionDate',
+              key: 'sourceSessionDate',
+              render: (value?: string | null) => (value ? dayjs(value).format('DD/MM/YYYY') : '-'),
+            },
+            {
+              title: 'Lý do',
               dataIndex: 'reason',
               key: 'reason',
-              render: (reason: string) => (reason === 'EXCUSED_ABSENCE' ? 'Xin nghỉ' : reason),
+              render: (reason: string) =>
+                reason === 'EXCUSED_ABSENCE'
+                  ? 'Xin nghỉ'
+                  : reason === 'CLASS_CANCELED'
+                    ? 'Hủy buổi học'
+                    : reason === 'MANUAL_ADJUSTMENT'
+                      ? 'Điều chỉnh thủ công'
+                      : reason,
             },
-            { title: 'Số buổi bù', dataIndex: 'creditSessions', key: 'creditSessions' },
-            { title: 'Đã dùng', dataIndex: 'usedSessions', key: 'usedSessions' },
             {
               title: 'Trạng thái',
               dataIndex: 'status',
               key: 'status',
-              render: (status: string) => <StatusTag status={status} />,
+              render: (status: string) => (
+                <StatusTag
+                  status={status}
+                  labels={{ AVAILABLE: 'Đã ghi nhận', CANCELED: 'Đã hủy' }}
+                />
+              ),
             },
             {
               title: 'Ghi chú',
               dataIndex: 'note',
               key: 'note',
               render: (value?: string | null) => value || '-',
+            },
+            {
+              title: 'Thao tác',
+              key: 'actions',
+              render: () => '-',
             },
           ]}
         />

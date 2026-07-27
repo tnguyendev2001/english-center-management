@@ -14,6 +14,7 @@ import com.englishcenter.classroom.Classroom;
 import com.englishcenter.classroom.ClassroomRepository;
 import com.englishcenter.classroom.ClassroomStatus;
 import com.englishcenter.classsession.ClassSessionRepository;
+import com.englishcenter.common.config.AppTimeProperties;
 import com.englishcenter.enrollment.mapper.EnrollmentMapper;
 import com.englishcenter.invoice.Invoice;
 import com.englishcenter.invoice.InvoiceRepository;
@@ -84,7 +85,8 @@ class EnrollmentLegacyImportTest {
                 paymentRepository,
                 new EnrollmentMapper(new StudentPackageMapper(), InvoiceTestSupport.invoiceMapper()),
                 new StudentMapper(),
-                InvoiceTestSupport.billingSnapshotService()
+                InvoiceTestSupport.billingSnapshotService(),
+                new AppTimeProperties()
         );
 
         Student student = new Student();

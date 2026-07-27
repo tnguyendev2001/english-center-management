@@ -2,10 +2,12 @@ package com.englishcenter.payment;
 
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
+import com.englishcenter.enrollment.EnrollmentStatus;
 import com.englishcenter.finance.FinancePeriodRangeService;
 import com.englishcenter.finance.FinancePostingService;
 import com.englishcenter.finance.FinancialAccount;
 import com.englishcenter.invoice.Invoice;
+import com.englishcenter.invoice.InvoiceDebtSupport;
 import com.englishcenter.invoice.InvoiceRepository;
 import com.englishcenter.invoice.InvoiceService;
 import com.englishcenter.invoice.InvoiceStatus;
@@ -84,7 +86,8 @@ public class PaymentService {
 
     @Transactional
     public PaymentResponse createPayment(Long invoiceId, CreatePaymentRequest request) {
-        Invoice invoice = findInvoice(invoiceId);
+        Invoice invoice = invoiceRepository.findByIdForUpdate(invoiceId)
+                .orElseThrow(() -> new NotFoundException("Invoice not found"));
         invoice = invoiceService.recalculateAndSave(invoice);
 
         validateInvoiceCanReceivePayment(invoice);
@@ -135,18 +138,19 @@ public class PaymentService {
         return paymentMapper.toResponse(payment);
     }
 
-    private Invoice findInvoice(Long invoiceId) {
-        return invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new NotFoundException("Invoice not found"));
-    }
-
     private void validateInvoiceCanReceivePayment(Invoice invoice) {
-        if (invoice.getStatus() == InvoiceStatus.CANCELED) {
-            throw new BusinessException("Cannot create payment for canceled invoice");
+        if (invoice.getStatus() == InvoiceStatus.CANCELED
+                || (invoice.getEnrollment() != null
+                && invoice.getEnrollment().getStatus() == EnrollmentStatus.CANCELED)) {
+            throw new BusinessException("Không thể thanh toán hóa đơn đã bị hủy.");
         }
 
         if (invoice.getStatus() == InvoiceStatus.PAID) {
             throw new BusinessException("Cannot create payment for paid invoice");
+        }
+
+        if (invoice.getStatus() == InvoiceStatus.REPLACED || !InvoiceDebtSupport.isCollectible(invoice)) {
+            throw new BusinessException("Không thể thanh toán hóa đơn đã bị hủy.");
         }
     }
 

@@ -537,7 +537,7 @@ export function ClassroomDetailPage() {
                         ?? enrollment.remainingSessions,
                     },
                     {
-                      title: 'Buổi bù',
+                      title: 'Nghỉ phép',
                       key: 'makeupAvailableSessions',
                       render: (_, enrollment) =>
                         progressByEnrollmentId.get(enrollment.id)?.makeupAvailableSessions ?? '-',

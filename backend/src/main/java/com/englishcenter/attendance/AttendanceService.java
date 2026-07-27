@@ -296,6 +296,11 @@ public class AttendanceService {
         }
     }
 
+    /**
+     * Records approved leave for an EXCUSED attendance (V1: "Nghỉ phép").
+     * Does not change Enrollment usedSessions, remainingSessions, or totalSessions,
+     * and does not create a replacement ClassSession.
+     */
     private void ensureMakeupCredit(ClassSession session, Student student) {
         Optional<MakeupCredit> creditOptional = makeupCreditRepository.findByStudentIdAndSourceSessionIdAndReason(
                 student.getId(),

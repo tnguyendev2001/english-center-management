@@ -212,7 +212,7 @@ export function ChangePackageModal({
             <Descriptions.Item label="Tổng buổi">{currentPackage.totalSessions}</Descriptions.Item>
             <Descriptions.Item label="Đã dùng">{currentPackage.usedSessions}</Descriptions.Item>
             <Descriptions.Item label="Còn lại">{currentPackage.remainingSessions}</Descriptions.Item>
-            <Descriptions.Item label="Buổi bù khả dụng">
+            <Descriptions.Item label="Nghỉ phép đã ghi nhận">
               {currentPackage.makeupAvailableSessions}
             </Descriptions.Item>
             <Descriptions.Item label="Học phí gói gần nhất">
@@ -339,7 +339,7 @@ export function ChangePackageModal({
             <Alert
               type="info"
               showIcon
-              message="Buổi bù chỉ hiển thị để tham khảo, không dùng để tính tiền trong V1."
+              message="Nghỉ phép chỉ hiển thị để tham khảo, không dùng để tính tiền trong V1."
             />
           </Space>
         ) : selectedPackageId ? (

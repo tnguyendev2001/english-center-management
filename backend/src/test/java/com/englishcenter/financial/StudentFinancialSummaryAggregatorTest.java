@@ -73,7 +73,13 @@ class StudentFinancialSummaryAggregatorTest {
         partial.setRemainingAmount(new BigDecimal("300000"));
         partial.setDueDate(LocalDate.of(2026, 7, 10));
 
-        List<StudentDebtSummaryResponse> summaries = StudentFinancialSummaryAggregator.aggregateDebtSummaries(List.of(unpaid, partial));
+        Invoice canceled = invoice(3L, student, classroom, new BigDecimal("500000"), new BigDecimal("0"), InvoiceStatus.CANCELED);
+        canceled.setRemainingAmount(new BigDecimal("500000"));
+        canceled.setDueDate(LocalDate.of(2026, 7, 5));
+
+        List<StudentDebtSummaryResponse> summaries = StudentFinancialSummaryAggregator.aggregateDebtSummaries(
+                List.of(unpaid, partial, canceled)
+        );
 
         assertThat(summaries).hasSize(1);
         assertThat(summaries.getFirst().totalRemainingDebt()).isEqualByComparingTo("800000");

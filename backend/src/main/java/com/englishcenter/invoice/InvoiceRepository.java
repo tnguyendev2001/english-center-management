@@ -1,5 +1,6 @@
 package com.englishcenter.invoice;
 
+import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -8,6 +9,7 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -17,6 +19,34 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
     long countByStatus(InvoiceStatus status);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT invoice FROM Invoice invoice WHERE invoice.id = :id")
+    Optional<Invoice> findByIdForUpdate(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT invoice
+            FROM Invoice invoice
+            WHERE invoice.enrollment.id = :enrollmentId
+            ORDER BY invoice.createdAt DESC
+            """)
+    java.util.List<Invoice> findAllByEnrollmentIdForUpdate(@Param("enrollmentId") Long enrollmentId);
+
+    @Query("""
+            SELECT invoice
+            FROM Invoice invoice
+            JOIN FETCH invoice.enrollment enrollment
+            JOIN FETCH invoice.student
+            JOIN FETCH invoice.classroom
+            WHERE enrollment.status = com.englishcenter.enrollment.EnrollmentStatus.CANCELED
+              AND invoice.status IN (
+                com.englishcenter.invoice.InvoiceStatus.UNPAID,
+                com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
+              )
+            ORDER BY enrollment.id ASC, invoice.id ASC
+            """)
+    java.util.List<Invoice> findCollectibleInvoicesLinkedToCanceledEnrollments();
+
     @Query("""
             SELECT COALESCE(SUM(invoice.remainingAmount), 0)
             FROM Invoice invoice
@@ -24,6 +54,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
                 com.englishcenter.invoice.InvoiceStatus.UNPAID,
                 com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
             )
+              AND invoice.remainingAmount > 0
             """)
     BigDecimal sumDebtAmount();
 
@@ -48,6 +79,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
                 com.englishcenter.invoice.InvoiceStatus.UNPAID,
                 com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
               )
+              AND invoice.remainingAmount > 0
             """)
     BigDecimal sumDebtAmountByClassroomId(@Param("classroomId") Long classroomId);
 
@@ -58,6 +90,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
                 com.englishcenter.invoice.InvoiceStatus.UNPAID,
                 com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
             )
+              AND invoice.remainingAmount > 0
             """)
     long countDistinctStudentsWithDebt();
 
@@ -232,6 +265,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
                 com.englishcenter.invoice.InvoiceStatus.UNPAID,
                 com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
             )
+              AND invoice.remainingAmount > 0
             ORDER BY invoice.createdAt DESC
             """)
     Page<Invoice> findDebtInvoices(Pageable pageable);
@@ -244,6 +278,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
                 com.englishcenter.invoice.InvoiceStatus.UNPAID,
                 com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
               )
+              AND invoice.remainingAmount > 0
             ORDER BY invoice.createdAt DESC
             """)
     java.util.List<Invoice> findDebtInvoicesByStudentId(@Param("studentId") Long studentId);
@@ -268,6 +303,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
                 com.englishcenter.invoice.InvoiceStatus.UNPAID,
                 com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
             )
+              AND invoice.remainingAmount > 0
               AND (:classroomId IS NULL OR invoice.classroom.id = :classroomId)
             ORDER BY student.fullName ASC, classroom.className ASC, invoice.dueDate ASC
             """)
@@ -280,6 +316,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
                 com.englishcenter.invoice.InvoiceStatus.UNPAID,
                 com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
             )
+              AND invoice.remainingAmount > 0
               AND (:status IS NULL OR invoice.status = :status)
               AND (:classroomId IS NULL OR invoice.classroom.id = :classroomId)
               AND (:fromDate IS NULL OR CAST(invoice.createdAt AS localdate) >= :fromDate)

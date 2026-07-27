@@ -1,3 +1,8 @@
+/**
+ * Approved-leave tracking types (internal API name: MakeupCredit).
+ * V1 UI label is "Nghỉ phép" — not a real makeup/replacement class.
+ * USED is not part of the V1 user workflow.
+ */
 export type MakeupCreditStatus = 'AVAILABLE' | 'CANCELED'
 export type MakeupCreditReason = 'EXCUSED_ABSENCE' | 'CLASS_CANCELED' | 'MANUAL_ADJUSTMENT'
 

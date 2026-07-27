@@ -79,7 +79,16 @@ export interface TransferEnrollmentResult {
 }
 
 export interface CancelEnrollmentPayload {
+  effectiveDate?: string | null
   reason: string
+}
+
+export interface CancelEnrollmentResult {
+  enrollmentId: number
+  status: EnrollmentStatus
+  canceledInvoiceIds: number[]
+  canceledInvoiceCount: number
+  enrollment: Enrollment
 }
 
 export interface EnrollmentStatusHistory {

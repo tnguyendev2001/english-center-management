@@ -8,10 +8,12 @@ import com.englishcenter.classroom.ClassroomStatus;
 import com.englishcenter.classsession.ClassSession;
 import com.englishcenter.classsession.ClassSessionRepository;
 import com.englishcenter.classsession.ClassSessionStatus;
+import com.englishcenter.common.config.AppTimeProperties;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
 import com.englishcenter.enrollment.dto.EnrollStudentRequest;
 import com.englishcenter.enrollment.dto.CancelEnrollmentRequest;
+import com.englishcenter.enrollment.dto.CancelEnrollmentResponse;
 import com.englishcenter.enrollment.dto.EnrollmentResponse;
 import com.englishcenter.enrollment.dto.DuplicateEnrollmentGroupResponse;
 import com.englishcenter.enrollment.dto.EnrollmentStatusHistoryResponse;
@@ -22,6 +24,7 @@ import com.englishcenter.enrollment.dto.TransferEnrollmentRequest;
 import com.englishcenter.enrollment.dto.TransferEnrollmentResponse;
 import com.englishcenter.enrollment.mapper.EnrollmentMapper;
 import com.englishcenter.invoice.Invoice;
+import com.englishcenter.invoice.InvoiceDebtSupport;
 import com.englishcenter.invoice.InvoiceRepository;
 import com.englishcenter.invoice.InvoiceStatus;
 import com.englishcenter.payment.PaymentRepository;
@@ -71,6 +74,7 @@ public class EnrollmentService {
     private final EnrollmentMapper enrollmentMapper;
     private final StudentMapper studentMapper;
     private final com.englishcenter.invoice.InvoiceBillingSnapshotService invoiceBillingSnapshotService;
+    private final AppTimeProperties appTimeProperties;
 
     public EnrollmentService(
             EnrollmentRepository enrollmentRepository,
@@ -86,7 +90,8 @@ public class EnrollmentService {
             PaymentRepository paymentRepository,
             EnrollmentMapper enrollmentMapper,
             StudentMapper studentMapper,
-            com.englishcenter.invoice.InvoiceBillingSnapshotService invoiceBillingSnapshotService
+            com.englishcenter.invoice.InvoiceBillingSnapshotService invoiceBillingSnapshotService,
+            AppTimeProperties appTimeProperties
     ) {
         this.enrollmentRepository = enrollmentRepository;
         this.statusHistoryRepository = statusHistoryRepository;
@@ -102,6 +107,7 @@ public class EnrollmentService {
         this.enrollmentMapper = enrollmentMapper;
         this.studentMapper = studentMapper;
         this.invoiceBillingSnapshotService = invoiceBillingSnapshotService;
+        this.appTimeProperties = appTimeProperties;
     }
 
     @Transactional
@@ -503,8 +509,17 @@ public class EnrollmentService {
     }
 
     @Transactional
-    public EnrollmentResponse cancel(Long id, CancelEnrollmentRequest request) {
-        Enrollment enrollment = findEnrollmentForLifecycle(id, List.of(EnrollmentStatus.ACTIVE));
+    public CancelEnrollmentResponse cancel(Long id, CancelEnrollmentRequest request) {
+        Enrollment enrollment = enrollmentRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new NotFoundException("Enrollment not found"));
+
+        if (enrollment.getStatus() == EnrollmentStatus.CANCELED) {
+            return buildCancelResponse(enrollment, List.of());
+        }
+        if (enrollment.getStatus() != EnrollmentStatus.ACTIVE) {
+            throw new BusinessException("Enrollment status does not allow this action");
+        }
+
         if (attendanceRepository.countForEnrollmentPeriod(
                 enrollment.getStudent().getId(),
                 enrollment.getClassroom().getId(),
@@ -512,11 +527,11 @@ public class EnrollmentService {
                 enrollment.getEndDate()
         ) > 0) {
             throw new BusinessException(
-                    "Ghi danh đã có dữ liệu điểm danh. Vui lòng dùng Ngừng học."
+                    "Ghi danh đã có dữ liệu điểm danh. Vui lòng sử dụng chức năng Ngừng học."
             );
         }
 
-        List<Invoice> invoices = invoiceRepository.findAllByEnrollmentIdOrderByCreatedAtDesc(id);
+        List<Invoice> invoices = invoiceRepository.findAllByEnrollmentIdForUpdate(id);
         if (invoices.stream().anyMatch(invoice ->
                 paymentRepository.existsByInvoiceIdAndStatus(invoice.getId(), PaymentStatus.VALID))) {
             throw new BusinessException(
@@ -524,37 +539,58 @@ public class EnrollmentService {
             );
         }
 
+        LocalDate effectiveDate = request.effectiveDate() == null
+                ? LocalDate.now(appTimeProperties.zoneId())
+                : request.effectiveDate();
+        String reason = request.reason().trim();
+
         transitionHistory(
                 enrollment,
-                LocalDate.now(),
+                effectiveDate,
                 EnrollmentStatus.CANCELED,
-                request.reason(),
+                reason,
                 null
         );
         enrollment.setStatus(EnrollmentStatus.CANCELED);
-        enrollment.setNote(appendLifecycleReason(enrollment.getNote(), "Hủy ghi danh", request.reason()));
+        enrollment.setNote(appendLifecycleReason(enrollment.getNote(), "Hủy ghi danh", reason));
         enrollmentRepository.save(enrollment);
 
         List<StudentPackage> studentPackages = studentPackageRepository.findAllByEnrollmentId(id);
         studentPackages.forEach(studentPackage -> studentPackage.setStatus(StudentPackageStatus.CANCELED));
         studentPackageRepository.saveAll(studentPackages);
 
-        LocalDateTime canceledAt = LocalDateTime.now();
-        invoices.stream()
-                .filter(invoice -> invoice.getStudentPackage() != null
-                        && invoice.getStudentPackage().getSourceType() == StudentPackageSourceType.ENROLLMENT)
-                .filter(invoice -> invoice.getStatus() == InvoiceStatus.UNPAID
-                        || invoice.getStatus() == InvoiceStatus.PARTIALLY_PAID)
-                .forEach(invoice -> {
-                    invoice.setStatus(InvoiceStatus.CANCELED);
-                    invoice.setCancelReason(request.reason().trim());
-                    invoice.setCanceledAt(canceledAt);
-                });
+        LocalDateTime canceledAt = LocalDateTime.now(appTimeProperties.zoneId());
+        List<Long> canceledInvoiceIds = new java.util.ArrayList<>();
+        for (Invoice invoice : invoices) {
+            if (!InvoiceDebtSupport.isCollectible(invoice)) {
+                continue;
+            }
+            invoice.setStatus(InvoiceStatus.CANCELED);
+            invoice.setCancelReason(reason);
+            invoice.setCanceledAt(canceledAt);
+            canceledInvoiceIds.add(invoice.getId());
+        }
         invoiceRepository.saveAll(invoices);
 
-        StudentPackage responsePackage = studentPackages.isEmpty() ? null : studentPackages.getFirst();
-        Invoice responseInvoice = invoices.isEmpty() ? null : invoices.getFirst();
-        return enrollmentMapper.toResponse(enrollment, responsePackage, responseInvoice);
+        return buildCancelResponse(enrollment, canceledInvoiceIds);
+    }
+
+    private CancelEnrollmentResponse buildCancelResponse(Enrollment enrollment, List<Long> canceledInvoiceIds) {
+        Long enrollmentId = enrollment.getId();
+        StudentPackage responsePackage = findLatestStudentPackage(enrollmentId);
+        Invoice responseInvoice = findLatestInvoice(enrollmentId);
+        EnrollmentResponse enrollmentResponse = enrollmentMapper.toResponse(
+                enrollment,
+                responsePackage,
+                responseInvoice
+        );
+        return new CancelEnrollmentResponse(
+                enrollmentId,
+                enrollment.getStatus(),
+                List.copyOf(canceledInvoiceIds),
+                canceledInvoiceIds.size(),
+                enrollmentResponse
+        );
     }
 
     private Enrollment createEnrollment(

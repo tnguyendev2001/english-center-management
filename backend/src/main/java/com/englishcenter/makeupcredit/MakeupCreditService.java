@@ -8,6 +8,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Read-only list of approved-leave tracking records (MakeupCredit).
+ * User-facing product name in V1 is "Nghỉ phép", not a makeup class workflow.
+ * There is no mark-as-used API in V1.
+ */
 @Service
 public class MakeupCreditService {
     private static final int MAX_PAGE_SIZE = 100;

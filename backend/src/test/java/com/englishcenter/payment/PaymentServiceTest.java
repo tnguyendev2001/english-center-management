@@ -59,7 +59,7 @@ class PaymentServiceTest {
         CreatePaymentRequest request = createRequest(new BigDecimal("200000"));
         FinancialAccount cashAccount = cashAccount();
 
-        when(invoiceRepository.findById(1L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(invoice));
         when(invoiceService.recalculateAndSave(invoice)).thenReturn(invoice);
         when(financePostingService.resolvePaymentAccount(PaymentMethod.CASH, null)).thenReturn(cashAccount);
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> {
@@ -84,7 +84,7 @@ class PaymentServiceTest {
         PaymentService paymentService = newService();
         Invoice invoice = invoice(InvoiceStatus.UNPAID, new BigDecimal("100000"));
 
-        when(invoiceRepository.findById(1L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(invoice));
         when(invoiceService.recalculateAndSave(invoice)).thenReturn(invoice);
 
         assertThatThrownBy(() -> paymentService.createPayment(1L, createRequest(new BigDecimal("200000"))))
@@ -99,12 +99,31 @@ class PaymentServiceTest {
         PaymentService paymentService = newService();
         Invoice invoice = invoice(InvoiceStatus.CANCELED, new BigDecimal("500000"));
 
-        when(invoiceRepository.findById(1L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(invoice));
         when(invoiceService.recalculateAndSave(invoice)).thenReturn(invoice);
 
         assertThatThrownBy(() -> paymentService.createPayment(1L, createRequest(new BigDecimal("200000"))))
                 .isInstanceOf(BusinessException.class)
-                .hasMessage("Cannot create payment for canceled invoice");
+                .hasMessage("Không thể thanh toán hóa đơn đã bị hủy.");
+
+        verify(paymentRepository, never()).save(any(Payment.class));
+    }
+
+    @Test
+    void createPaymentRejectsInvoiceLinkedToCanceledEnrollment() {
+        PaymentService paymentService = newService();
+        Invoice invoice = invoice(InvoiceStatus.UNPAID, new BigDecimal("500000"));
+        com.englishcenter.enrollment.Enrollment enrollment = new com.englishcenter.enrollment.Enrollment();
+        enrollment.setId(99L);
+        enrollment.setStatus(com.englishcenter.enrollment.EnrollmentStatus.CANCELED);
+        invoice.setEnrollment(enrollment);
+
+        when(invoiceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(invoice));
+        when(invoiceService.recalculateAndSave(invoice)).thenReturn(invoice);
+
+        assertThatThrownBy(() -> paymentService.createPayment(1L, createRequest(new BigDecimal("200000"))))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Không thể thanh toán hóa đơn đã bị hủy.");
 
         verify(paymentRepository, never()).save(any(Payment.class));
     }
@@ -114,7 +133,7 @@ class PaymentServiceTest {
         PaymentService paymentService = newService();
         Invoice invoice = invoice(InvoiceStatus.PAID, BigDecimal.ZERO);
 
-        when(invoiceRepository.findById(1L)).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(invoice));
         when(invoiceService.recalculateAndSave(invoice)).thenReturn(invoice);
 
         assertThatThrownBy(() -> paymentService.createPayment(1L, createRequest(new BigDecimal("200000"))))

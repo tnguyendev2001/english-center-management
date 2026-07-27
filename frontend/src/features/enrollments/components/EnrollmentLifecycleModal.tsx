@@ -183,7 +183,13 @@ export function EnrollmentLifecycleModal({
     }
 
     cancelEnrollment.mutate(
-      { id: enrollment.id, payload: { reason } },
+      {
+        id: enrollment.id,
+        payload: {
+          effectiveDate: values.effectiveDate?.format('YYYY-MM-DD') ?? null,
+          reason,
+        },
+      },
       {
         onSuccess: () => finishSuccess('Đã hủy ghi danh'),
         onError: showErrorMessage,
@@ -221,16 +227,21 @@ export function EnrollmentLifecycleModal({
         <Alert
           type="error"
           showIcon
-          message="Hành động này chỉ dành cho ghi danh tạo nhầm. Dữ liệu sẽ được hủy nhưng vẫn giữ lịch sử."
+          message="Hủy ghi danh sẽ đồng thời hủy các hóa đơn chưa có thanh toán của ghi danh này. Dữ liệu vẫn được giữ lại trong lịch sử."
           style={{ marginBottom: 16 }}
         />
       ) : null}
 
       <Form form={form} layout="vertical" onFinish={handleSubmit}>
-        {action === 'hold' || action === 'reactivate' || action === 'stop' ? (
+        {action === 'hold' || action === 'reactivate' || action === 'stop' || action === 'cancel' ? (
           <Form.Item
             label="Ngày hiệu lực"
             name="effectiveDate"
+            rules={
+              action === 'cancel'
+                ? [{ required: true, message: 'Vui lòng chọn ngày hiệu lực' }]
+                : undefined
+            }
             extra={
               action === 'reactivate'
                 ? 'Nếu ngày chọn không có buổi học, hệ thống sẽ lấy ngày buổi học hợp lệ gần nhất để điểm danh trở lại.'
@@ -276,7 +287,7 @@ export function EnrollmentLifecycleModal({
         ) : null}
 
         <Form.Item
-          label="Lý do"
+          label={action === 'cancel' ? 'Lý do hủy' : 'Lý do'}
           name="reason"
           rules={
             action === 'reactivate'
@@ -286,7 +297,13 @@ export function EnrollmentLifecycleModal({
         >
           <Input.TextArea
             rows={3}
-            placeholder={action === 'reactivate' ? 'Nhập lý do (không bắt buộc)' : 'Nhập lý do'}
+            placeholder={
+              action === 'reactivate'
+                ? 'Nhập lý do (không bắt buộc)'
+                : action === 'cancel'
+                  ? 'Ví dụ: Tạo nhầm ghi danh'
+                  : 'Nhập lý do'
+            }
           />
         </Form.Item>
       </Form>

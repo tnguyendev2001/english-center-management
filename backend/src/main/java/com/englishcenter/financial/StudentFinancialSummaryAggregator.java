@@ -2,6 +2,7 @@ package com.englishcenter.financial;
 
 import com.englishcenter.debt.dto.StudentDebtSummaryResponse;
 import com.englishcenter.invoice.Invoice;
+import com.englishcenter.invoice.InvoiceDebtSupport;
 import com.englishcenter.invoice.InvoiceStatus;
 import com.englishcenter.invoice.dto.StudentTuitionSummaryResponse;
 import com.englishcenter.payment.Payment;
@@ -68,11 +69,7 @@ public final class StudentFinancialSummaryAggregator {
         Map<String, DebtAccumulator> groups = new HashMap<>();
 
         for (Invoice invoice : debtInvoices) {
-            if (invoice.getStatus() != InvoiceStatus.UNPAID && invoice.getStatus() != InvoiceStatus.PARTIALLY_PAID) {
-                continue;
-            }
-
-            if (invoice.getRemainingAmount().compareTo(ZERO) <= 0) {
+            if (!InvoiceDebtSupport.isOutstanding(invoice)) {
                 continue;
             }
 

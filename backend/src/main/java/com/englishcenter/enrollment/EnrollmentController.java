@@ -4,6 +4,7 @@ import com.englishcenter.common.api.ApiResponse;
 import com.englishcenter.common.api.PageMeta;
 import com.englishcenter.enrollment.dto.EnrollStudentRequest;
 import com.englishcenter.enrollment.dto.CancelEnrollmentRequest;
+import com.englishcenter.enrollment.dto.CancelEnrollmentResponse;
 import com.englishcenter.enrollment.dto.EnrollmentResponse;
 import com.englishcenter.enrollment.dto.DuplicateEnrollmentGroupResponse;
 import com.englishcenter.enrollment.dto.EnrollmentStatusHistoryResponse;
@@ -12,6 +13,8 @@ import com.englishcenter.enrollment.dto.ReactivateEnrollmentRequest;
 import com.englishcenter.enrollment.dto.StopEnrollmentRequest;
 import com.englishcenter.enrollment.dto.TransferEnrollmentRequest;
 import com.englishcenter.enrollment.dto.TransferEnrollmentResponse;
+import com.englishcenter.enrollment.dto.CanceledEnrollmentInvoiceDiagnosticResponse;
+import com.englishcenter.enrollment.dto.CanceledEnrollmentInvoiceRepairResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -31,9 +34,14 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasRole('ADMIN')")
 public class EnrollmentController {
     private final EnrollmentService enrollmentService;
+    private final CanceledEnrollmentInvoiceConsistencyService consistencyService;
 
-    public EnrollmentController(EnrollmentService enrollmentService) {
+    public EnrollmentController(
+            EnrollmentService enrollmentService,
+            CanceledEnrollmentInvoiceConsistencyService consistencyService
+    ) {
         this.enrollmentService = enrollmentService;
+        this.consistencyService = consistencyService;
     }
 
     @PostMapping
@@ -73,6 +81,26 @@ public class EnrollmentController {
         return ApiResponse.success(enrollmentService.getDuplicates());
     }
 
+    /**
+     * Diagnoses canceled enrollments that still have collectible invoices.
+     * Safe rows have zero attendance and zero VALID payments.
+     */
+    @GetMapping("/canceled-invoice-consistency")
+    public ApiResponse<List<CanceledEnrollmentInvoiceDiagnosticResponse>> diagnoseCanceledInvoiceConsistency() {
+        return ApiResponse.success(consistencyService.diagnose());
+    }
+
+    /**
+     * Repairs safe inconsistent rows (canceled enrollment + collectible invoice, no attendance/payment).
+     * Pass dryRun=true (default) to preview without writing. Unsafe rows are reported and skipped.
+     */
+    @PostMapping("/canceled-invoice-consistency/repair")
+    public ApiResponse<CanceledEnrollmentInvoiceRepairResponse> repairCanceledInvoiceConsistency(
+            @RequestParam(defaultValue = "true") boolean dryRun
+    ) {
+        return ApiResponse.success(consistencyService.repair(dryRun));
+    }
+
     @PostMapping("/{id}/hold")
     public ApiResponse<EnrollmentResponse> hold(
             @PathVariable Long id,
@@ -106,7 +134,7 @@ public class EnrollmentController {
     }
 
     @PostMapping("/{id}/cancel")
-    public ApiResponse<EnrollmentResponse> cancel(
+    public ApiResponse<CancelEnrollmentResponse> cancel(
             @PathVariable Long id,
             @Valid @RequestBody CancelEnrollmentRequest request
     ) {

@@ -30,8 +30,9 @@ const statusConfigs: Record<string, StatusConfig> = {
   PRESENT: { label: 'Có mặt', color: 'green' },
   ABSENT: { label: 'Vắng', color: 'red' },
   EXCUSED: { label: 'Xin nghỉ', color: 'gold' },
-  AVAILABLE: { label: 'Còn buổi bù', color: 'green' },
-  USED: { label: 'Đã dùng', color: 'default' },
+  AVAILABLE: { label: 'Đã ghi nhận', color: 'green' },
+  // MakeupCredit USED is not a V1 user-facing leave workflow; keep fallback for legacy rows only.
+  USED: { label: 'Đã ghi nhận', color: 'default' },
 }
 
 interface StatusTagProps {

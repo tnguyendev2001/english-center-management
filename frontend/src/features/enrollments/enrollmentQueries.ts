@@ -4,7 +4,9 @@ import { attendanceKeys } from '../attendance/attendanceQueries'
 import { classroomKeys } from '../classrooms/classroomQueries'
 import { dashboardKeys } from '../dashboard/dashboardQueries'
 import { debtKeys } from '../debts/debtQueries'
+import { financeKeys } from '../finance/financeQueries'
 import { invoiceKeys } from '../invoices/invoiceQueries'
+import { meKeys } from '../me/meQueries'
 import { reportKeys } from '../reports/reportQueries'
 import { studentPackageKeys } from '../studentPackages/studentPackageQueries'
 import { studentKeys } from '../students/studentQueries'
@@ -88,6 +90,10 @@ function invalidateEnrollmentLifecycleQueries(queryClient: QueryClient, includeF
   if (includeFinancials) {
     void queryClient.invalidateQueries({ queryKey: invoiceKeys.all })
     void queryClient.invalidateQueries({ queryKey: debtKeys.all })
+    void queryClient.invalidateQueries({ queryKey: financeKeys.all })
+    void queryClient.invalidateQueries({ queryKey: meKeys.debt })
+    void queryClient.invalidateQueries({ queryKey: meKeys.invoices })
+    void queryClient.invalidateQueries({ queryKey: meKeys.studentDashboard })
   }
 }
 

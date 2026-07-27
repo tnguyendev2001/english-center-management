@@ -106,7 +106,7 @@ public class ClassSessionService {
         }
         if (!ClassDayOfWeek.isDateMatchingDaysOfWeek(sessionDate, classroom.getDaysOfWeek())) {
             throw new BusinessException(
-                    "Ngày học không khớp với lịch học của lớp. Vui lòng sử dụng chức năng Buổi bù nếu đây là buổi học bổ sung."
+                    "Ngày học không khớp với lịch học của lớp. Việc tạo buổi học bổ sung ngoài lịch sẽ được hỗ trợ ở chức năng riêng (nếu có)."
             );
         }
 
