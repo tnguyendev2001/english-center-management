@@ -1,20 +1,31 @@
 import { Button, Card, Segmented, Space, Table, Typography } from 'antd'
 import dayjs from 'dayjs'
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ActiveFilterTags } from '../../../components/common/ActiveFilterTags'
 import { StatusTag } from '../../../components/common/StatusTag'
+import { useUrlEnumParam } from '../../../hooks/useUrlEnumParam'
 import { classroomDetailPath } from '../../classrooms/classroomRoutes'
 import type { ClassSession } from '../../classSessions/classSessionTypes'
 import { useMySessions } from '../meQueries'
 
 const { Title, Text } = Typography
 
-type SessionFilter = 'TODAY' | 'UPCOMING' | 'HISTORY' | 'ALL'
+const FILTER_OPTIONS = ['TODAY', 'UPCOMING', 'HISTORY', 'ALL'] as const
+type SessionFilter = (typeof FILTER_OPTIONS)[number]
+
+const FILTER_LABELS: Record<SessionFilter, string> = {
+  TODAY: 'Hôm nay',
+  UPCOMING: 'Sắp tới',
+  HISTORY: 'Lịch sử',
+  ALL: 'Tất cả',
+}
 
 export function TeacherSessionsPage() {
   const navigate = useNavigate()
   const sessionsQuery = useMySessions()
-  const [filter, setFilter] = useState<SessionFilter>('TODAY')
+  const filterParam = useUrlEnumParam('filter', FILTER_OPTIONS)
+  const filter: SessionFilter = filterParam.value ?? 'TODAY'
 
   const sessions = useMemo(() => {
     const all = [...(sessionsQuery.data ?? [])].sort((a, b) => {
@@ -51,13 +62,27 @@ export function TeacherSessionsPage() {
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <Segmented
             value={filter}
-            onChange={(value) => setFilter(value as SessionFilter)}
+            onChange={(value) => filterParam.setValue(value as SessionFilter)}
             options={[
               { label: 'Hôm nay', value: 'TODAY' },
               { label: 'Sắp tới', value: 'UPCOMING' },
               { label: 'Lịch sử', value: 'HISTORY' },
               { label: 'Tất cả', value: 'ALL' },
             ]}
+          />
+
+          <ActiveFilterTags
+            tags={
+              filter !== 'ALL'
+                ? [
+                    {
+                      key: 'filter',
+                      label: FILTER_LABELS[filter],
+                      onClose: () => filterParam.setValue('ALL'),
+                    },
+                  ]
+                : []
+            }
           />
 
           <Table<ClassSession>
@@ -92,13 +117,13 @@ export function TeacherSessionsPage() {
                     onClick={() =>
                       navigate(
                         classroomDetailPath(session.classroomId, {
-                          tab: 'attendance',
+                          tab: 'sessions',
                           sessionId: session.id,
                         }),
                       )
                     }
                   >
-                    Điểm danh
+                    Xem buổi
                   </Button>
                 ),
               },

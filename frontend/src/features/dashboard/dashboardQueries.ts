@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import {
   getDashboardDebtAlerts,
+  getDashboardOverview,
   getDashboardRecentPayments,
   getDashboardSummary,
   getDashboardTodaySessions,
@@ -10,11 +11,19 @@ import type { SessionWarningParams } from './dashboardTypes'
 
 export const dashboardKeys = {
   all: ['dashboard'] as const,
+  overview: ['dashboard', 'overview'] as const,
   summary: ['dashboard', 'summary'] as const,
   todaySessions: ['dashboard', 'today-sessions'] as const,
   debtAlerts: (limit: number) => ['dashboard', 'debt-alerts', limit] as const,
   sessionWarnings: (params: SessionWarningParams) => ['dashboard', 'session-warnings', params] as const,
   recentPayments: (limit: number) => ['dashboard', 'recent-payments', limit] as const,
+}
+
+export function useDashboardOverview() {
+  return useQuery({
+    queryKey: dashboardKeys.overview,
+    queryFn: getDashboardOverview,
+  })
 }
 
 export function useDashboardSummary() {
@@ -38,10 +47,11 @@ export function useDashboardDebtAlerts(limit = 10) {
   })
 }
 
-export function useSessionWarnings(params: SessionWarningParams = { remainingThreshold: 2 }) {
+export function useSessionWarnings(params: SessionWarningParams = { remainingThreshold: 2 }, enabled = true) {
   return useQuery({
     queryKey: dashboardKeys.sessionWarnings(params),
     queryFn: () => getSessionWarnings(params),
+    enabled,
   })
 }
 

@@ -43,6 +43,32 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
     @Query("""
             SELECT COUNT(enrollment)
             FROM Enrollment enrollment
+            WHERE enrollment.status = :status
+              AND enrollment.classroom.teacherId = :teacherId
+              AND (enrollment.totalSessions - enrollment.usedSessions) <= 0
+            """)
+    long countDepletedByTeacherIdAndStatus(
+            @Param("teacherId") Long teacherId,
+            @Param("status") EnrollmentStatus status
+    );
+
+    @Query("""
+            SELECT COUNT(enrollment)
+            FROM Enrollment enrollment
+            WHERE enrollment.status = :status
+              AND enrollment.classroom.teacherId = :teacherId
+              AND (enrollment.totalSessions - enrollment.usedSessions) > 0
+              AND (enrollment.totalSessions - enrollment.usedSessions) <= :threshold
+            """)
+    long countLowSessionsByTeacherIdAndStatus(
+            @Param("teacherId") Long teacherId,
+            @Param("status") EnrollmentStatus status,
+            @Param("threshold") int threshold
+    );
+
+    @Query("""
+            SELECT COUNT(enrollment)
+            FROM Enrollment enrollment
             WHERE enrollment.classroom.id = :classroomId
               AND enrollment.status = :status
             """)
@@ -87,6 +113,38 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
                      enrollment.student.fullName ASC
             """)
     List<Enrollment> findSessionWarnings(@Param("threshold") int threshold);
+
+    @EntityGraph(attributePaths = {"student", "classroom"})
+    @Query("""
+            SELECT enrollment
+            FROM Enrollment enrollment
+            WHERE enrollment.status = com.englishcenter.enrollment.EnrollmentStatus.ACTIVE
+              AND (enrollment.totalSessions - enrollment.usedSessions) <= 0
+            ORDER BY enrollment.student.fullName ASC
+            """)
+    List<Enrollment> findDepletedActiveEnrollments();
+
+    @EntityGraph(attributePaths = {"student", "classroom"})
+    @Query("""
+            SELECT enrollment
+            FROM Enrollment enrollment
+            WHERE enrollment.status = com.englishcenter.enrollment.EnrollmentStatus.ACTIVE
+              AND (enrollment.totalSessions - enrollment.usedSessions) > 0
+              AND (enrollment.totalSessions - enrollment.usedSessions) <= :threshold
+            ORDER BY (enrollment.totalSessions - enrollment.usedSessions) ASC,
+                     enrollment.student.fullName ASC
+            """)
+    List<Enrollment> findLowSessionActiveEnrollments(@Param("threshold") int threshold);
+
+    @EntityGraph(attributePaths = {"student", "classroom"})
+    @Query("""
+            SELECT enrollment
+            FROM Enrollment enrollment
+            WHERE enrollment.status = com.englishcenter.enrollment.EnrollmentStatus.ACTIVE
+              AND (enrollment.totalSessions - enrollment.usedSessions) > :threshold
+            ORDER BY enrollment.student.fullName ASC
+            """)
+    List<Enrollment> findAvailableSessionActiveEnrollments(@Param("threshold") int threshold);
 
     @EntityGraph(attributePaths = {"student", "classroom", "selectedPackage"})
     @Query("""

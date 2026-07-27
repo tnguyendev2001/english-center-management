@@ -61,6 +61,68 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
             """)
     long countDistinctStudentsWithDebt();
 
+    @Query("""
+            SELECT COUNT(invoice)
+            FROM Invoice invoice
+            WHERE invoice.status IN (
+                com.englishcenter.invoice.InvoiceStatus.UNPAID,
+                com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
+            )
+              AND invoice.remainingAmount > 0
+              AND invoice.dueDate < :today
+            """)
+    long countOverdueInvoices(@Param("today") LocalDate today);
+
+    @Query("""
+            SELECT invoice
+            FROM Invoice invoice
+            WHERE invoice.status IN (
+                com.englishcenter.invoice.InvoiceStatus.UNPAID,
+                com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
+            )
+              AND invoice.remainingAmount > 0
+              AND invoice.dueDate < :today
+            ORDER BY invoice.dueDate ASC, invoice.createdAt DESC
+            """)
+    Page<Invoice> findOverdueInvoices(@Param("today") LocalDate today, Pageable pageable);
+
+    @Query("""
+            SELECT COUNT(DISTINCT invoice.student.id)
+            FROM Invoice invoice
+            WHERE invoice.status IN (
+                com.englishcenter.invoice.InvoiceStatus.UNPAID,
+                com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
+            )
+              AND invoice.remainingAmount > 0
+              AND (
+                  SELECT COUNT(other.id)
+                  FROM Invoice other
+                  WHERE other.student.id = invoice.student.id
+                    AND other.status IN (
+                        com.englishcenter.invoice.InvoiceStatus.UNPAID,
+                        com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
+                    )
+                    AND other.remainingAmount > 0
+              ) >= 2
+            """)
+    long countStudentsWithMultipleUnpaidInvoices();
+
+    @Query("""
+            SELECT COUNT(invoice)
+            FROM Invoice invoice
+            WHERE invoice.student.id = :studentId
+              AND invoice.status IN (
+                com.englishcenter.invoice.InvoiceStatus.UNPAID,
+                com.englishcenter.invoice.InvoiceStatus.PARTIALLY_PAID
+              )
+              AND invoice.remainingAmount > 0
+              AND invoice.dueDate < :today
+            """)
+    long countOverdueInvoicesByStudentId(
+            @Param("studentId") Long studentId,
+            @Param("today") LocalDate today
+    );
+
     Page<Invoice> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     Optional<Invoice> findTopByEnrollmentIdOrderByCreatedAtDesc(Long enrollmentId);

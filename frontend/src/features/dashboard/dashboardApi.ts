@@ -2,12 +2,18 @@ import type { ApiResponse } from '../../api/apiResponse'
 import { httpClient } from '../../api/httpClient'
 import type {
   DashboardDebtAlert,
+  DashboardOverview,
   DashboardRecentPayment,
   DashboardSummary,
   DashboardTodaySession,
   SessionWarning,
   SessionWarningParams,
 } from './dashboardTypes'
+
+export async function getDashboardOverview() {
+  const response = await httpClient.get<ApiResponse<DashboardOverview>>('/dashboard/overview')
+  return response.data.data
+}
 
 export async function getDashboardSummary() {
   const response = await httpClient.get<ApiResponse<DashboardSummary>>('/dashboard/summary')

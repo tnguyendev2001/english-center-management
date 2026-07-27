@@ -8,10 +8,11 @@ export const studentKeys = {
   detail: (id: number) => ['students', 'detail', id] as const,
 }
 
-export function useStudents(params: StudentSearchParams) {
+export function useStudents(params: StudentSearchParams, enabled = true) {
   return useQuery({
     queryKey: studentKeys.list(params),
     queryFn: () => getStudents(params),
+    enabled,
   })
 }
 

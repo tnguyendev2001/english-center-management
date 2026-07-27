@@ -5,6 +5,7 @@ import dayjs from 'dayjs'
 import { isAxiosError } from 'axios'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ActiveFilterTags } from '../../../components/common/ActiveFilterTags'
 import { MoneyText } from '../../../components/common/MoneyText'
 import {
   STUDENT_SEARCH_PLACEHOLDER,
@@ -12,6 +13,7 @@ import {
   studentKeywordFields,
   studentNameColumn,
 } from '../../../components/common/studentDisplay'
+import { useUrlEnumParam } from '../../../hooks/useUrlEnumParam'
 import { matchesKeyword, paginateItems } from '../../../utils/clientPagination'
 import { useClassrooms } from '../../classrooms/classroomQueries'
 import { StudentInvoiceListDrawer } from '../../financial/components/StudentInvoiceListDrawer'
@@ -26,6 +28,15 @@ import { useDebts, useDebtStudentSummaries } from '../debtQueries'
 const { Title, Text } = Typography
 
 const FETCH_SIZE = 100
+
+const DEBT_STATUS_OPTIONS = ['OUTSTANDING', 'OVERDUE', 'MULTIPLE_UNPAID'] as const
+type DebtStatusFilter = (typeof DEBT_STATUS_OPTIONS)[number]
+
+const DEBT_STATUS_LABELS: Record<DebtStatusFilter, string> = {
+  OUTSTANDING: 'Còn nợ',
+  OVERDUE: 'Quá hạn',
+  MULTIPLE_UNPAID: 'Nợ nhiều hóa đơn',
+}
 
 function summaryRowKey(summary: StudentDebtSummary) {
   return `${summary.studentId}-${summary.classroomId}`
@@ -44,6 +55,8 @@ function findCollectibleInvoice(invoices: Invoice[], studentId: number, classroo
 
 export function DebtPage() {
   const navigate = useNavigate()
+  const statusParam = useUrlEnumParam('status', DEBT_STATUS_OPTIONS)
+  const statusFilter = statusParam.value
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(10)
   const [keyword, setKeyword] = useState('')
@@ -61,14 +74,47 @@ export function DebtPage() {
   const createPayment = useCreatePayment()
 
   const filteredSummaries = useMemo(() => {
-    return (summariesQuery.data?.data ?? []).filter((summary) => {
+    const today = dayjs().startOf('day')
+    const allSummaries = summariesQuery.data?.data ?? []
+
+    const multiUnpaidStudentIds = new Set<number>()
+    if (statusFilter === 'MULTIPLE_UNPAID') {
+      const invoiceCountByStudent = new Map<number, number>()
+      for (const summary of allSummaries) {
+        invoiceCountByStudent.set(
+          summary.studentId,
+          (invoiceCountByStudent.get(summary.studentId) ?? 0) + summary.debtInvoiceCount,
+        )
+      }
+      for (const [studentId, count] of invoiceCountByStudent) {
+        if (count >= 2) {
+          multiUnpaidStudentIds.add(studentId)
+        }
+      }
+    }
+
+    return allSummaries.filter((summary) => {
       if (classroomId && summary.classroomId !== classroomId) {
+        return false
+      }
+
+      if (statusFilter === 'OVERDUE') {
+        if (!summary.nearestDueDate || !dayjs(summary.nearestDueDate).isBefore(today)) {
+          return false
+        }
+      }
+
+      if (statusFilter === 'OUTSTANDING' && summary.totalRemainingDebt <= 0) {
+        return false
+      }
+
+      if (statusFilter === 'MULTIPLE_UNPAID' && !multiUnpaidStudentIds.has(summary.studentId)) {
         return false
       }
 
       return matchesKeyword(keyword, ...studentKeywordFields(summary), summary.classroomName)
     })
-  }, [classroomId, keyword, summariesQuery.data?.data])
+  }, [classroomId, keyword, statusFilter, summariesQuery.data?.data])
 
   const pagedSummaries = useMemo(
     () => paginateItems(filteredSummaries, page, size),
@@ -81,6 +127,13 @@ export function DebtPage() {
       studentCount: filteredSummaries.length,
     }
   }, [filteredSummaries])
+
+  function handleStatusChange(value: DebtStatusFilter | undefined) {
+    statusParam.setValue(value)
+    setPage(0)
+  }
+
+  const classroomName = classroomsQuery.data?.data?.find((item) => item.id === classroomId)?.className
 
   const columns: ColumnsType<StudentDebtSummary> = [
     studentCodeColumn(),
@@ -120,7 +173,11 @@ export function DebtPage() {
     {
       title: 'Trạng thái',
       key: 'status',
-      render: () => <Tag color="orange">Còn nợ</Tag>,
+      render: (_, summary) => {
+        const overdue =
+          summary.nearestDueDate != null && dayjs(summary.nearestDueDate).isBefore(dayjs().startOf('day'))
+        return <Tag color={overdue ? 'red' : 'orange'}>{overdue ? 'Quá hạn' : 'Còn nợ'}</Tag>
+      },
     },
     {
       title: 'Thao tác',
@@ -197,13 +254,17 @@ export function DebtPage() {
     message.error('Có lỗi xảy ra')
   }
 
+  const subtitle = statusFilter
+    ? `Công nợ – ${DEBT_STATUS_LABELS[statusFilter]}`
+    : 'Theo dõi công nợ theo học viên và lớp học.'
+
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       <Space direction="vertical" size={4}>
         <Title level={2} style={{ margin: 0 }}>
           Công nợ
         </Title>
-        <Text type="secondary">Theo dõi công nợ theo học viên và lớp học.</Text>
+        <Text type="secondary">{subtitle}</Text>
       </Space>
 
       <Row gutter={16}>
@@ -244,6 +305,18 @@ export function DebtPage() {
             />
             <Select
               allowClear
+              placeholder="Trạng thái công nợ"
+              style={{ width: 200 }}
+              value={statusFilter}
+              onChange={(value) => handleStatusChange(value)}
+              options={[
+                { value: 'OUTSTANDING', label: 'Còn nợ' },
+                { value: 'OVERDUE', label: 'Quá hạn' },
+                { value: 'MULTIPLE_UNPAID', label: 'Nợ nhiều hóa đơn' },
+              ]}
+            />
+            <Select
+              allowClear
               placeholder="Lớp học"
               style={{ width: 220 }}
               value={classroomId}
@@ -254,6 +327,34 @@ export function DebtPage() {
               }))}
             />
           </Space>
+
+          <ActiveFilterTags
+            tags={[
+              ...(statusFilter
+                ? [
+                    {
+                      key: 'status',
+                      label: DEBT_STATUS_LABELS[statusFilter],
+                      color: statusFilter === 'OVERDUE' ? 'red' : 'orange',
+                      onClose: () => handleStatusChange(undefined),
+                    },
+                  ]
+                : []),
+              ...(classroomId && classroomName
+                ? [
+                    {
+                      key: 'classroom',
+                      label: `Lớp: ${classroomName}`,
+                      onClose: () => handleClassroomChange(undefined),
+                    },
+                  ]
+                : []),
+            ]}
+            onClearAll={() => {
+              handleStatusChange(undefined)
+              handleClassroomChange(undefined)
+            }}
+          />
 
           <Table
             rowKey={summaryRowKey}

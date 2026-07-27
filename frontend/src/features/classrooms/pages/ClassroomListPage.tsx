@@ -4,7 +4,8 @@ import type { ColumnsType } from 'antd/es/table'
 import { isAxiosError } from 'axios'
 import dayjs from 'dayjs'
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
+import { ActiveFilterTags } from '../../../components/common/ActiveFilterTags'
 import { StatusTag } from '../../../components/common/StatusTag'
 import { ClassroomFormModal } from '../components/ClassroomFormModal'
 import {
@@ -18,12 +19,22 @@ import { formatDaysOfWeek } from '../classroomTypes'
 
 const { Title, Text } = Typography
 
-type AssignmentFilter = 'ALL' | 'ASSIGNED' | 'UNASSIGNED'
+const ASSIGNMENT_OPTIONS = ['ASSIGNED', 'UNASSIGNED'] as const
+type AssignmentFilter = (typeof ASSIGNMENT_OPTIONS)[number]
+
+const ASSIGNMENT_LABELS: Record<AssignmentFilter, string> = {
+  ASSIGNED: 'Đã phân công',
+  UNASSIGNED: 'Chưa phân công giáo viên',
+}
 
 export function ClassroomListPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const rawAssignment = searchParams.get('teacherAssignment') ?? searchParams.get('assignment')
+  const assignmentFilter =
+    rawAssignment === 'ASSIGNED' || rawAssignment === 'UNASSIGNED' ? rawAssignment : undefined
+
   const [keyword, setKeyword] = useState('')
   const [teacherId, setTeacherId] = useState<number>()
-  const [assignmentFilter, setAssignmentFilter] = useState<AssignmentFilter>('ALL')
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(10)
   const [modalOpen, setModalOpen] = useState(false)
@@ -45,6 +56,26 @@ export function ClassroomListPage() {
   const teachersQuery = useActiveTeachers()
   const createClassroom = useCreateClassroom()
   const updateClassroom = useUpdateClassroom()
+
+  function updateAssignmentFilter(value: AssignmentFilter | undefined) {
+    if (value === 'UNASSIGNED') {
+      setTeacherId(undefined)
+    }
+    setPage(0)
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('assignment')
+        if (value) {
+          next.set('teacherAssignment', value)
+        } else {
+          next.delete('teacherAssignment')
+        }
+        return next
+      },
+      { replace: true },
+    )
+  }
 
   const columns: ColumnsType<Classroom> = [
     {
@@ -185,7 +216,11 @@ export function ClassroomListPage() {
         <Title level={2} style={{ margin: 0 }}>
           Lớp học
         </Title>
-        <Text type="secondary">Quản lý lớp tiếng Anh, phân công giáo viên, phòng học và lịch học.</Text>
+        <Text type="secondary">
+          {assignmentFilter
+            ? `Lớp học – ${ASSIGNMENT_LABELS[assignmentFilter]}`
+            : 'Quản lý lớp tiếng Anh, phân công giáo viên, phòng học và lịch học.'}
+        </Text>
       </Space>
 
       <Card>
@@ -215,17 +250,12 @@ export function ClassroomListPage() {
                 }))}
               />
               <Select
-                style={{ width: 200 }}
+                allowClear
+                placeholder="Tình trạng phân công"
+                style={{ width: 220 }}
                 value={assignmentFilter}
-                onChange={(value: AssignmentFilter) => {
-                  setAssignmentFilter(value)
-                  if (value === 'UNASSIGNED') {
-                    setTeacherId(undefined)
-                  }
-                  setPage(0)
-                }}
+                onChange={(value: AssignmentFilter | undefined) => updateAssignmentFilter(value)}
                 options={[
-                  { value: 'ALL', label: 'Tất cả phân công' },
                   { value: 'ASSIGNED', label: 'Đã phân công' },
                   { value: 'UNASSIGNED', label: 'Chưa phân công' },
                 ]}
@@ -235,6 +265,22 @@ export function ClassroomListPage() {
               Thêm lớp học
             </Button>
           </Space>
+
+          <ActiveFilterTags
+            tags={
+              assignmentFilter
+                ? [
+                    {
+                      key: 'teacherAssignment',
+                      label: ASSIGNMENT_LABELS[assignmentFilter],
+                      color: assignmentFilter === 'UNASSIGNED' ? 'warning' : 'processing',
+                      onClose: () => updateAssignmentFilter(undefined),
+                    },
+                  ]
+                : []
+            }
+            onClearAll={() => updateAssignmentFilter(undefined)}
+          />
 
           <Table
             rowKey="id"

@@ -11,6 +11,8 @@ import org.springframework.data.repository.query.Param;
 public interface ClassroomRepository extends JpaRepository<Classroom, Long> {
     long countByStatus(ClassroomStatus status);
 
+    long countByTeacherIdIsNullAndStatus(ClassroomStatus status);
+
     boolean existsByClassCode(String classCode);
 
     boolean existsByClassCodeAndIdNot(String classCode, Long id);
@@ -53,8 +55,18 @@ public interface ClassroomRepository extends JpaRepository<Classroom, Long> {
             WHERE (:teacherId IS NULL OR classroom.teacherId = :teacherId)
               AND (:unassignedOnly = FALSE OR classroom.teacherId IS NULL)
               AND (:assignedOnly = FALSE OR classroom.teacherId IS NOT NULL)
+              AND (
+                  :keyword IS NULL OR :keyword = ''
+                  OR LOWER(classroom.classCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(classroom.className) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR (classroom.teacherName IS NOT NULL
+                      AND LOWER(classroom.teacherName) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                  OR (classroom.room IS NOT NULL
+                      AND LOWER(classroom.room) LIKE LOWER(CONCAT('%', :keyword, '%')))
+              )
             """)
     Page<Classroom> searchFiltered(
+            @Param("keyword") String keyword,
             @Param("teacherId") Long teacherId,
             @Param("unassignedOnly") boolean unassignedOnly,
             @Param("assignedOnly") boolean assignedOnly,

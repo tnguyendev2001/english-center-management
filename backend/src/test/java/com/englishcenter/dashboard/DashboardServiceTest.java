@@ -3,17 +3,22 @@ package com.englishcenter.dashboard;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.englishcenter.attendance.AttendanceRepository;
 import com.englishcenter.classroom.ClassroomRepository;
 import com.englishcenter.classsession.ClassSessionRepository;
 import com.englishcenter.classsession.ClassSessionStatus;
 import com.englishcenter.dashboard.dto.DashboardSummaryResponse;
 import com.englishcenter.enrollment.EnrollmentRepository;
+import com.englishcenter.enrollment.EnrollmentSessionService;
 import com.englishcenter.enrollment.EnrollmentStatus;
 import com.englishcenter.invoice.InvoiceRepository;
 import com.englishcenter.invoice.InvoiceStatus;
+import com.englishcenter.invoice.mapper.InvoiceMapper;
 import com.englishcenter.makeupcredit.MakeupCreditRepository;
 import com.englishcenter.makeupcredit.MakeupCreditStatus;
 import com.englishcenter.payment.PaymentRepository;
+import com.englishcenter.payment.mapper.PaymentMapper;
+import com.englishcenter.security.CurrentUserService;
 import com.englishcenter.student.StudentRepository;
 import com.englishcenter.student.StudentStatus;
 import com.englishcenter.classroom.ClassroomStatus;
@@ -29,24 +34,30 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class DashboardServiceTest {
     @Mock
     private StudentRepository studentRepository;
-
     @Mock
     private ClassroomRepository classroomRepository;
-
     @Mock
     private EnrollmentRepository enrollmentRepository;
-
+    @Mock
+    private EnrollmentSessionService enrollmentSessionService;
     @Mock
     private InvoiceRepository invoiceRepository;
-
+    @Mock
+    private InvoiceMapper invoiceMapper;
     @Mock
     private PaymentRepository paymentRepository;
-
+    @Mock
+    private PaymentMapper paymentMapper;
     @Mock
     private MakeupCreditRepository makeupCreditRepository;
-
     @Mock
     private ClassSessionRepository classSessionRepository;
+    @Mock
+    private AttendanceRepository attendanceRepository;
+    @Mock
+    private DashboardAlertService dashboardAlertService;
+    @Mock
+    private CurrentUserService currentUserService;
 
     @InjectMocks
     private DashboardService dashboardService;

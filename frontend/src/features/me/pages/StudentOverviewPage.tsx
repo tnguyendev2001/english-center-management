@@ -1,7 +1,10 @@
-import { Card, Col, Empty, Progress, Row, Space, Statistic, Table, Typography } from 'antd'
+import { Alert, Button, Card, Col, Empty, Progress, Row, Space, Statistic, Table, Typography } from 'antd'
 import dayjs from 'dayjs'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
+import { ClickableStatCard } from '../../dashboard/components/ClickableStatCard'
+import { DashboardAlertsSection } from '../../dashboard/components/DashboardAlertsSection'
+import { useDashboardOverview } from '../../dashboard/dashboardQueries'
 import { useStudentDashboard } from '../meQueries'
 import type { StudentAttendanceItem, StudentScheduleItem } from '../studentTypes'
 import type { Enrollment } from '../../enrollments/enrollmentTypes'
@@ -10,8 +13,27 @@ import type { Invoice } from '../../invoices/invoiceTypes'
 const { Title, Text } = Typography
 
 export function StudentOverviewPage() {
+  const overviewQuery = useDashboardOverview()
   const dashboardQuery = useStudentDashboard()
+  const overview = overviewQuery.data
   const data = dashboardQuery.data
+  const loading = overviewQuery.isLoading || dashboardQuery.isLoading
+
+  if (overviewQuery.isError) {
+    return (
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Title level={2} style={{ margin: 0 }}>
+          Tổng quan
+        </Title>
+        <Alert
+          type="error"
+          showIcon
+          message="Không tải được dữ liệu tổng quan"
+          action={<Button onClick={() => void overviewQuery.refetch()}>Thử lại</Button>}
+        />
+      </Space>
+    )
+  }
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -22,14 +44,23 @@ export function StudentOverviewPage() {
         <Text type="secondary">Thông tin học tập và học phí của bạn.</Text>
       </Space>
 
+      <DashboardAlertsSection
+        alerts={overview?.alerts}
+        loading={overviewQuery.isLoading}
+        onRetry={() => void overviewQuery.refetch()}
+      />
+
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={8} xl={4}>
-          <Card loading={dashboardQuery.isLoading}>
-            <Statistic title="Lớp đang học" value={data?.activeClassCount ?? 0} />
-          </Card>
+          <ClickableStatCard
+            loading={loading}
+            title="Lớp đang học"
+            value={overview?.summary.activeClassrooms ?? data?.activeClassCount ?? 0}
+            href="/student/learning?tab=classes"
+          />
         </Col>
         <Col xs={24} sm={12} lg={8} xl={5}>
-          <Card loading={dashboardQuery.isLoading}>
+          <Card loading={loading}>
             <Statistic
               title="Buổi học tiếp theo"
               value={
@@ -44,29 +75,37 @@ export function StudentOverviewPage() {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={8} xl={5}>
-          <Card loading={dashboardQuery.isLoading}>
+          <Card loading={loading}>
             <Statistic title="Đã dùng" value={data?.usedSessions ?? 0} suffix="buổi" />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={8} xl={5}>
-          <Card loading={dashboardQuery.isLoading}>
-            <Statistic title="Còn lại" value={data?.remainingSessions ?? 0} suffix="buổi" />
-          </Card>
+          <ClickableStatCard
+            loading={loading}
+            title="Còn lại"
+            value={overview?.summary.remainingSessions ?? data?.remainingSessions ?? 0}
+            href="/student/learning?tab=progress"
+            valueStyle={
+              (overview?.summary.remainingSessions ?? data?.remainingSessions ?? 0) <= 2
+                ? { color: '#d46b08' }
+                : undefined
+            }
+          />
         </Col>
         <Col xs={24} sm={12} lg={8} xl={5}>
-          <Card loading={dashboardQuery.isLoading}>
-            <Statistic
-              title="Tổng công nợ"
-              value={Number(data?.totalOutstandingDebt ?? 0)}
-              formatter={(value) => <MoneyText value={Number(value)} />}
-            />
-          </Card>
+          <ClickableStatCard
+            loading={loading}
+            title="Tổng công nợ"
+            value={Number(overview?.summary.outstandingDebt ?? data?.totalOutstandingDebt ?? 0)}
+            href="/student/tuition?tab=debt"
+            formatter={(value) => <MoneyText value={Number(value)} />}
+          />
         </Col>
       </Row>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={12}>
-          <Card title="Lịch học sắp tới" loading={dashboardQuery.isLoading}>
+          <Card title="Lịch học sắp tới" loading={loading}>
             <Table<StudentScheduleItem>
               rowKey="sessionId"
               size="small"
@@ -102,7 +141,7 @@ export function StudentOverviewPage() {
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="Tiến độ học tập" loading={dashboardQuery.isLoading}>
+          <Card title="Tiến độ học tập" loading={loading}>
             {(data?.progressItems ?? []).length === 0 ? (
               <Empty description="Bạn chưa được ghi danh vào lớp học nào." />
             ) : (
@@ -134,7 +173,7 @@ export function StudentOverviewPage() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={12}>
-          <Card title="Điểm danh gần đây" loading={dashboardQuery.isLoading}>
+          <Card title="Điểm danh gần đây" loading={loading}>
             <Table<StudentAttendanceItem>
               rowKey="id"
               size="small"
@@ -164,7 +203,7 @@ export function StudentOverviewPage() {
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="Học phí cần chú ý" loading={dashboardQuery.isLoading}>
+          <Card title="Học phí cần chú ý" loading={loading}>
             {(data?.attentionInvoices ?? []).length === 0 ? (
               <Empty description="Bạn không có khoản học phí chưa thanh toán." />
             ) : (

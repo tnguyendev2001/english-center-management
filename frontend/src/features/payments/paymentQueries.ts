@@ -62,4 +62,6 @@ function invalidateMoneyQueries(queryClient: ReturnType<typeof useQueryClient>) 
   queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
   queryClient.invalidateQueries({ queryKey: reportKeys.all })
   queryClient.invalidateQueries({ queryKey: financeKeys.all })
+  queryClient.invalidateQueries({ queryKey: ['me-student-dashboard'] })
+  queryClient.invalidateQueries({ queryKey: ['me-teacher-dashboard'] })
 }

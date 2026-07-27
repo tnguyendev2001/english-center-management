@@ -69,6 +69,8 @@ export function useMarkAttendance() {
       queryClient.invalidateQueries({ queryKey: studentPackageKeys.all })
       queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
       queryClient.invalidateQueries({ queryKey: reportKeys.all })
+      queryClient.invalidateQueries({ queryKey: ['me-teacher-dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['me-student-dashboard'] })
     },
   })
 }

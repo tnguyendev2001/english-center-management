@@ -233,4 +233,76 @@ public interface ClassSessionRepository extends JpaRepository<ClassSession, Long
             @Param("teacherId") Long teacherId,
             @Param("beforeDate") LocalDate beforeDate
     );
+
+    @Query("""
+            SELECT COUNT(session)
+            FROM ClassSession session
+            WHERE session.sessionDate < :beforeDate
+              AND session.status <> com.englishcenter.classsession.ClassSessionStatus.CANCELED
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM Attendance attendance
+                  WHERE attendance.session = session
+                    AND attendance.valid = true
+              )
+            """)
+    long countIncompleteAttendance(@Param("beforeDate") LocalDate beforeDate);
+
+    @Query("""
+            SELECT session
+            FROM ClassSession session
+            JOIN FETCH session.classroom classroom
+            WHERE session.sessionDate < :beforeDate
+              AND session.status <> com.englishcenter.classsession.ClassSessionStatus.CANCELED
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM Attendance attendance
+                  WHERE attendance.session = session
+                    AND attendance.valid = true
+              )
+            ORDER BY session.sessionDate DESC, session.startTime DESC
+            """)
+    List<ClassSession> findIncompleteAttendance(@Param("beforeDate") LocalDate beforeDate);
+
+    @Query("""
+            SELECT COUNT(session)
+            FROM ClassSession session
+            WHERE session.classroom.teacherId = :teacherId
+              AND session.sessionDate < :beforeDate
+              AND session.status <> com.englishcenter.classsession.ClassSessionStatus.CANCELED
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM Attendance attendance
+                  WHERE attendance.session = session
+                    AND attendance.valid = true
+              )
+            """)
+    long countIncompleteAttendanceByTeacherId(
+            @Param("teacherId") Long teacherId,
+            @Param("beforeDate") LocalDate beforeDate
+    );
+
+    @Query("""
+            SELECT COUNT(session)
+            FROM ClassSession session
+            WHERE session.classroom.teacherId = :teacherId
+              AND session.sessionDate = :sessionDate
+              AND session.status <> com.englishcenter.classsession.ClassSessionStatus.CANCELED
+            """)
+    long countTodayByTeacherId(
+            @Param("teacherId") Long teacherId,
+            @Param("sessionDate") LocalDate sessionDate
+    );
+
+    @Query("""
+            SELECT COUNT(session)
+            FROM ClassSession session
+            WHERE session.classroom.teacherId = :teacherId
+              AND session.sessionDate >= :fromDate
+              AND session.status <> com.englishcenter.classsession.ClassSessionStatus.CANCELED
+            """)
+    long countUpcomingByTeacherId(
+            @Param("teacherId") Long teacherId,
+            @Param("fromDate") LocalDate fromDate
+    );
 }

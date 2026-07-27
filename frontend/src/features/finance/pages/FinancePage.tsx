@@ -26,7 +26,7 @@ import type { ColumnsType } from 'antd/es/table'
 import { isAxiosError } from 'axios'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   Bar,
   BarChart,
@@ -259,7 +259,19 @@ function CompareMetricCard({
 
 export function FinancePage() {
   const now = dayjs()
-  const [activeTab, setActiveTab] = useState('overview')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabFromUrl = searchParams.get('tab')
+  const balanceFilter = searchParams.get('balance') === 'NEGATIVE' ? 'NEGATIVE' : undefined
+  const reconStatusFilter =
+    searchParams.get('reconStatus') === 'MISMATCHED' || searchParams.get('reconStatus') === 'MATCHED'
+      ? (searchParams.get('reconStatus') as 'MISMATCHED' | 'MATCHED')
+      : undefined
+  const initialTab =
+    tabFromUrl &&
+    ['overview', 'ledger', 'accounts', 'categories', 'reconciliation', 'periods', 'reports'].includes(tabFromUrl)
+      ? tabFromUrl
+      : 'overview'
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [overviewScope, setOverviewScope] = useState<FinanceScope>('MONTH')
   const [overviewMonth, setOverviewMonth] = useState<Dayjs>(now)
 
@@ -548,7 +560,36 @@ export function FinancePage() {
   const exportReport = useExportFinanceReport()
   const repairPaymentLedger = useRepairPaymentLedger()
 
-  const accounts = accountsQuery.data ?? []
+  const accounts = useMemo(() => {
+    const all = accountsQuery.data ?? []
+    if (balanceFilter === 'NEGATIVE') {
+      return all.filter((account) => account.currentBalance < 0)
+    }
+    return all
+  }, [accountsQuery.data, balanceFilter])
+
+  function changeFinanceTab(nextTab: string) {
+    setActiveTab(nextTab)
+    const next = new URLSearchParams(searchParams)
+    if (nextTab === 'overview') {
+      next.delete('tab')
+    } else {
+      next.set('tab', nextTab)
+    }
+    if (nextTab !== 'accounts') {
+      next.delete('balance')
+    }
+    if (nextTab !== 'reconciliation') {
+      next.delete('reconStatus')
+    }
+    setSearchParams(next, { replace: true })
+  }
+
+  function clearBalanceFilter() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('balance')
+    setSearchParams(next, { replace: true })
+  }
   const categories = categoriesQuery.data ?? []
   const overviewLoading = overviewQuery.isLoading || overviewQuery.isFetching
   const overview = overviewLoading ? undefined : overviewQuery.data
@@ -1589,15 +1630,39 @@ export function FinancePage() {
 
   const accountsTab = (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <Button
-        type="primary"
-        onClick={() => {
-          setEditingAccount(undefined)
-          setAccountModalOpen(true)
-        }}
-      >
-        Thêm tài khoản
-      </Button>
+      <Space wrap>
+        <Button
+          type="primary"
+          onClick={() => {
+            setEditingAccount(undefined)
+            setAccountModalOpen(true)
+          }}
+        >
+          Thêm tài khoản
+        </Button>
+        <Select
+          allowClear
+          placeholder="Số dư tài khoản"
+          style={{ width: 200 }}
+          value={balanceFilter}
+          onChange={(value?: 'NEGATIVE') => {
+            const next = new URLSearchParams(searchParams)
+            if (value) {
+              next.set('balance', value)
+            } else {
+              next.delete('balance')
+            }
+            next.set('tab', 'accounts')
+            setSearchParams(next, { replace: true })
+          }}
+          options={[{ value: 'NEGATIVE', label: 'Số dư âm' }]}
+        />
+        {balanceFilter === 'NEGATIVE' ? (
+          <Tag color="red" closable onClose={clearBalanceFilter}>
+            Bộ lọc: Tài khoản đang âm
+          </Tag>
+        ) : null}
+      </Space>
       <Row gutter={[16, 16]}>
         {accounts.map((account) => (
           <Col xs={24} sm={12} lg={8} key={account.id}>
@@ -1625,6 +1690,7 @@ export function FinancePage() {
         columns={accountColumns}
         dataSource={accounts}
         pagination={false}
+        locale={{ emptyText: balanceFilter === 'NEGATIVE' ? 'Không có tài khoản đang âm.' : 'Chưa có tài khoản.' }}
       />
     </Space>
   )
@@ -2049,16 +2115,63 @@ export function FinancePage() {
   const reconciliation = reconciliationQuery.data
   const reconciliationTab = (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <RangePicker
-        format="DD/MM/YYYY"
-        value={reconRange}
-        onChange={(value) => setReconRange(value as [Dayjs, Dayjs] | null)}
-      />
+      <Space wrap>
+        <RangePicker
+          format="DD/MM/YYYY"
+          value={reconRange}
+          onChange={(value) => setReconRange(value as [Dayjs, Dayjs] | null)}
+        />
+        <Select
+          allowClear
+          placeholder="Trạng thái đối soát"
+          style={{ width: 220 }}
+          value={reconStatusFilter}
+          onChange={(value?: 'MATCHED' | 'MISMATCHED') => {
+            const next = new URLSearchParams(searchParams)
+            if (value) {
+              next.set('reconStatus', value)
+            } else {
+              next.delete('reconStatus')
+            }
+            next.set('tab', 'reconciliation')
+            setSearchParams(next, { replace: true })
+          }}
+          options={[
+            { value: 'MATCHED', label: 'Khớp' },
+            { value: 'MISMATCHED', label: 'Không khớp' },
+          ]}
+        />
+        {reconStatusFilter ? (
+          <Tag
+            color={reconStatusFilter === 'MISMATCHED' ? 'red' : 'green'}
+            closable
+            onClose={() => {
+              const next = new URLSearchParams(searchParams)
+              next.delete('reconStatus')
+              setSearchParams(next, { replace: true })
+            }}
+          >
+            {reconStatusFilter === 'MISMATCHED' ? 'Không khớp' : 'Khớp'}
+          </Tag>
+        ) : null}
+      </Space>
 
       {reconciliation && reconciliation.status === 'MISMATCHED' ? (
         <Alert type="error" showIcon message="Đối soát chưa khớp — cần kiểm tra các lệch bên dưới" />
       ) : reconciliation ? (
         <Alert type="success" showIcon message="Đối soát khớp" />
+      ) : null}
+
+      {reconStatusFilter && reconciliation && reconciliation.status !== reconStatusFilter ? (
+        <Alert
+          type="info"
+          showIcon
+          message={
+            reconStatusFilter === 'MISMATCHED'
+              ? 'Kết quả hiện tại đang khớp — không có lệch để hiển thị.'
+              : 'Kết quả hiện tại đang không khớp.'
+          }
+        />
       ) : null}
 
       <Row gutter={[16, 16]}>
@@ -2244,7 +2357,7 @@ export function FinancePage() {
         <Dropdown
           menu={{
             items: settingsMenuItems,
-            onClick: ({ key }) => setActiveTab(key),
+            onClick: ({ key }) => changeFinanceTab(key),
           }}
         >
           <Button>Cài đặt tài chính</Button>
@@ -2254,7 +2367,7 @@ export function FinancePage() {
       {isSettingsTab ? (
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <Space wrap>
-            <Button onClick={() => setActiveTab('overview')}>← Quay lại</Button>
+            <Button onClick={() => changeFinanceTab('overview')}>← Quay lại</Button>
             <Title level={4} style={{ margin: 0 }}>
               {settingsTitle[activeTab]}
             </Title>
@@ -2267,7 +2380,7 @@ export function FinancePage() {
       ) : (
         <Tabs
           activeKey={activeTab}
-          onChange={setActiveTab}
+          onChange={changeFinanceTab}
           items={[
             { key: 'overview', label: 'Tổng quan', children: overviewTab },
             { key: 'ledger', label: 'Giao dịch', children: ledgerTab },

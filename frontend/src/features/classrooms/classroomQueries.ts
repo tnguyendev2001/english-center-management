@@ -107,6 +107,7 @@ function invalidateTeacherRelated(queryClient: ReturnType<typeof useQueryClient>
   queryClient.invalidateQueries({ queryKey: ['me-teacher-dashboard'] })
   queryClient.invalidateQueries({ queryKey: ['me-students'] })
   queryClient.invalidateQueries({ queryKey: ['me-sessions'] })
+  queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
 }
 
 export function useCreateClassroom() {

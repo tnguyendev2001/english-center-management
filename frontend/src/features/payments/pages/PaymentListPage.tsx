@@ -29,6 +29,7 @@ import {
   studentNameColumn,
 } from '../../../components/common/studentDisplay'
 import { matchesKeyword, paginateItems } from '../../../utils/clientPagination'
+import { useClassrooms } from '../../classrooms/classroomQueries'
 import { StudentPaymentHistoryDrawer } from '../../financial/components/StudentPaymentHistoryDrawer'
 import type { StudentPaymentSummary } from '../../financial/financialSummaryTypes'
 import { CancelPaymentModal } from '../components/CancelPaymentModal'
@@ -73,6 +74,7 @@ export function PaymentListPage() {
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(10)
   const [keyword, setKeyword] = useState('')
+  const [classroomId, setClassroomId] = useState<number>()
   const [methodFilter, setMethodFilter] = useState<PaymentMethod>()
   const [statusFilter, setStatusFilter] = useState<PaymentStatus>()
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>(defaultMonthRange)
@@ -98,6 +100,7 @@ export function PaymentListPage() {
   const isStudentTab = tab === 'by-student'
   const paymentsQuery = usePayments(params)
   const studentSummariesQuery = usePaymentStudentSummaries(summaryParams, isStudentTab)
+  const classroomsQuery = useClassrooms({ page: 0, size: 100 })
   const cancelPayment = useCancelPayment()
 
   const filteredPayments = useMemo(() => {
@@ -118,6 +121,10 @@ export function PaymentListPage() {
         return false
       }
 
+      if (classroomId && payment.classroomId !== classroomId) {
+        return false
+      }
+
       if (!matchesKeyword(keyword, ...studentKeywordFields(payment), payment.invoiceCode)) {
         return false
       }
@@ -129,7 +136,7 @@ export function PaymentListPage() {
 
       return true
     })
-  }, [dateRange, keyword, methodFilter, paymentsQuery.data?.data, statusFilter, tab])
+  }, [classroomId, dateRange, keyword, methodFilter, paymentsQuery.data?.data, statusFilter, tab])
 
   const pagedPayments = useMemo(
     () => paginateItems(filteredPayments, page, size),
@@ -137,10 +144,14 @@ export function PaymentListPage() {
   )
 
   const filteredStudentSummaries = useMemo(() => {
-    return (studentSummariesQuery.data?.data ?? []).filter((summary) =>
-      matchesKeyword(keyword, ...studentKeywordFields(summary), summary.classroomName),
-    )
-  }, [keyword, studentSummariesQuery.data?.data])
+    return (studentSummariesQuery.data?.data ?? []).filter((summary) => {
+      if (classroomId && summary.classroomId !== classroomId) {
+        return false
+      }
+
+      return matchesKeyword(keyword, ...studentKeywordFields(summary), summary.classroomName)
+    })
+  }, [classroomId, keyword, studentSummariesQuery.data?.data])
 
   const pagedStudentSummaries = useMemo(
     () => paginateItems(filteredStudentSummaries, page, size),
@@ -291,6 +302,11 @@ export function PaymentListPage() {
     setPage(0)
   }
 
+  function handleClassroomChange(value?: number) {
+    setClassroomId(value)
+    setPage(0)
+  }
+
   function handleMethodChange(value?: PaymentMethod) {
     setMethodFilter(value)
     setPage(0)
@@ -407,6 +423,17 @@ export function PaymentListPage() {
               style={{ width: 280 }}
               value={keyword}
               onChange={(event) => handleKeywordChange(event.target.value)}
+            />
+            <Select
+              allowClear
+              placeholder="Lớp học"
+              style={{ width: 220 }}
+              value={classroomId}
+              onChange={handleClassroomChange}
+              options={(classroomsQuery.data?.data ?? []).map((classroom) => ({
+                label: classroom.className,
+                value: classroom.id,
+              }))}
             />
             {!isStudentTab && (
               <Select

@@ -1,6 +1,7 @@
 package com.englishcenter.dashboard;
 
 import com.englishcenter.common.api.ApiResponse;
+import com.englishcenter.dashboard.dto.DashboardOverviewResponse;
 import com.englishcenter.dashboard.dto.DashboardSummaryResponse;
 import com.englishcenter.dashboard.dto.DashboardTodaySessionResponse;
 import com.englishcenter.dashboard.dto.SessionWarningResponse;
@@ -15,7 +16,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/dashboard")
-@PreAuthorize("hasRole('ADMIN')")
 public class DashboardController {
     private final DashboardService dashboardService;
 
@@ -23,17 +23,26 @@ public class DashboardController {
         this.dashboardService = dashboardService;
     }
 
+    @GetMapping({"/overview", ""})
+    @PreAuthorize("hasAnyRole('ADMIN', 'TEACHER', 'STUDENT')")
+    public ApiResponse<DashboardOverviewResponse> getOverview() {
+        return ApiResponse.success(dashboardService.getOverview());
+    }
+
     @GetMapping("/summary")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<DashboardSummaryResponse> getSummary() {
         return ApiResponse.success(dashboardService.getSummary());
     }
 
     @GetMapping("/today-sessions")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<List<DashboardTodaySessionResponse>> getTodaySessions() {
         return ApiResponse.success(dashboardService.getTodaySessions());
     }
 
     @GetMapping("/debt-alerts")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<List<DebtReportItemResponse>> getDebtAlerts(
             @RequestParam(defaultValue = "10") int limit
     ) {
@@ -41,13 +50,16 @@ public class DashboardController {
     }
 
     @GetMapping("/session-warnings")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<List<SessionWarningResponse>> getSessionWarnings(
-            @RequestParam(defaultValue = "2") int remainingThreshold
+            @RequestParam(defaultValue = "2") int remainingThreshold,
+            @RequestParam(required = false) String remaining
     ) {
-        return ApiResponse.success(dashboardService.getSessionWarnings(remainingThreshold));
+        return ApiResponse.success(dashboardService.getSessionWarnings(remainingThreshold, remaining));
     }
 
     @GetMapping("/recent-payments")
+    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<List<PaymentResponse>> getRecentPayments(
             @RequestParam(defaultValue = "10") int limit
     ) {

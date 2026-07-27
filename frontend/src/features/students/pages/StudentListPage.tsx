@@ -1,18 +1,36 @@
-import { Button, Card, Input, message, Space, Table, Typography } from 'antd'
+import { Button, Card, Input, message, Select, Space, Table, Tag, Typography } from 'antd'
 import type { TablePaginationConfig } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { isAxiosError } from 'axios'
 import dayjs from 'dayjs'
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { ActiveFilterTags } from '../../../components/common/ActiveFilterTags'
 import { StatusTag } from '../../../components/common/StatusTag'
+import { studentCodeColumn, studentNameColumn } from '../../../components/common/studentDisplay'
+import { useUrlEnumParam } from '../../../hooks/useUrlEnumParam'
+import { useSessionWarnings } from '../../dashboard/dashboardQueries'
+import type { SessionWarning } from '../../dashboard/dashboardTypes'
 import { StudentFormModal } from '../components/StudentFormModal'
 import { useCreateStudent, useStudents, useUpdateStudent } from '../studentQueries'
 import type { Student, StudentPayload, StudentSearchParams } from '../studentTypes'
 
 const { Title, Text } = Typography
 
+const REMAINING_OPTIONS = ['ZERO', 'LOW', 'AVAILABLE'] as const
+type RemainingFilter = (typeof REMAINING_OPTIONS)[number]
+
+const REMAINING_LABELS: Record<RemainingFilter, string> = {
+  ZERO: 'Đã hết buổi',
+  LOW: 'Sắp hết buổi',
+  AVAILABLE: 'Còn buổi',
+}
+
 export function StudentListPage() {
+  const navigate = useNavigate()
+  const remainingParam = useUrlEnumParam('remaining', REMAINING_OPTIONS)
+  const remainingFilter = remainingParam.value
+
   const [keyword, setKeyword] = useState('')
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(10)
@@ -28,7 +46,12 @@ export function StudentListPage() {
     [keyword, page, size],
   )
 
-  const studentsQuery = useStudents(params)
+  const progressMode = Boolean(remainingFilter)
+  const studentsQuery = useStudents(params, !progressMode)
+  const warningsQuery = useSessionWarnings(
+    { remainingThreshold: 2, remaining: remainingFilter },
+    progressMode,
+  )
   const createStudent = useCreateStudent()
   const updateStudent = useUpdateStudent()
 
@@ -87,6 +110,43 @@ export function StudentListPage() {
     },
   ]
 
+  const progressColumns: ColumnsType<SessionWarning> = [
+    studentCodeColumn(),
+    studentNameColumn(),
+    { title: 'Lớp học', dataIndex: 'classroomName' },
+    {
+      title: 'Trạng thái ghi danh',
+      key: 'status',
+      render: () => <StatusTag status="ACTIVE" />,
+    },
+    { title: 'Tổng buổi', dataIndex: 'totalSessions' },
+    { title: 'Đã dùng', dataIndex: 'usedSessions' },
+    { title: 'Còn lại', dataIndex: 'remainingSessions' },
+    {
+      title: 'Cảnh báo',
+      dataIndex: 'warningMessage',
+      render: (value: string, record) => (
+        <Tag color={record.remainingSessions <= 0 ? 'red' : record.remainingSessions <= 2 ? 'orange' : 'green'}>
+          {value}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Thao tác',
+      key: 'actions',
+      render: (_, record) => (
+        <Space size="small" wrap>
+          <Button type="link" onClick={() => navigate(`/students/${record.studentId}`)}>
+            Xem học viên
+          </Button>
+          <Button type="link" onClick={() => navigate(`/classrooms/${record.classroomId}`)}>
+            Xem ghi danh / Gia hạn
+          </Button>
+        </Space>
+      ),
+    },
+  ]
+
   function openCreateModal() {
     setEditingStudent(undefined)
     setModalOpen(true)
@@ -110,6 +170,11 @@ export function StudentListPage() {
   function handleTableChange(pagination: TablePaginationConfig) {
     setPage((pagination.current ?? 1) - 1)
     setSize(pagination.pageSize ?? 10)
+  }
+
+  function handleRemainingChange(value: RemainingFilter | undefined) {
+    remainingParam.setValue(value)
+    setPage(0)
   }
 
   function handleSubmit(payload: StudentPayload) {
@@ -145,42 +210,90 @@ export function StudentListPage() {
     message.error('Có lỗi xảy ra')
   }
 
+  const subtitle = remainingFilter
+    ? `Học viên – ${REMAINING_LABELS[remainingFilter]}`
+    : 'Quản lý thông tin học viên của trung tâm.'
+
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       <Space direction="vertical" size={4}>
         <Title level={2} style={{ margin: 0 }}>
           Học viên
         </Title>
-        <Text type="secondary">Quản lý thông tin học viên của trung tâm.</Text>
+        <Text type="secondary">{subtitle}</Text>
       </Space>
 
       <Card>
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
           <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
-            <Input.Search
-              allowClear
-              placeholder="Tìm theo mã, họ tên hoặc số điện thoại"
-              style={{ width: 360 }}
-              onSearch={handleSearch}
-            />
-            <Button type="primary" onClick={openCreateModal}>
-              Thêm học viên
-            </Button>
+            <Space wrap>
+              <Input.Search
+                allowClear
+                placeholder="Tìm theo mã, họ tên hoặc số điện thoại"
+                style={{ width: 320 }}
+                onSearch={handleSearch}
+                disabled={progressMode}
+              />
+              <Select
+                allowClear
+                placeholder="Tình trạng số buổi"
+                style={{ width: 200 }}
+                value={remainingFilter}
+                onChange={(value) => handleRemainingChange(value)}
+                options={[
+                  { value: 'ZERO', label: 'Đã hết buổi' },
+                  { value: 'LOW', label: 'Sắp hết buổi' },
+                  { value: 'AVAILABLE', label: 'Còn buổi' },
+                ]}
+              />
+            </Space>
+            {!progressMode ? (
+              <Button type="primary" onClick={openCreateModal}>
+                Thêm học viên
+              </Button>
+            ) : null}
           </Space>
 
-          <Table
-            rowKey="id"
-            columns={columns}
-            dataSource={studentsQuery.data?.data ?? []}
-            loading={studentsQuery.isLoading}
-            pagination={{
-              current: (studentsQuery.data?.meta?.page ?? page) + 1,
-              pageSize: studentsQuery.data?.meta?.size ?? size,
-              total: studentsQuery.data?.meta?.totalElements ?? 0,
-              showSizeChanger: true,
-            }}
-            onChange={handleTableChange}
+          <ActiveFilterTags
+            tags={
+              remainingFilter
+                ? [
+                    {
+                      key: 'remaining',
+                      label: REMAINING_LABELS[remainingFilter],
+                      color: remainingFilter === 'ZERO' ? 'red' : remainingFilter === 'LOW' ? 'orange' : 'green',
+                      onClose: () => handleRemainingChange(undefined),
+                    },
+                  ]
+                : []
+            }
+            onClearAll={() => handleRemainingChange(undefined)}
           />
+
+          {progressMode ? (
+            <Table
+              rowKey="enrollmentId"
+              columns={progressColumns}
+              dataSource={warningsQuery.data ?? []}
+              loading={warningsQuery.isLoading}
+              pagination={{ pageSize: 10, showSizeChanger: true }}
+              locale={{ emptyText: 'Không có học viên khớp bộ lọc.' }}
+            />
+          ) : (
+            <Table
+              rowKey="id"
+              columns={columns}
+              dataSource={studentsQuery.data?.data ?? []}
+              loading={studentsQuery.isLoading}
+              pagination={{
+                current: (studentsQuery.data?.meta?.page ?? page) + 1,
+                pageSize: studentsQuery.data?.meta?.size ?? size,
+                total: studentsQuery.data?.meta?.totalElements ?? 0,
+                showSizeChanger: true,
+              }}
+              onChange={handleTableChange}
+            />
+          )}
         </Space>
       </Card>
 

@@ -1,47 +1,43 @@
-import { Button, Card, Col, Empty, message, Row, Space, Statistic, Table, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Col, Empty, message, Row, Space, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { isAxiosError } from 'axios'
 import dayjs from 'dayjs'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { studentCodeColumn, studentNameColumn } from '../../../components/common/studentDisplay'
-import { StatusTag } from '../../../components/common/StatusTag'
 import { PaymentFormModal } from '../../payments/components/PaymentFormModal'
 import { useCreatePayment } from '../../payments/paymentQueries'
 import type { CreatePaymentPayload } from '../../payments/paymentTypes'
-import type { PaymentMethod } from '../../payments/paymentTypes'
-import type { Payment } from '../../payments/paymentTypes'
 import { debtItemToInvoice, type DebtReportItem } from '../../reports/reportTypes'
-import type { DashboardTodaySession, SessionWarning } from '../dashboardTypes'
+import type {
+  DashboardPendingAttendance,
+  DashboardTodaySession,
+  SessionWarning,
+} from '../dashboardTypes'
 import { classroomDetailPath } from '../../classrooms/classroomRoutes'
-import {
-  useDashboardDebtAlerts,
-  useDashboardRecentPayments,
-  useDashboardSummary,
-  useDashboardTodaySessions,
-  useSessionWarnings,
-} from '../dashboardQueries'
+import { ClickableStatCard } from '../components/ClickableStatCard'
+import { DashboardAlertsSection } from '../components/DashboardAlertsSection'
+import { useDashboardOverview } from '../dashboardQueries'
 
 const { Title, Text } = Typography
 
-const paymentMethodLabels: Record<PaymentMethod, string> = {
-  CASH: 'Tiền mặt',
-  BANK_TRANSFER: 'Chuyển khoản',
-  OTHER: 'Khác',
-}
-
 export function DashboardPage() {
   const navigate = useNavigate()
-  const summaryQuery = useDashboardSummary()
-  const todaySessionsQuery = useDashboardTodaySessions()
-  const debtAlertsQuery = useDashboardDebtAlerts(10)
-  const warningsQuery = useSessionWarnings({ remainingThreshold: 2 })
-  const recentPaymentsQuery = useDashboardRecentPayments(10)
+  const overviewQuery = useDashboardOverview()
   const createPayment = useCreatePayment()
   const [collectingDebt, setCollectingDebt] = useState<DebtReportItem>()
 
-  const summary = summaryQuery.data
+  useEffect(() => {
+    if (window.location.hash === '#pending-attendance') {
+      document.getElementById('pending-attendance')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [overviewQuery.data])
+
+  const overview = overviewQuery.data
+  const summary = overview?.summary
+  const loading = overviewQuery.isLoading
+  const hasError = overviewQuery.isError
 
   const todaySessionColumns: ColumnsType<DashboardTodaySession> = [
     {
@@ -91,28 +87,51 @@ export function DashboardPage() {
     },
   ]
 
+  const pendingColumns: ColumnsType<DashboardPendingAttendance> = [
+    {
+      title: 'Ngày',
+      dataIndex: 'sessionDate',
+      render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
+    },
+    {
+      title: 'Giờ',
+      key: 'time',
+      render: (_, session) => `${session.startTime.slice(0, 5)} - ${session.endTime.slice(0, 5)}`,
+    },
+    { title: 'Lớp', dataIndex: 'classroomName' },
+    {
+      title: 'Giáo viên',
+      dataIndex: 'teacherName',
+      render: (value?: string | null) => value ?? '-',
+    },
+    { title: 'Đủ điều kiện', dataIndex: 'eligibleStudentCount' },
+    { title: 'Đã điểm danh', dataIndex: 'markedCount' },
+    { title: 'Còn thiếu', dataIndex: 'missingCount' },
+    {
+      title: 'Thao tác',
+      key: 'actions',
+      render: (_, session) => (
+        <Button
+          type="link"
+          onClick={() =>
+            navigate(
+              classroomDetailPath(session.classroomId, {
+                tab: 'attendance',
+                sessionId: session.sessionId,
+              }),
+            )
+          }
+        >
+          Điểm danh
+        </Button>
+      ),
+    },
+  ]
+
   const debtColumns: ColumnsType<DebtReportItem> = [
     studentCodeColumn(),
     studentNameColumn(),
     { title: 'Lớp', dataIndex: 'classroomName', key: 'classroomName' },
-    {
-      title: 'Gói học',
-      dataIndex: 'latestPackageName',
-      key: 'latestPackageName',
-      render: (value?: string | null) => value ?? '-',
-    },
-    {
-      title: 'Cần đóng',
-      dataIndex: 'finalAmount',
-      key: 'finalAmount',
-      render: (value: number) => <MoneyText value={value} />,
-    },
-    {
-      title: 'Đã đóng',
-      dataIndex: 'paidAmount',
-      key: 'paidAmount',
-      render: (value: number) => <MoneyText value={value} />,
-    },
     {
       title: 'Còn nợ',
       dataIndex: 'remainingAmount',
@@ -133,9 +152,6 @@ export function DashboardPage() {
           <Button type="link" onClick={() => setCollectingDebt(item)}>
             Thu tiền
           </Button>
-          <Button type="link" onClick={() => navigate(`/invoices?keyword=${item.invoiceCode}`)}>
-            Xem học phí
-          </Button>
           <Button type="link" onClick={() => navigate(`/students/${item.studentId}`)}>
             Xem học viên
           </Button>
@@ -144,18 +160,13 @@ export function DashboardPage() {
     },
   ]
 
-  const warningColumns: ColumnsType<SessionWarning> = [
+  const renewalColumns: ColumnsType<SessionWarning> = [
     studentCodeColumn(),
     studentNameColumn(),
-    { title: 'Lớp', dataIndex: 'classroomName', key: 'classroomName' },
-    { title: 'Tổng buổi', dataIndex: 'totalSessions', key: 'totalSessions' },
-    { title: 'Đã dùng', dataIndex: 'usedSessions', key: 'usedSessions' },
-    { title: 'Còn lại', dataIndex: 'remainingSessions', key: 'remainingSessions' },
-    {
-      title: 'Trạng thái',
-      key: 'warningType',
-      render: (_, record) => <SessionWarningTag warning={record} />,
-    },
+    { title: 'Lớp', dataIndex: 'classroomName' },
+    { title: 'Tổng buổi', dataIndex: 'totalSessions' },
+    { title: 'Đã dùng', dataIndex: 'usedSessions' },
+    { title: 'Còn lại', dataIndex: 'remainingSessions' },
     {
       title: 'Thao tác',
       key: 'actions',
@@ -167,42 +178,8 @@ export function DashboardPage() {
           <Button type="link" onClick={() => navigate(`/students/${record.studentId}`)}>
             Xem học viên
           </Button>
-          <Button type="link" onClick={() => navigate(`/classrooms/${record.classroomId}`)}>
-            Xem lớp
-          </Button>
         </Space>
       ),
-    },
-  ]
-
-  const paymentColumns: ColumnsType<Payment> = [
-    {
-      title: 'Ngày thanh toán',
-      dataIndex: 'paymentDate',
-      key: 'paymentDate',
-      render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
-    },
-    studentCodeColumn(),
-    studentNameColumn(),
-    { title: 'Lớp', dataIndex: 'classroomName', key: 'classroomName' },
-    {
-      title: 'Số tiền',
-      dataIndex: 'amount',
-      key: 'amount',
-      render: (value: number) => <MoneyText value={value} />,
-    },
-    {
-      title: 'Phương thức',
-      dataIndex: 'method',
-      key: 'method',
-      render: (method: PaymentMethod) => paymentMethodLabels[method] ?? method,
-    },
-    { title: 'Mã hóa đơn', dataIndex: 'invoiceCode', key: 'invoiceCode' },
-    {
-      title: 'Trạng thái',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => <StatusTag status={status} />,
     },
   ]
 
@@ -231,127 +208,174 @@ export function DashboardPage() {
     message.error('Có lỗi xảy ra')
   }
 
+  if (hasError) {
+    return (
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Title level={2} style={{ margin: 0 }}>
+          Tổng quan
+        </Title>
+        <Alert
+          type="error"
+          showIcon
+          message="Không tải được dữ liệu tổng quan"
+          description="Vui lòng thử lại. Hệ thống không hiển thị số liệu mặc định bằng 0 khi tải thất bại."
+          action={
+            <Button onClick={() => void overviewQuery.refetch()}>Thử lại</Button>
+          }
+        />
+      </Space>
+    )
+  }
+
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       <Space direction="vertical" size={4}>
         <Title level={2} style={{ margin: 0 }}>
           Tổng quan
         </Title>
-        <Text type="secondary">Theo dõi nhanh hoạt động hàng ngày và các việc cần xử lý.</Text>
+        <Text type="secondary">Không gian làm việc hàng ngày: theo dõi vấn đề và xử lý nhanh.</Text>
       </Space>
 
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} lg={8} xl={4}>
-          <Card loading={summaryQuery.isLoading}>
-            <Statistic title="Học viên đang học" value={summary?.totalActiveStudents ?? 0} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={8} xl={4}>
-          <Card loading={summaryQuery.isLoading}>
-            <Statistic title="Lớp đang học" value={summary?.totalActiveClassrooms ?? 0} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={8} xl={4}>
-          <Card loading={summaryQuery.isLoading}>
-            <Statistic title="Lớp học hôm nay" value={summary?.upcomingSessionsToday ?? 0} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={8} xl={4}>
-          <Card loading={summaryQuery.isLoading}>
-            <Statistic
-              title="Doanh thu tháng này"
-              value={summary?.totalRevenueThisMonth ?? 0}
-              formatter={(value) => <MoneyText value={Number(value)} />}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={8} xl={4}>
-          <Card loading={summaryQuery.isLoading}>
-            <Statistic
-              title="Công nợ hiện tại"
-              value={summary?.totalDebtAmount ?? 0}
-              formatter={(value) => <MoneyText value={Number(value)} />}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={8} xl={4}>
-          <Card loading={summaryQuery.isLoading}>
-            <Statistic title="Học viên còn nợ" value={summary?.totalStudentsWithDebt ?? 0} />
-          </Card>
-        </Col>
-      </Row>
+      <DashboardAlertsSection
+        alerts={overview?.alerts}
+        loading={loading}
+        error={false}
+        onRetry={() => void overviewQuery.refetch()}
+      />
 
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={8}>
-          <Card size="small" loading={summaryQuery.isLoading}>
-            <Statistic
+      <div>
+        <Title level={4}>Tổng quan</Title>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} sm={12} lg={8} xl={4}>
+            <ClickableStatCard
+              loading={loading}
+              title="Học viên đang học"
+              value={summary?.activeStudents ?? 0}
+              href="/students"
+            />
+          </Col>
+          <Col xs={24} sm={12} lg={8} xl={4}>
+            <ClickableStatCard
+              loading={loading}
+              title="Lớp đang hoạt động"
+              value={summary?.activeClassrooms ?? 0}
+              href="/classrooms"
+            />
+          </Col>
+          <Col xs={24} sm={12} lg={8} xl={4}>
+            <ClickableStatCard
+              loading={loading}
+              title="Lớp học hôm nay"
+              value={summary?.todayClasses ?? 0}
+              href="/dashboard#today-sessions"
+            />
+          </Col>
+          <Col xs={24} sm={12} lg={8} xl={4}>
+            <ClickableStatCard
+              loading={loading}
+              title="Doanh thu tháng này"
+              value={summary?.monthlyRevenue ?? 0}
+              formatter={(value) => <MoneyText value={Number(value)} />}
+            />
+          </Col>
+          <Col xs={24} sm={12} lg={8} xl={4}>
+            <ClickableStatCard
+              loading={loading}
+              title="Công nợ hiện tại"
+              value={summary?.currentDebt ?? 0}
+              href="/debts?status=OUTSTANDING"
+              formatter={(value) => <MoneyText value={Number(value)} />}
+            />
+          </Col>
+          <Col xs={24} sm={12} lg={8} xl={4}>
+            <ClickableStatCard
+              loading={loading}
+              title="Học viên còn nợ"
+              value={summary?.studentsWithDebt ?? 0}
+              href="/debts?status=OUTSTANDING"
+            />
+          </Col>
+        </Row>
+
+        <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+          <Col xs={24} sm={8}>
+            <ClickableStatCard
+              size="small"
+              loading={loading}
               title="Học viên hết buổi"
-              value={summary?.totalStudentsWithDepletedSessions ?? 0}
+              value={summary?.studentsOutOfSessions ?? 0}
+              href="/students?remaining=ZERO"
               valueStyle={{ color: '#cf1322', fontSize: 20 }}
             />
-          </Card>
-        </Col>
-        <Col xs={24} sm={8}>
-          <Card size="small" loading={summaryQuery.isLoading}>
-            <Statistic
+          </Col>
+          <Col xs={24} sm={8}>
+            <ClickableStatCard
+              size="small"
+              loading={loading}
               title="Học viên sắp hết buổi"
-              value={summary?.totalStudentsWithLowSessions ?? 0}
+              value={summary?.studentsNearlyOutOfSessions ?? 0}
+              href="/students?remaining=LOW"
               valueStyle={{ color: '#d46b08', fontSize: 20 }}
             />
-          </Card>
-        </Col>
-        <Col xs={24} sm={8}>
-          <Card size="small" loading={summaryQuery.isLoading}>
-            <Statistic
-              title="Buổi bù đang có"
-              value={summary?.totalPendingMakeupCredits ?? 0}
+          </Col>
+          <Col xs={24} sm={8}>
+            <ClickableStatCard
+              size="small"
+              loading={loading}
+              title="Buổi chưa điểm danh"
+              value={summary?.incompleteAttendance ?? 0}
+              href="/dashboard#pending-attendance"
               valueStyle={{ fontSize: 20 }}
             />
-          </Card>
-        </Col>
-      </Row>
+          </Col>
+        </Row>
+      </div>
 
-      <Card title="Lịch học hôm nay">
-        <Table<DashboardTodaySession>
-          rowKey="sessionId"
-          loading={todaySessionsQuery.isLoading}
-          dataSource={todaySessionsQuery.data ?? []}
-          columns={todaySessionColumns}
-          pagination={false}
-          locale={{ emptyText: <Empty description="Không có lớp học hôm nay" /> }}
-        />
-      </Card>
+      <div id="today-sessions">
+        <Card title="Công việc hôm nay · Lịch học hôm nay">
+          <Table<DashboardTodaySession>
+            rowKey="sessionId"
+            loading={loading}
+            dataSource={overview?.todaySessions ?? []}
+            columns={todaySessionColumns}
+            pagination={false}
+            locale={{ emptyText: <Empty description="Không có lớp học hôm nay." /> }}
+          />
+        </Card>
+      </div>
 
-      <Card title="Học viên còn nợ">
-        <Table<DebtReportItem>
-          rowKey="invoiceId"
-          loading={debtAlertsQuery.isLoading}
-          dataSource={debtAlertsQuery.data ?? []}
-          columns={debtColumns}
-          pagination={false}
-          locale={{ emptyText: <Empty description="Không có công nợ" /> }}
-        />
-      </Card>
+      <div id="pending-attendance">
+        <Card title="Buổi chưa điểm danh">
+          <Table<DashboardPendingAttendance>
+            rowKey="sessionId"
+            loading={loading}
+            dataSource={overview?.pendingAttendance ?? []}
+            columns={pendingColumns}
+            pagination={false}
+            locale={{ emptyText: <Empty description="Không có buổi học cần điểm danh." /> }}
+          />
+        </Card>
+      </div>
 
-      <Card title="Học viên sắp hết / hết buổi">
+      <Card title="Học viên cần gia hạn">
         <Table<SessionWarning>
           rowKey="enrollmentId"
-          loading={warningsQuery.isLoading}
-          dataSource={warningsQuery.data ?? []}
-          columns={warningColumns}
-          pagination={{ pageSize: 10, showSizeChanger: true }}
-          locale={{ emptyText: <Empty description="Không có học viên cần gia hạn" /> }}
+          loading={loading}
+          dataSource={overview?.studentsNeedingRenewal ?? []}
+          columns={renewalColumns}
+          pagination={false}
+          locale={{ emptyText: <Empty description="Không có học viên cần gia hạn." /> }}
         />
       </Card>
 
-      <Card title="Thanh toán gần đây">
-        <Table<Payment>
-          rowKey="id"
-          loading={recentPaymentsQuery.isLoading}
-          dataSource={recentPaymentsQuery.data ?? []}
-          columns={paymentColumns}
+      <Card title="Hóa đơn cần thu">
+        <Table<DebtReportItem>
+          rowKey="invoiceId"
+          loading={loading}
+          dataSource={overview?.overdueInvoices ?? []}
+          columns={debtColumns}
           pagination={false}
-          locale={{ emptyText: <Empty description="Chưa có thanh toán gần đây" /> }}
+          locale={{ emptyText: <Empty description="Không có hóa đơn quá hạn." /> }}
         />
       </Card>
 
@@ -374,11 +398,4 @@ function TodaySessionAttendanceTag({ status }: { status: DashboardTodaySession['
     return <Tag color="green">Đã điểm danh</Tag>
   }
   return <Tag color="gold">Chưa điểm danh</Tag>
-}
-
-function SessionWarningTag({ warning }: { warning: SessionWarning }) {
-  if (warning.remainingSessions <= 0 || warning.warningType === 'DEPLETED' || warning.warningType === 'OVERUSED') {
-    return <Tag color="red">Hết buổi</Tag>
-  }
-  return <Tag color="orange">Sắp hết</Tag>
 }

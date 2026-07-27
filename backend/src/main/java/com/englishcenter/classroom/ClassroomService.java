@@ -72,11 +72,12 @@ public class ClassroomService {
 
         boolean onlyUnassigned = Boolean.TRUE.equals(unassignedOnly);
         boolean onlyAssigned = Boolean.TRUE.equals(assignedOnly);
+        String normalizedKeyword = isBlank(keyword) ? null : keyword.trim();
         Page<Classroom> classrooms;
-        if (!isBlank(keyword)) {
-            classrooms = classroomRepository.search(keyword.trim(), pageable);
-        } else if (teacherId != null || onlyUnassigned || onlyAssigned) {
+
+        if (normalizedKeyword != null || teacherId != null || onlyUnassigned || onlyAssigned) {
             classrooms = classroomRepository.searchFiltered(
+                    normalizedKeyword,
                     teacherId,
                     onlyUnassigned,
                     onlyAssigned,
