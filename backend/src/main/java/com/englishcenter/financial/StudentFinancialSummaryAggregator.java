@@ -60,7 +60,51 @@ public final class StudentFinancialSummaryAggregator {
         return groups.values().stream()
                 .map(TuitionAccumulator::toResponse)
                 .sorted(Comparator.comparing(StudentTuitionSummaryResponse::studentName)
-                        .thenComparing(StudentTuitionSummaryResponse::classroomName))
+                        .thenComparing(summary -> nullToEmpty(summary.currentClassroomName())))
+                .toList();
+    }
+
+    public static List<StudentTuitionSummaryResponse> aggregateStudentTuitionSummaries(List<Invoice> invoices) {
+        Map<Long, TuitionAccumulator> groups = new HashMap<>();
+
+        for (Invoice invoice : invoices) {
+            if (invoice.getStatus() == InvoiceStatus.CANCELED) {
+                continue;
+            }
+
+            Long studentId = invoice.getStudent().getId();
+            TuitionAccumulator accumulator = groups.computeIfAbsent(studentId, ignored -> new TuitionAccumulator(
+                    studentId,
+                    invoice.getStudent().getStudentCode(),
+                    invoice.getStudent().getFullName(),
+                    null,
+                    null
+            ));
+
+            accumulator.totalTuitionAmount = accumulator.totalTuitionAmount.add(invoice.getFinalAmount());
+            accumulator.totalPaidAmount = accumulator.totalPaidAmount.add(invoice.getPaidAmount());
+            accumulator.totalInvoiceCount++;
+
+            switch (invoice.getStatus()) {
+                case UNPAID -> {
+                    accumulator.unpaidCount++;
+                    accumulator.remainingDebt = accumulator.remainingDebt.add(invoice.getRemainingAmount());
+                }
+                case PARTIALLY_PAID -> {
+                    accumulator.partialCount++;
+                    accumulator.remainingDebt = accumulator.remainingDebt.add(invoice.getRemainingAmount());
+                }
+                case PAID -> accumulator.paidCount++;
+                case REPLACED -> accumulator.hasReplacedInvoices = true;
+                default -> {
+                }
+            }
+        }
+
+        return groups.values().stream()
+                .map(TuitionAccumulator::toResponse)
+                .sorted(Comparator.comparing(StudentTuitionSummaryResponse::studentName)
+                        .thenComparing(StudentTuitionSummaryResponse::studentCode))
                 .toList();
     }
 
@@ -94,7 +138,8 @@ public final class StudentFinancialSummaryAggregator {
                 accumulator.partialCount++;
             }
 
-            if (accumulator.nearestDueDate == null || invoice.getDueDate().isBefore(accumulator.nearestDueDate)) {
+            if (invoice.getDueDate() != null
+                    && (accumulator.nearestDueDate == null || invoice.getDueDate().isBefore(accumulator.nearestDueDate))) {
                 accumulator.nearestDueDate = invoice.getDueDate();
             }
         }
@@ -102,7 +147,50 @@ public final class StudentFinancialSummaryAggregator {
         return groups.values().stream()
                 .map(DebtAccumulator::toResponse)
                 .sorted(Comparator.comparing(StudentDebtSummaryResponse::studentName)
-                        .thenComparing(StudentDebtSummaryResponse::classroomName))
+                        .thenComparing(summary -> nullToEmpty(summary.currentClassroomName())))
+                .toList();
+    }
+
+    public static List<StudentDebtSummaryResponse> aggregateStudentDebtSummaries(List<Invoice> debtInvoices) {
+        Map<Long, DebtAccumulator> groups = new HashMap<>();
+
+        for (Invoice invoice : debtInvoices) {
+            if (invoice.getStatus() != InvoiceStatus.UNPAID && invoice.getStatus() != InvoiceStatus.PARTIALLY_PAID) {
+                continue;
+            }
+
+            if (invoice.getRemainingAmount().compareTo(ZERO) <= 0) {
+                continue;
+            }
+
+            Long studentId = invoice.getStudent().getId();
+            DebtAccumulator accumulator = groups.computeIfAbsent(studentId, ignored -> new DebtAccumulator(
+                    studentId,
+                    invoice.getStudent().getStudentCode(),
+                    invoice.getStudent().getFullName(),
+                    null,
+                    null
+            ));
+
+            accumulator.totalRemainingDebt = accumulator.totalRemainingDebt.add(invoice.getRemainingAmount());
+            accumulator.debtInvoiceCount++;
+
+            if (invoice.getStatus() == InvoiceStatus.UNPAID) {
+                accumulator.unpaidCount++;
+            } else {
+                accumulator.partialCount++;
+            }
+
+            if (invoice.getDueDate() != null
+                    && (accumulator.nearestDueDate == null || invoice.getDueDate().isBefore(accumulator.nearestDueDate))) {
+                accumulator.nearestDueDate = invoice.getDueDate();
+            }
+        }
+
+        return groups.values().stream()
+                .map(DebtAccumulator::toResponse)
+                .sorted(Comparator.comparing(StudentDebtSummaryResponse::studentName)
+                        .thenComparing(StudentDebtSummaryResponse::studentCode))
                 .toList();
     }
 
@@ -157,6 +245,10 @@ public final class StudentFinancialSummaryAggregator {
 
     private static String groupKey(Long studentId, Long classroomId) {
         return studentId + ":" + classroomId;
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 
     private static final class TuitionAccumulator {

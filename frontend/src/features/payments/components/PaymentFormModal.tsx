@@ -136,7 +136,7 @@ export function PaymentFormModal({
           <Descriptions.Item label="Học viên">
             {formatStudentLabel(invoice.studentCode, invoice.studentName)}
           </Descriptions.Item>
-          <Descriptions.Item label="Lớp học">{invoice.classroomName}</Descriptions.Item>
+          <Descriptions.Item label="Lớp phát sinh">{invoice.classroomName}</Descriptions.Item>
           <Descriptions.Item label="Còn phải đóng">
             <MoneyText value={invoice.remainingAmount} />
           </Descriptions.Item>

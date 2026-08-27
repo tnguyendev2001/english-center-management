@@ -6,8 +6,8 @@ public record StudentTuitionSummaryResponse(
         Long studentId,
         String studentCode,
         String studentName,
-        Long classroomId,
-        String classroomName,
+        Long currentClassroomId,
+        String currentClassroomName,
         BigDecimal totalTuitionAmount,
         BigDecimal totalPaidAmount,
         BigDecimal remainingDebt,
@@ -17,4 +17,21 @@ public record StudentTuitionSummaryResponse(
         int paidCount,
         boolean hasReplacedInvoices
 ) {
+    public StudentTuitionSummaryResponse withCurrentClassroom(Long classroomId, String classroomName) {
+        return new StudentTuitionSummaryResponse(
+                studentId,
+                studentCode,
+                studentName,
+                classroomId,
+                classroomName,
+                totalTuitionAmount,
+                totalPaidAmount,
+                remainingDebt,
+                totalInvoiceCount,
+                unpaidCount,
+                partialCount,
+                paidCount,
+                hasReplacedInvoices
+        );
+    }
 }

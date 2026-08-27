@@ -29,6 +29,10 @@ export interface InvoiceSearchParams {
   status?: InvoiceStatus
   studentId?: number
   classroomId?: number
+  keyword?: string
+  packageName?: string
+  dueFrom?: string
+  dueTo?: string
   page: number
   size: number
 }

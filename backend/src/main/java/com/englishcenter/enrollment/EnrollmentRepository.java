@@ -174,4 +174,16 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     @EntityGraph(attributePaths = {"student", "classroom", "selectedPackage"})
     List<Enrollment> findByStudentIdOrderByStartDateDescIdDesc(Long studentId);
+
+    @EntityGraph(attributePaths = {"student", "classroom"})
+    @Query("""
+            SELECT enrollment
+            FROM Enrollment enrollment
+            WHERE enrollment.student.id IN :studentIds
+            ORDER BY enrollment.student.id ASC,
+                     CASE WHEN enrollment.status = com.englishcenter.enrollment.EnrollmentStatus.ACTIVE THEN 0 ELSE 1 END ASC,
+                     enrollment.startDate DESC,
+                     enrollment.id DESC
+            """)
+    List<Enrollment> findCurrentClassroomCandidates(@Param("studentIds") Collection<Long> studentIds);
 }

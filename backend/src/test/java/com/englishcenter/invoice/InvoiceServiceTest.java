@@ -22,7 +22,12 @@ class InvoiceServiceTest {
     @Test
     void recalculateSetsPartiallyPaidFromValidPayments() {
         Invoice invoice = invoice(new BigDecimal("500000"));
-        InvoiceService invoiceService = new InvoiceService(invoiceRepository, paymentRepository, new InvoiceMapper());
+        InvoiceService invoiceService = new InvoiceService(
+                invoiceRepository,
+                paymentRepository,
+                new InvoiceMapper(),
+                null
+        );
 
         when(paymentRepository.sumValidAmountByInvoiceId(1L)).thenReturn(new BigDecimal("200000"));
         when(invoiceRepository.save(invoice)).thenReturn(invoice);
@@ -37,7 +42,12 @@ class InvoiceServiceTest {
     @Test
     void recalculateSetsPaidWhenValidPaymentsEqualFinalAmount() {
         Invoice invoice = invoice(new BigDecimal("500000"));
-        InvoiceService invoiceService = new InvoiceService(invoiceRepository, paymentRepository, new InvoiceMapper());
+        InvoiceService invoiceService = new InvoiceService(
+                invoiceRepository,
+                paymentRepository,
+                new InvoiceMapper(),
+                null
+        );
 
         when(paymentRepository.sumValidAmountByInvoiceId(1L)).thenReturn(new BigDecimal("500000"));
         when(invoiceRepository.save(invoice)).thenReturn(invoice);
@@ -55,7 +65,12 @@ class InvoiceServiceTest {
         invoice.setPaidAmount(new BigDecimal("200000"));
         invoice.setRemainingAmount(new BigDecimal("300000"));
         invoice.setStatus(InvoiceStatus.PARTIALLY_PAID);
-        InvoiceService invoiceService = new InvoiceService(invoiceRepository, paymentRepository, new InvoiceMapper());
+        InvoiceService invoiceService = new InvoiceService(
+                invoiceRepository,
+                paymentRepository,
+                new InvoiceMapper(),
+                null
+        );
 
         when(paymentRepository.sumValidAmountByInvoiceId(1L)).thenReturn(BigDecimal.ZERO);
         when(invoiceRepository.save(invoice)).thenReturn(invoice);

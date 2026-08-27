@@ -3,7 +3,6 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 import { ClassroomDetailPage } from './features/classrooms/pages/ClassroomDetailPage'
 import { ClassroomListPage } from './features/classrooms/pages/ClassroomListPage'
 import { DashboardPage } from './features/dashboard/pages/DashboardPage'
-import { DebtPage } from './features/debts/pages/DebtPage'
 import { InvoiceListPage } from './features/invoices/pages/InvoiceListPage'
 import { MakeupCreditPage } from './features/makeupCredits/pages/MakeupCreditPage'
 import { FinancePage } from './features/finance/pages/FinancePage'
@@ -27,9 +26,7 @@ function App() {
       ? '/payments'
     : location.pathname.startsWith('/finance')
       ? '/finance'
-    : location.pathname.startsWith('/debts')
-      ? '/debts'
-    : location.pathname.startsWith('/invoices')
+    : location.pathname.startsWith('/invoices') || location.pathname.startsWith('/debts')
       ? '/invoices'
     : location.pathname.startsWith('/makeup-credits')
       ? '/makeup-credits'
@@ -62,7 +59,6 @@ function App() {
             { key: '/finance', label: 'Quản lý thu chi' },
             { key: '/makeup-credits', label: 'Nghỉ phép' },
             { key: '/reports', label: 'Báo cáo' },
-            { key: '/debts', label: 'Công nợ' },
             { key: '/tuition-packages', label: 'Gói học phí' },
             { key: '/imports/legacy-students', label: 'Nhập liệu Excel' },
           ]}
@@ -84,7 +80,7 @@ function App() {
             <Route path="/invoices" element={<InvoiceListPage />} />
             <Route path="/payments" element={<PaymentListPage />} />
             <Route path="/finance" element={<FinancePage />} />
-            <Route path="/debts" element={<DebtPage />} />
+            <Route path="/debts" element={<Navigate to="/invoices?tab=debt" replace />} />
             <Route path="/makeup-credits" element={<MakeupCreditPage />} />
             <Route path="/reports" element={<ReportsPage />} />
           </Routes>

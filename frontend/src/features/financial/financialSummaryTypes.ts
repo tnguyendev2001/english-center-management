@@ -4,8 +4,8 @@ export interface StudentTuitionSummary {
   studentId: number
   studentCode: string
   studentName: string
-  classroomId: number
-  classroomName: string
+  currentClassroomId?: number | null
+  currentClassroomName?: string | null
   totalTuitionAmount: number
   totalPaidAmount: number
   remainingDebt: number
@@ -20,8 +20,8 @@ export interface StudentDebtSummary {
   studentId: number
   studentCode: string
   studentName: string
-  classroomId: number
-  classroomName: string
+  currentClassroomId?: number | null
+  currentClassroomName?: string | null
   totalRemainingDebt: number
   debtInvoiceCount: number
   unpaidCount: number
@@ -42,7 +42,17 @@ export interface StudentPaymentSummary {
 }
 
 export interface StudentSummarySearchParams {
+  keyword?: string
   classroomId?: number
   fromDate?: string
   toDate?: string
+  page?: number
+  size?: number
+}
+
+export interface TuitionOverview {
+  totalOutstanding: number
+  studentsWithDebt: number
+  unpaidInvoiceCount: number
+  partialInvoiceCount: number
 }

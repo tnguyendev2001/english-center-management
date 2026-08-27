@@ -564,8 +564,8 @@ public class FinanceCalculationService {
                             summary.studentId(),
                             summary.studentCode(),
                             summary.studentName(),
-                            summary.classroomId(),
-                            summary.classroomName(),
+                            summary.currentClassroomId(),
+                            summary.currentClassroomName(),
                             summary.totalRemainingDebt(),
                             (long) summary.debtInvoiceCount()
                     ))

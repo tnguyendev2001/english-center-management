@@ -1,7 +1,6 @@
-import { Button, Drawer, Space, Table } from 'antd'
+import { Button, Descriptions, Drawer, Space, Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
-import { formatStudentLabel } from '../../../components/common/studentDisplay'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
 import { useInvoices } from '../../invoices/invoiceQueries'
@@ -20,10 +19,9 @@ const invoiceStatusLabels = {
 interface StudentInvoiceListDrawerProps {
   open: boolean
   studentId?: number
-  classroomId?: number
   studentCode?: string
   studentName?: string
-  classroomName?: string
+  currentClassroomName?: string | null
   onClose: () => void
   onCollect?: (invoice: Invoice) => void
 }
@@ -31,10 +29,9 @@ interface StudentInvoiceListDrawerProps {
 export function StudentInvoiceListDrawer({
   open,
   studentId,
-  classroomId,
   studentCode,
   studentName,
-  classroomName,
+  currentClassroomName,
   onClose,
   onCollect,
 }: StudentInvoiceListDrawerProps) {
@@ -43,34 +40,42 @@ export function StudentInvoiceListDrawer({
   const invoicesQuery = useInvoices(
     {
       studentId,
-      classroomId,
       page: 0,
       size: 100,
     },
-    open && Number.isFinite(studentId) && Number.isFinite(classroomId),
+    open && Number.isFinite(studentId),
   )
 
   const invoices = useMemo(() => {
-    return (invoicesQuery.data?.data ?? []).filter(
-      (invoice) => invoice.studentId === studentId && invoice.classroomId === classroomId,
-    )
-  }, [classroomId, invoicesQuery.data?.data, studentId])
+    return (invoicesQuery.data?.data ?? []).filter((invoice) => invoice.studentId === studentId)
+  }, [invoicesQuery.data?.data, studentId])
+
+  const totals = useMemo(() => {
+    const relevant = invoices.filter((invoice) => invoice.status !== 'CANCELED')
+    return {
+      totalTuition: relevant.reduce((sum, invoice) => sum + invoice.finalAmount, 0),
+      totalPaid: relevant.reduce((sum, invoice) => sum + invoice.paidAmount, 0),
+      remaining: relevant
+        .filter((invoice) => invoice.status === 'UNPAID' || invoice.status === 'PARTIALLY_PAID')
+        .reduce((sum, invoice) => sum + invoice.remainingAmount, 0),
+    }
+  }, [invoices])
 
   const columns: ColumnsType<Invoice> = [
     {
-      title: 'Mã học phí',
+      title: 'Mã hóa đơn',
       dataIndex: 'invoiceCode',
       key: 'invoiceCode',
     },
     {
-      title: 'Gói học',
-      dataIndex: 'packageNameSnapshot',
-      key: 'packageNameSnapshot',
+      title: 'Lớp phát sinh',
+      dataIndex: 'classroomName',
+      key: 'classroomName',
     },
     {
-      title: 'Số buổi',
-      dataIndex: 'totalSessionsSnapshot',
-      key: 'totalSessionsSnapshot',
+      title: 'Gói học phí',
+      dataIndex: 'packageNameSnapshot',
+      key: 'packageNameSnapshot',
     },
     {
       title: 'Phải đóng',
@@ -97,10 +102,10 @@ export function StudentInvoiceListDrawer({
       render: (status: string) => <StatusTag status={status} labels={invoiceStatusLabels} />,
     },
     {
-      title: 'Ngày tạo',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      render: (value: string) => dayjs(value).format('DD/MM/YYYY'),
+      title: 'Ngày tạo / hạn đóng',
+      key: 'dates',
+      render: (_, invoice) =>
+        `${dayjs(invoice.createdAt).format('DD/MM/YYYY')} / ${dayjs(invoice.dueDate).format('DD/MM/YYYY')}`,
     },
     {
       title: 'Thao tác',
@@ -122,22 +127,35 @@ export function StudentInvoiceListDrawer({
 
   return (
     <>
-      <Drawer
-        title={`Học phí: ${formatStudentLabel(studentCode, studentName)} — ${classroomName ?? ''}`}
-        open={open}
-        onClose={onClose}
-        width={960}
-        destroyOnClose
-      >
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={invoices}
-          loading={invoicesQuery.isLoading}
-          pagination={false}
-          locale={{ emptyText: 'Không có học phí cần thu' }}
-          scroll={{ x: 900 }}
-        />
+      <Drawer title="Chi tiết học phí" open={open} onClose={onClose} width={1080} destroyOnClose>
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Descriptions column={2} bordered size="small">
+            <Descriptions.Item label="Học viên">{studentName || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Mã học viên">{studentCode || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Lớp hiện tại" span={2}>
+              {currentClassroomName || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Tổng phải đóng">
+              <MoneyText value={totals.totalTuition} />
+            </Descriptions.Item>
+            <Descriptions.Item label="Đã đóng">
+              <MoneyText value={totals.totalPaid} />
+            </Descriptions.Item>
+            <Descriptions.Item label="Còn nợ">
+              <MoneyText value={totals.remaining} />
+            </Descriptions.Item>
+          </Descriptions>
+
+          <Table
+            rowKey="id"
+            columns={columns}
+            dataSource={invoices}
+            loading={invoicesQuery.isLoading}
+            pagination={false}
+            locale={{ emptyText: 'Không có học phí' }}
+            scroll={{ x: 1000 }}
+          />
+        </Space>
       </Drawer>
 
       <InvoiceDetailModal

@@ -20,9 +20,12 @@ public class DebtController {
 
     @GetMapping("/api/debts/student-summaries")
     public ApiResponse<List<StudentDebtSummaryResponse>> getStudentSummaries(
-            @RequestParam(required = false) Long classroomId
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
     ) {
-        return ApiResponse.success(debtService.getStudentSummaries(classroomId));
+        Page<StudentDebtSummaryResponse> summaries = debtService.getStudentSummaries(keyword, page, size);
+        return ApiResponse.success(summaries.getContent(), toMeta(summaries));
     }
 
     @GetMapping("/api/debts")
@@ -31,13 +34,15 @@ public class DebtController {
             @RequestParam(defaultValue = "20") int size
     ) {
         Page<InvoiceResponse> debts = debtService.getDebts(page, size);
-        PageMeta meta = new PageMeta(
-                debts.getNumber(),
-                debts.getSize(),
-                debts.getTotalElements(),
-                debts.getTotalPages()
-        );
+        return ApiResponse.success(debts.getContent(), toMeta(debts));
+    }
 
-        return ApiResponse.success(debts.getContent(), meta);
+    private PageMeta toMeta(Page<?> page) {
+        return new PageMeta(
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages()
+        );
     }
 }

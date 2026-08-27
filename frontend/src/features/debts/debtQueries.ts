@@ -17,7 +17,7 @@ export function useDebts(params: InvoiceSearchParams, enabled = true) {
   })
 }
 
-export function useDebtStudentSummaries(params?: StudentSummarySearchParams, enabled = true) {
+export function useDebtStudentSummaries(params: StudentSummarySearchParams, enabled = true) {
   return useQuery({
     queryKey: debtKeys.studentSummaries(params),
     queryFn: () => getDebtStudentSummaries(params),

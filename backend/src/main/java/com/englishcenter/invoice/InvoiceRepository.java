@@ -73,12 +73,29 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
             WHERE (:status IS NULL OR invoice.status = :status)
               AND (:studentId IS NULL OR invoice.student.id = :studentId)
               AND (:classroomId IS NULL OR invoice.classroom.id = :classroomId)
+              AND (:dueFrom IS NULL OR invoice.dueDate >= :dueFrom)
+              AND (:dueTo IS NULL OR invoice.dueDate <= :dueTo)
+              AND (
+                  :packageName IS NULL OR :packageName = ''
+                  OR LOWER(invoice.packageNameSnapshot) = LOWER(:packageName)
+              )
+              AND (
+                  :keyword IS NULL OR :keyword = ''
+                  OR LOWER(invoice.student.studentCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(invoice.student.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(invoice.student.phone) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                  OR LOWER(invoice.invoiceCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
+              )
             ORDER BY invoice.createdAt DESC
             """)
     Page<Invoice> search(
             @Param("status") InvoiceStatus status,
             @Param("studentId") Long studentId,
             @Param("classroomId") Long classroomId,
+            @Param("keyword") String keyword,
+            @Param("packageName") String packageName,
+            @Param("dueFrom") LocalDate dueFrom,
+            @Param("dueTo") LocalDate dueTo,
             Pageable pageable
     );
 

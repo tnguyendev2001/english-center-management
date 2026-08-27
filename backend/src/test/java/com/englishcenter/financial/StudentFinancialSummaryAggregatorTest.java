@@ -82,6 +82,63 @@ class StudentFinancialSummaryAggregatorTest {
     }
 
     @Test
+    void aggregateStudentTuitionSummariesGroupsByStudentAcrossClassrooms() {
+        Student student = student(12L, "Duong My Han");
+        Classroom grade4A = classroom(4L, "GRADE 4-A");
+        Classroom grade4B = classroom(5L, "GRADE 4-B");
+
+        List<StudentTuitionSummaryResponse> summaries = StudentFinancialSummaryAggregator.aggregateStudentTuitionSummaries(
+                List.of(
+                        invoice(1L, student, grade4A, new BigDecimal("500000"), new BigDecimal("0"), InvoiceStatus.UNPAID),
+                        invoice(2L, student, grade4B, new BigDecimal("500000"), new BigDecimal("0"), InvoiceStatus.UNPAID)
+                )
+        );
+
+        assertThat(summaries).hasSize(1);
+        assertThat(summaries.getFirst().studentId()).isEqualTo(12L);
+        assertThat(summaries.getFirst().totalTuitionAmount()).isEqualByComparingTo("1000000");
+        assertThat(summaries.getFirst().remainingDebt()).isEqualByComparingTo("1000000");
+        assertThat(summaries.getFirst().totalInvoiceCount()).isEqualTo(2);
+        assertThat(summaries.getFirst().currentClassroomId()).isNull();
+    }
+
+    @Test
+    void aggregateStudentDebtSummariesKeepsDebtAfterClassroomChange() {
+        Student student = student(12L, "Duong My Han");
+        Classroom grade4A = classroom(4L, "GRADE 4-A");
+        Classroom grade4B = classroom(5L, "GRADE 4-B");
+
+        Invoice oldClassInvoice = invoice(
+                1L,
+                student,
+                grade4A,
+                new BigDecimal("500000"),
+                new BigDecimal("0"),
+                InvoiceStatus.UNPAID
+        );
+        oldClassInvoice.setRemainingAmount(new BigDecimal("500000"));
+        Invoice newClassInvoice = invoice(
+                2L,
+                student,
+                grade4B,
+                new BigDecimal("500000"),
+                new BigDecimal("200000"),
+                InvoiceStatus.PARTIALLY_PAID
+        );
+        newClassInvoice.setRemainingAmount(new BigDecimal("300000"));
+
+        List<StudentDebtSummaryResponse> summaries = StudentFinancialSummaryAggregator.aggregateStudentDebtSummaries(
+                List.of(oldClassInvoice, newClassInvoice)
+        );
+
+        assertThat(summaries).hasSize(1);
+        assertThat(summaries.getFirst().totalRemainingDebt()).isEqualByComparingTo("800000");
+        assertThat(summaries.getFirst().debtInvoiceCount()).isEqualTo(2);
+        assertThat(summaries.getFirst().unpaidCount()).isEqualTo(1);
+        assertThat(summaries.getFirst().partialCount()).isEqualTo(1);
+    }
+
+    @Test
     void aggregatePaymentSummariesCountsValidPaymentsOnly() {
         Student student = student(1L, "Nguyen Van A");
         Classroom classroom = classroom(10L, "Lop A1");

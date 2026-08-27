@@ -1,11 +1,17 @@
 package com.englishcenter.debt;
 
+import com.englishcenter.classroom.Classroom;
 import com.englishcenter.debt.dto.StudentDebtSummaryResponse;
+import com.englishcenter.financial.StudentCurrentClassroomResolver;
 import com.englishcenter.financial.StudentFinancialSummaryAggregator;
+import com.englishcenter.financial.StudentSummaryQuerySupport;
+import com.englishcenter.invoice.Invoice;
 import com.englishcenter.invoice.InvoiceRepository;
 import com.englishcenter.invoice.dto.InvoiceResponse;
 import com.englishcenter.invoice.mapper.InvoiceMapper;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -19,17 +25,34 @@ public class DebtService {
 
     private final InvoiceRepository invoiceRepository;
     private final InvoiceMapper invoiceMapper;
+    private final StudentCurrentClassroomResolver currentClassroomResolver;
 
-    public DebtService(InvoiceRepository invoiceRepository, InvoiceMapper invoiceMapper) {
+    public DebtService(
+            InvoiceRepository invoiceRepository,
+            InvoiceMapper invoiceMapper,
+            StudentCurrentClassroomResolver currentClassroomResolver
+    ) {
         this.invoiceRepository = invoiceRepository;
         this.invoiceMapper = invoiceMapper;
+        this.currentClassroomResolver = currentClassroomResolver;
     }
 
     @Transactional(readOnly = true)
-    public List<StudentDebtSummaryResponse> getStudentSummaries(Long classroomId) {
-        return StudentFinancialSummaryAggregator.aggregateDebtSummaries(
-                invoiceRepository.findAllForDebtSummary(classroomId)
+    public Page<StudentDebtSummaryResponse> getStudentSummaries(String keyword, int page, int size) {
+        List<Invoice> invoices = invoiceRepository.findAllForDebtSummary(null);
+        List<StudentDebtSummaryResponse> summaries = enrichCurrentClassrooms(
+                StudentFinancialSummaryAggregator.aggregateStudentDebtSummaries(invoices)
         );
+        Map<Long, String> phonesByStudentId = phonesByStudentId(invoices);
+        List<StudentDebtSummaryResponse> filtered = summaries.stream()
+                .filter(summary -> StudentSummaryQuerySupport.matchesKeyword(
+                        keyword,
+                        summary.studentCode(),
+                        summary.studentName(),
+                        phonesByStudentId.get(summary.studentId())
+                ))
+                .toList();
+        return StudentSummaryQuerySupport.paginate(filtered, page, size, MAX_PAGE_SIZE);
     }
 
     @Transactional(readOnly = true)
@@ -42,6 +65,29 @@ public class DebtService {
 
         return invoiceRepository.findDebtInvoices(pageable)
                 .map(invoiceMapper::toResponse);
+    }
+
+    private List<StudentDebtSummaryResponse> enrichCurrentClassrooms(List<StudentDebtSummaryResponse> summaries) {
+        Map<Long, Classroom> classrooms = currentClassroomResolver.resolve(
+                summaries.stream().map(StudentDebtSummaryResponse::studentId).toList()
+        );
+        return summaries.stream()
+                .map(summary -> {
+                    Classroom classroom = classrooms.get(summary.studentId());
+                    if (classroom == null) {
+                        return summary;
+                    }
+                    return summary.withCurrentClassroom(classroom.getId(), classroom.getClassName());
+                })
+                .toList();
+    }
+
+    private Map<Long, String> phonesByStudentId(List<Invoice> invoices) {
+        Map<Long, String> phones = new HashMap<>();
+        for (Invoice invoice : invoices) {
+            phones.putIfAbsent(invoice.getStudent().getId(), invoice.getStudent().getPhone());
+        }
+        return phones;
     }
 
     private int normalizePageSize(int size) {

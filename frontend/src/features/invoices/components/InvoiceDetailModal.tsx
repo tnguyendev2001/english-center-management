@@ -10,6 +10,7 @@ const invoiceStatusLabels = {
   PARTIALLY_PAID: 'Đóng một phần',
   PAID: 'Đã đóng',
   CANCELED: 'Đã hủy',
+  REPLACED: 'Đã thay thế do đổi gói',
 }
 
 interface InvoiceDetailModalProps {
@@ -27,7 +28,7 @@ export function InvoiceDetailModal({ open, invoice, onClose }: InvoiceDetailModa
           <Descriptions.Item label="Học viên">
             {formatStudentLabel(invoice.studentCode, invoice.studentName)}
           </Descriptions.Item>
-          <Descriptions.Item label="Lớp học">{invoice.classroomName}</Descriptions.Item>
+          <Descriptions.Item label="Lớp phát sinh">{invoice.classroomName}</Descriptions.Item>
           <Descriptions.Item label="Gói học phí">{invoice.packageNameSnapshot}</Descriptions.Item>
           <Descriptions.Item label="Số buổi">{invoice.totalSessionsSnapshot}</Descriptions.Item>
           <Descriptions.Item label="Phải đóng">
