@@ -26,6 +26,7 @@ import com.englishcenter.student.Student;
 import com.englishcenter.student.StudentRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -47,6 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AttendanceService {
     private static final Logger log = LoggerFactory.getLogger(AttendanceService.class);
     private static final int MAX_PAGE_SIZE = 100;
+    private static final DateTimeFormatter DISPLAY_DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final AttendanceRepository attendanceRepository;
     private final ClassSessionRepository classSessionRepository;
@@ -97,28 +99,39 @@ public class AttendanceService {
 
     /**
      * Shared attendance consumption path for legacy Excel import.
-     * Marks PRESENT for eligible sessions using {@link EnrollmentSessionService#applyAttendanceDelta}.
-     * Existing attendance rows are preserved (not overwritten).
+     * Uses the same delta and makeup-credit behavior as normal attendance.
+     * Existing attendance with the same status is reused; conflicting status is never overwritten.
      */
     @Transactional
-    public int markLegacyAttendancePresent(Long enrollmentId, List<Long> sessionIds) {
+    public int markLegacyAttendance(
+            Long enrollmentId,
+            Map<Long, AttendanceStatus> plannedStatuses,
+            LocalDate businessDate
+    ) {
         Enrollment enrollment = enrollmentRepository.findById(enrollmentId)
                 .orElseThrow(() -> new NotFoundException("Enrollment not found"));
-        LocalDate today = LocalDate.now();
+        if (businessDate == null) {
+            throw new BusinessException("Business date is required");
+        }
         int created = 0;
 
-        for (Long sessionId : sessionIds) {
+        for (Map.Entry<Long, AttendanceStatus> planned : plannedStatuses.entrySet()) {
+            Long sessionId = planned.getKey();
+            AttendanceStatus plannedStatus = planned.getValue();
+            if (plannedStatus == null) {
+                throw new BusinessException("Attendance status is required");
+            }
             ClassSession session = classSessionRepository.findById(sessionId)
                     .orElseThrow(() -> new NotFoundException("Class session not found"));
             if (session.getStatus() == ClassSessionStatus.CANCELED) {
-                continue;
+                throw new BusinessException("Cannot import attendance for canceled session");
             }
             if (!session.getClassroom().getId().equals(enrollment.getClassroom().getId())) {
                 throw new BusinessException("Session does not belong to enrollment classroom");
             }
             if (session.getSessionDate().isBefore(enrollment.getStartDate())
-                    || session.getSessionDate().isAfter(today)) {
-                continue;
+                    || session.getSessionDate().isAfter(businessDate)) {
+                throw new BusinessException("Attendance date is outside the eligible historical period");
             }
 
             Optional<Attendance> existing = attendanceRepository.findBySessionIdAndStudentId(
@@ -126,12 +139,21 @@ public class AttendanceService {
                     enrollment.getStudent().getId()
             );
             if (existing.isPresent()) {
-                continue;
+                Attendance attendance = existing.get();
+                if (Boolean.TRUE.equals(attendance.getValid()) && attendance.getStatus() == plannedStatus) {
+                    continue;
+                }
+                if (Boolean.TRUE.equals(attendance.getValid()) && attendance.getStatus() != plannedStatus) {
+                    throw new BusinessException(
+                            "Buổi " + DISPLAY_DATE_FORMATTER.format(session.getSessionDate()) + " đã có điểm danh "
+                                    + attendance.getStatus() + " nhưng file Excel yêu cầu " + plannedStatus + "."
+                    );
+                }
             }
 
             AttendanceItemRequest item = new AttendanceItemRequest(
                     enrollment.getStudent().getId(),
-                    AttendanceStatus.PRESENT,
+                    plannedStatus,
                     "Nhập liệu legacy Excel",
                     null
             );

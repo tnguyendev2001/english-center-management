@@ -46,6 +46,10 @@ function formatMoney(value?: number | null) {
   return new Intl.NumberFormat('vi-VN').format(value)
 }
 
+function formatDateList(dates: string[]) {
+  return dates.length ? dates.map((date) => dayjs(date).format('DD/MM/YYYY')).join(', ') : '-'
+}
+
 export function LegacyStudentImportPage() {
   const [file, setFile] = useState<File>()
   const [tuitionPackageId, setTuitionPackageId] = useState<number>()
@@ -95,55 +99,44 @@ export function LegacyStudentImportPage() {
   ]
 
   const rowColumns: ColumnsType<LegacyImportRowPreview> = [
-    { title: 'Sheet/Class', dataIndex: 'sheetName', key: 'sheetName', width: 120 },
     {
-      title: 'Student name',
+      title: 'Họ tên',
       dataIndex: 'studentName',
       key: 'studentName',
       render: (value?: string | null) => value || '-',
     },
     {
-      title: 'Phone',
+      title: 'SĐT',
       dataIndex: 'phone',
       key: 'phone',
       render: (value?: string | null) => value || '-',
     },
     {
-      title: 'Learning start',
+      title: 'Ngày bắt đầu học',
       dataIndex: 'learningStartDate',
       key: 'learningStartDate',
       render: (value?: string | null) => (value ? dayjs(value).format('DD/MM/YYYY') : '-'),
     },
-    { title: 'Eligible sessions', dataIndex: 'eligibleSessionCount', key: 'eligibleSessionCount' },
-    { title: 'Package cycles', dataIndex: 'packageCycles', key: 'packageCycles' },
-    { title: 'Total', dataIndex: 'totalSessionsAfterImport', key: 'totalSessionsAfterImport' },
-    { title: 'Used', dataIndex: 'usedSessionsAfterImport', key: 'usedSessionsAfterImport' },
-    { title: 'Remaining', dataIndex: 'remainingSessionsAfterImport', key: 'remainingSessionsAfterImport' },
-    { title: 'Unpaid invoices', dataIndex: 'unpaidInvoicesToCreate', key: 'unpaidInvoicesToCreate' },
+    { title: 'Tổng buổi lịch sử', dataIndex: 'eligibleSessionCount', key: 'eligibleSessionCount' },
+    { title: 'Có mặt', dataIndex: 'presentCount', key: 'presentCount' },
+    { title: 'Nghỉ không phép', dataIndex: 'absentCount', key: 'absentCount' },
+    { title: 'Xin phép', dataIndex: 'excusedCount', key: 'excusedCount' },
+    { title: 'Số buổi tính vào gói', dataIndex: 'consumingSessionCount', key: 'consumingSessionCount' },
+    { title: 'Số gói cần tạo', dataIndex: 'packageCycles', key: 'packageCycles' },
+    { title: 'Số hóa đơn', dataIndex: 'unpaidInvoicesToCreate', key: 'unpaidInvoicesToCreate' },
+    { title: 'Còn lại sau import', dataIndex: 'remainingSessionsAfterImport', key: 'remainingSessionsAfterImport' },
     {
-      title: 'Total debt',
-      dataIndex: 'totalDebt',
-      key: 'totalDebt',
-      render: (value: number) => formatMoney(value),
-    },
-    {
-      title: 'Action',
-      dataIndex: 'actions',
-      key: 'actions',
-      render: (actions: string[]) => actions.join(', ') || '-',
-    },
-    {
-      title: 'Status',
+      title: 'Trạng thái validation',
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => <StatusTag status={status} />,
-    },
-    {
-      title: 'Errors/warnings',
-      key: 'messages',
-      render: (_, row) => {
+      render: (status: string, row) => {
         const items = [...row.errors.map((e) => `Error: ${e}`), ...row.warnings.map((w) => `Warn: ${w}`)]
-        return items.length ? items.join(' | ') : '-'
+        return (
+          <Space direction="vertical" size={4}>
+            <StatusTag status={status} />
+            {items.length > 0 && <Text type={row.errors.length ? 'danger' : 'warning'}>{items.join(' | ')}</Text>}
+          </Space>
+        )
       },
     },
   ]
@@ -187,16 +180,38 @@ export function LegacyStudentImportPage() {
           Legacy student import
         </Title>
         <Text type="secondary">
-          Initial school migration: classrooms, students, enrollments, historical sessions, PRESENT
-          attendance, unpaid package-cycle invoices. No payments are created.
+          Nhập lớp, học viên, điểm danh lịch sử chi tiết và hóa đơn gói chưa thanh toán. Không tạo
+          thanh toán giả.
         </Text>
       </div>
 
       <Card title="1. Upload and package">
         <Paragraph type="secondary" style={{ marginBottom: 16 }}>
-          Each sheet = one classroom. Metadata: classroom start date and days of week. Student columns
-          default to B=name, C=learning start date, D=phone.
+          Mỗi sheet là một lớp. Các cột được nhận diện theo tiêu đề: Họ tên, Ngày bắt đầu học
+          (hoặc Ngày bắt đầu học2), SĐT, Nghỉ không phép, Xin phép. SĐT và hai cột nghỉ là tùy chọn.
         </Paragraph>
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="Cách nhập điểm danh lịch sử"
+          description={
+            <Space direction="vertical" size={2}>
+              <Text>
+                <Text strong>Nghỉ không phép:</Text>{' '}
+                <Text code>12/06/2026,16/06/2026</Text>
+              </Text>
+              <Text>
+                <Text strong>Xin phép:</Text>{' '}
+                <Text code>19/06/2026,25/06/2026,28/06/2026</Text>
+              </Text>
+              <Text>
+                Có thể ngăn cách ngày bằng dấu phẩy, dấu chấm phẩy hoặc xuống dòng. Nếu cả hai ô để
+                trống, mọi buổi học lịch sử hợp lệ được xem là PRESENT.
+              </Text>
+            </Space>
+          }
+        />
         <Row gutter={[16, 16]}>
           <Col xs={24} md={10}>
             <Upload.Dragger
@@ -318,6 +333,27 @@ export function LegacyStudentImportPage() {
             }}
             scroll={{ x: 1800 }}
             size="small"
+            expandable={{
+              expandedRowRender: (row) => (
+                <Descriptions bordered size="small" column={1}>
+                  <Descriptions.Item label={`PRESENT (${row.presentCount})`}>
+                    {formatDateList(row.presentDates)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={`ABSENT (${row.absentCount})`}>
+                    {formatDateList(row.absentDates)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={`EXCUSED (${row.excusedCount})`}>
+                    {formatDateList(row.excusedDates)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Tổng buổi được cấp">
+                    {row.totalSessionsAfterImport}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Tổng học phí">
+                    {formatMoney(row.totalDebt)}
+                  </Descriptions.Item>
+                </Descriptions>
+              ),
+            }}
           />
         </Card>
       )}

@@ -5,12 +5,12 @@ import com.englishcenter.common.exception.BusinessException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -27,12 +27,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Component
 public class LegacyExcelWorkbookParser {
+    private static final DateTimeFormatter ATTENDANCE_DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("d/M/uuuu").withResolverStyle(ResolverStyle.STRICT);
+    private static final DateTimeFormatter DISPLAY_DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter[] DATE_FORMATTERS = {
-            DateTimeFormatter.ofPattern("d/M/yyyy"),
-            DateTimeFormatter.ofPattern("dd/MM/yyyy"),
-            DateTimeFormatter.ofPattern("d-M-yyyy"),
-            DateTimeFormatter.ofPattern("dd-MM-yyyy"),
-            DateTimeFormatter.ofPattern("yyyy-MM-dd")
+            DateTimeFormatter.ofPattern("d/M/uuuu").withResolverStyle(ResolverStyle.STRICT),
+            DateTimeFormatter.ofPattern("d-M-uuuu").withResolverStyle(ResolverStyle.STRICT),
+            DateTimeFormatter.ofPattern("uuuu-MM-dd").withResolverStyle(ResolverStyle.STRICT)
     };
 
     private final DataFormatter dataFormatter = new DataFormatter(Locale.ROOT);
@@ -131,18 +132,41 @@ public class LegacyExcelWorkbookParser {
             String studentName = LegacyImportNormalizer.normalizePersonName(cellAsString(row.getCell(columnMap.nameCol())));
             String phoneRaw = cellAsPhoneString(row.getCell(columnMap.phoneCol()));
             String phone = LegacyImportNormalizer.normalizePhone(phoneRaw);
-            LocalDate learningStartDate = parseDateCell(row.getCell(columnMap.dateCol()));
+            Cell learningStartDateCell = row.getCell(columnMap.dateCol());
+            String rawLearningStartDate = cellAsString(learningStartDateCell);
+            LocalDate learningStartDate = parseDateCell(learningStartDateCell);
+            ParsedAttendanceDates absentDates = parseAttendanceDates(
+                    cellAt(row, columnMap.absentCol()),
+                    "Nghỉ không phép"
+            );
+            ParsedAttendanceDates excusedDates = parseAttendanceDates(
+                    cellAt(row, columnMap.excusedCol()),
+                    "Xin phép"
+            );
 
-            if (studentName == null && phone == null && learningStartDate == null) {
+            if (studentName == null
+                    && phone == null
+                    && rawLearningStartDate == null
+                    && absentDates.empty()
+                    && excusedDates.empty()) {
                 continue;
             }
 
+            List<String> attendanceErrors = new ArrayList<>(absentDates.errors());
+            attendanceErrors.addAll(excusedDates.errors());
+            List<String> attendanceWarnings = new ArrayList<>(absentDates.warnings());
+            attendanceWarnings.addAll(excusedDates.warnings());
             rows.add(new ParsedRow(
                     r + 1,
                     studentName,
                     phone,
                     learningStartDate,
-                    phoneRaw
+                    phoneRaw,
+                    rawLearningStartDate,
+                    absentDates.dates(),
+                    excusedDates.dates(),
+                    attendanceErrors,
+                    attendanceWarnings
             ));
         }
 
@@ -193,19 +217,21 @@ public class LegacyExcelWorkbookParser {
 
     private ColumnMap resolveColumns(Sheet sheet, int headerRowIndex) {
         if (headerRowIndex < 0) {
-            return new ColumnMap(1, 2, 3);
+            return new ColumnMap(1, 2, 3, null, null);
         }
         Row header = sheet.getRow(headerRowIndex);
         Integer nameCol = null;
         Integer dateCol = null;
         Integer phoneCol = null;
+        Integer absentCol = null;
+        Integer excusedCol = null;
         short lastCell = header.getLastCellNum();
         for (int c = 0; c < lastCell; c++) {
             String value = cellAsString(header.getCell(c));
             if (value == null) {
                 continue;
             }
-            String normalized = value.toLowerCase(Locale.ROOT);
+            String normalized = normalizeHeader(value);
             if (nameCol == null && (normalized.contains("họ tên")
                     || normalized.contains("ho ten")
                     || normalized.contains("họ và tên")
@@ -225,12 +251,18 @@ public class LegacyExcelWorkbookParser {
                     || normalized.contains("điện thoại")
                     || normalized.contains("dien thoai"))) {
                 phoneCol = c;
+            } else if (absentCol == null && normalized.equals("nghỉ không phép")) {
+                absentCol = c;
+            } else if (excusedCol == null && normalized.equals("xin phép")) {
+                excusedCol = c;
             }
         }
         return new ColumnMap(
                 nameCol != null ? nameCol : 1,
                 dateCol != null ? dateCol : 2,
-                phoneCol != null ? phoneCol : 3
+                phoneCol != null ? phoneCol : 3,
+                absentCol,
+                excusedCol
         );
     }
 
@@ -253,7 +285,9 @@ public class LegacyExcelWorkbookParser {
     private boolean isEmptyRow(Row row, ColumnMap columnMap) {
         return cellAsString(row.getCell(columnMap.nameCol())) == null
                 && cellAsPhoneString(row.getCell(columnMap.phoneCol())) == null
-                && parseDateCell(row.getCell(columnMap.dateCol())) == null;
+                && cellAsString(row.getCell(columnMap.dateCol())) == null
+                && cellAsString(cellAt(row, columnMap.absentCol())) == null
+                && cellAsString(cellAt(row, columnMap.excusedCol())) == null;
     }
 
     private boolean isStartDateLabel(String label) {
@@ -302,14 +336,12 @@ public class LegacyExcelWorkbookParser {
             return null;
         }
         if (cell.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(cell)) {
-            Date date = cell.getDateCellValue();
-            return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+            return DateUtil.getLocalDateTime(cell.getNumericCellValue()).toLocalDate();
         }
         if (cell.getCellType() == CellType.NUMERIC) {
             double value = cell.getNumericCellValue();
             if (DateUtil.isValidExcelDate(value)) {
-                Date date = DateUtil.getJavaDate(value);
-                return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                return DateUtil.getLocalDateTime(value).toLocalDate();
             }
         }
         String text = cellAsString(cell);
@@ -324,6 +356,56 @@ public class LegacyExcelWorkbookParser {
             }
         }
         return null;
+    }
+
+    private ParsedAttendanceDates parseAttendanceDates(Cell cell, String columnName) {
+        if (cell == null || cell.getCellType() == CellType.BLANK) {
+            return ParsedAttendanceDates.emptyResult();
+        }
+        if (cell.getCellType() == CellType.NUMERIC && DateUtil.isValidExcelDate(cell.getNumericCellValue())) {
+            return new ParsedAttendanceDates(
+                    List.of(DateUtil.getLocalDateTime(cell.getNumericCellValue()).toLocalDate()),
+                    List.of(),
+                    List.of()
+            );
+        }
+
+        String raw = cellAsString(cell);
+        if (raw == null) {
+            return ParsedAttendanceDates.emptyResult();
+        }
+
+        Set<LocalDate> uniqueDates = new LinkedHashSet<>();
+        List<String> errors = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+        for (String rawToken : raw.split("[;,\\r\\n]+", -1)) {
+            String token = rawToken.trim();
+            if (token.isEmpty()) {
+                continue;
+            }
+            try {
+                LocalDate date = LocalDate.parse(token, ATTENDANCE_DATE_FORMATTER);
+                if (!uniqueDates.add(date)) {
+                    warnings.add("Ngày " + DISPLAY_DATE_FORMATTER.format(date)
+                            + " bị nhập trùng trong cột \"" + columnName
+                            + "\" và sẽ chỉ được xử lý một lần.");
+                }
+            } catch (DateTimeParseException ex) {
+                errors.add("Giá trị ngày \"" + token + "\" trong cột \"" + columnName
+                        + "\" không hợp lệ. Dùng định dạng d/M/yyyy hoặc dd/MM/yyyy.");
+            }
+        }
+        return new ParsedAttendanceDates(List.copyOf(uniqueDates), errors, warnings);
+    }
+
+    private Cell cellAt(Row row, Integer column) {
+        return column == null ? null : row.getCell(column);
+    }
+
+    private String normalizeHeader(String value) {
+        String normalized = java.text.Normalizer.normalize(value.trim(), java.text.Normalizer.Form.NFC)
+                .toLowerCase(Locale.ROOT);
+        return normalized.replaceAll("\\s+", " ");
     }
 
     public record ParsedSheet(
@@ -342,10 +424,29 @@ public class LegacyExcelWorkbookParser {
             String studentName,
             String phone,
             LocalDate learningStartDate,
-            String rawPhone
+            String rawPhone,
+            String rawLearningStartDate,
+            List<LocalDate> absentDates,
+            List<LocalDate> excusedDates,
+            List<String> attendanceErrors,
+            List<String> attendanceWarnings
     ) {
     }
 
-    private record ColumnMap(int nameCol, int dateCol, int phoneCol) {
+    private record ColumnMap(int nameCol, int dateCol, int phoneCol, Integer absentCol, Integer excusedCol) {
+    }
+
+    private record ParsedAttendanceDates(
+            List<LocalDate> dates,
+            List<String> errors,
+            List<String> warnings
+    ) {
+        private static ParsedAttendanceDates emptyResult() {
+            return new ParsedAttendanceDates(List.of(), List.of(), List.of());
+        }
+
+        private boolean empty() {
+            return dates.isEmpty() && errors.isEmpty() && warnings.isEmpty();
+        }
     }
 }

@@ -1,14 +1,22 @@
 package com.englishcenter.importdata;
 
+import com.englishcenter.attendance.Attendance;
+import com.englishcenter.attendance.AttendanceRepository;
+import com.englishcenter.attendance.AttendanceStatus;
 import com.englishcenter.classroom.ClassDayOfWeek;
 import com.englishcenter.classroom.Classroom;
 import com.englishcenter.classroom.ClassroomRepository;
+import com.englishcenter.classsession.ClassSession;
+import com.englishcenter.classsession.ClassSessionRepository;
+import com.englishcenter.classsession.ClassSessionStatus;
 import com.englishcenter.classsession.ClassSessionService;
 import com.englishcenter.classsession.dto.GenerateClassSessionsResponse;
+import com.englishcenter.common.config.AppTimeProperties;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
 import com.englishcenter.enrollment.Enrollment;
 import com.englishcenter.enrollment.EnrollmentRepository;
+import com.englishcenter.enrollment.EnrollmentSessionService;
 import com.englishcenter.importdata.LegacyExcelWorkbookParser.ParsedRow;
 import com.englishcenter.importdata.LegacyExcelWorkbookParser.ParsedSheet;
 import com.englishcenter.importdata.LegacyStudentImportWriter.ClassroomEnsureResult;
@@ -26,10 +34,13 @@ import com.englishcenter.tuitionpackage.TuitionPackageRepository;
 import com.englishcenter.tuitionpackage.TuitionPackageStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -44,17 +55,22 @@ public class LegacyStudentImportService {
     private static final int REQUIRED_PACKAGE_SESSIONS = 8;
     private static final long SUSPICIOUS_DAYS_AFTER_MEDIAN = 60;
     private static final long FUTURE_YEARS_SUSPICIOUS = 1;
+    private static final DateTimeFormatter DISPLAY_DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final String CONFIRMATION_WARNING =
-            "All eligible historical sessions will be imported as PRESENT. "
-                    + "All package cycles from the learning start date to the current date will be created as unpaid invoices.";
+            "Các buổi lịch sử hợp lệ mặc định là PRESENT; ngày trong hai cột nghỉ sẽ ghi đè thành "
+                    + "ABSENT/EXCUSED. Các chu kỳ gói cần thiết sẽ tạo hóa đơn chưa thanh toán.";
 
     private final LegacyExcelWorkbookParser workbookParser;
     private final TuitionPackageRepository tuitionPackageRepository;
     private final ClassroomRepository classroomRepository;
     private final StudentRepository studentRepository;
     private final EnrollmentRepository enrollmentRepository;
+    private final ClassSessionRepository classSessionRepository;
+    private final AttendanceRepository attendanceRepository;
     private final ClassSessionService classSessionService;
+    private final EnrollmentSessionService enrollmentSessionService;
     private final LegacyStudentImportWriter importWriter;
+    private final AppTimeProperties appTimeProperties;
 
     public LegacyStudentImportService(
             LegacyExcelWorkbookParser workbookParser,
@@ -62,16 +78,24 @@ public class LegacyStudentImportService {
             ClassroomRepository classroomRepository,
             StudentRepository studentRepository,
             EnrollmentRepository enrollmentRepository,
+            ClassSessionRepository classSessionRepository,
+            AttendanceRepository attendanceRepository,
             ClassSessionService classSessionService,
-            LegacyStudentImportWriter importWriter
+            EnrollmentSessionService enrollmentSessionService,
+            LegacyStudentImportWriter importWriter,
+            AppTimeProperties appTimeProperties
     ) {
         this.workbookParser = workbookParser;
         this.tuitionPackageRepository = tuitionPackageRepository;
         this.classroomRepository = classroomRepository;
         this.studentRepository = studentRepository;
         this.enrollmentRepository = enrollmentRepository;
+        this.classSessionRepository = classSessionRepository;
+        this.attendanceRepository = attendanceRepository;
         this.classSessionService = classSessionService;
+        this.enrollmentSessionService = enrollmentSessionService;
         this.importWriter = importWriter;
+        this.appTimeProperties = appTimeProperties;
     }
 
     @Transactional(readOnly = true)
@@ -203,7 +227,7 @@ public class LegacyStudentImportService {
     }
 
     private Analysis analyze(List<ParsedSheet> parsedSheets, TuitionPackage tuitionPackage) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = businessDate();
         List<LegacyImportSheetPreview> sheets = new ArrayList<>();
         List<LegacyImportRowPreview> allRows = new ArrayList<>();
         Set<String> seenClassroomKeys = new LinkedHashSet<>();
@@ -240,32 +264,18 @@ public class LegacyStudentImportService {
                 sheetWarnings.add("classroomStartDate does not match daysOfWeek");
             }
 
-            List<LocalDate> plannedDates = List.of();
+            List<SessionCandidate> sessionCandidates = List.of();
             int existingSessionCount = 0;
             int sessionsToCreate = 0;
             LocalDate firstSessionDate = null;
             LocalDate lastGeneratedSessionDate = null;
             if (parsed.classroomStartDate() != null && !parsed.daysOfWeek().isEmpty()) {
-                LocalDate to = today.isBefore(parsed.classroomStartDate()) ? parsed.classroomStartDate() : today;
-                plannedDates = classSessionService.plannedSessionDates(
-                        parsed.classroomStartDate(),
-                        parsed.daysOfWeek(),
-                        parsed.classroomStartDate(),
-                        to
-                );
-                firstSessionDate = plannedDates.isEmpty() ? null : plannedDates.getFirst();
-                lastGeneratedSessionDate = plannedDates.isEmpty() ? null : plannedDates.getLast();
-                if (existingClassroom != null) {
-                    var plan = classSessionService.planGeneration(
-                            existingClassroom,
-                            parsed.classroomStartDate(),
-                            to
-                    );
-                    existingSessionCount = plan.existingSessionCount();
-                    sessionsToCreate = plan.sessionsToCreate();
-                } else {
-                    sessionsToCreate = plannedDates.size();
-                }
+                SessionPlan sessionPlan = buildSessionPlan(parsed, existingClassroom, today);
+                sessionCandidates = sessionPlan.candidates();
+                existingSessionCount = sessionPlan.existingSessionCount();
+                sessionsToCreate = sessionPlan.sessionsToCreate();
+                firstSessionDate = sessionPlan.firstSessionDate();
+                lastGeneratedSessionDate = sessionPlan.lastSessionDate();
             }
 
             List<LocalDate> learningDates = parsed.rows().stream()
@@ -281,7 +291,7 @@ public class LegacyStudentImportService {
                         parsed,
                         parsedRow,
                         existingClassroom,
-                        plannedDates,
+                        sessionCandidates,
                         today,
                         tuitionPackage.getPrice(),
                         medianLearningDate,
@@ -357,21 +367,25 @@ public class LegacyStudentImportService {
             ParsedSheet sheet,
             ParsedRow row,
             Classroom existingClassroom,
-            List<LocalDate> plannedDates,
+            List<SessionCandidate> sessionCandidates,
             LocalDate today,
             BigDecimal packagePrice,
             LocalDate medianLearningDate,
             Map<String, Long> phoneResolution
     ) {
-        List<String> errors = new ArrayList<>();
-        List<String> warnings = new ArrayList<>();
+        List<String> errors = new ArrayList<>(row.attendanceErrors());
+        List<String> warnings = new ArrayList<>(row.attendanceWarnings());
         List<LegacyImportRowAction> actions = new ArrayList<>();
 
         if (row.studentName() == null) {
             errors.add("studentName is required");
         }
         if (row.learningStartDate() == null) {
-            errors.add("learningStartDate is required");
+            if (row.rawLearningStartDate() == null) {
+                errors.add("learningStartDate is required");
+            } else {
+                errors.add("Ngày bắt đầu học \"" + row.rawLearningStartDate() + "\" không hợp lệ.");
+            }
         }
         if (sheet.classroomStartDate() == null) {
             errors.add("classroomStartDate is missing for sheet");
@@ -380,7 +394,7 @@ public class LegacyStudentImportService {
             errors.add("daysOfWeek is missing for sheet");
         }
         if (row.phone() == null) {
-            warnings.add("Phone is missing; a new student will be created");
+            warnings.add("Phone is missing; re-import matching uses classroom, name, and learning start date");
         }
 
         if (row.learningStartDate() != null && sheet.classroomStartDate() != null
@@ -402,17 +416,66 @@ public class LegacyStudentImportService {
             }
         }
 
-        List<LocalDate> eligibleDates = List.of();
-        if (row.learningStartDate() != null && plannedDates != null) {
-            eligibleDates = plannedDates.stream()
-                    .filter(date -> !date.isBefore(row.learningStartDate()) && !date.isAfter(today))
+        Set<LocalDate> availableSessionDates = sessionCandidates.stream()
+                .map(SessionCandidate::date)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<LocalDate> overlappingAbsences = new LinkedHashSet<>(row.absentDates());
+        overlappingAbsences.retainAll(row.excusedDates());
+        for (LocalDate date : overlappingAbsences) {
+            errors.add("Ngày " + formatDate(date)
+                    + " xuất hiện đồng thời ở \"Nghỉ không phép\" và \"Xin phép\". "
+                    + "Vui lòng chỉ chọn một trạng thái.");
+        }
+        validateAttendanceDates(
+                row.absentDates(),
+                "Nghỉ không phép",
+                "nghỉ không phép",
+                row.learningStartDate(),
+                today,
+                availableSessionDates,
+                errors
+        );
+        validateAttendanceDates(
+                row.excusedDates(),
+                "Xin phép",
+                "xin phép",
+                row.learningStartDate(),
+                today,
+                availableSessionDates,
+                errors
+        );
+
+        List<SessionCandidate> eligibleSessions = List.of();
+        if (row.learningStartDate() != null) {
+            eligibleSessions = sessionCandidates.stream()
+                    .filter(candidate -> !candidate.date().isBefore(row.learningStartDate())
+                            && !candidate.date().isAfter(today))
                     .toList();
         }
-        int eligibleSessionCount = eligibleDates.size();
-        int packageCycles = LegacyImportCycleCalculator.packageCycles(eligibleSessionCount);
+        Set<LocalDate> absentDates = Set.copyOf(row.absentDates());
+        Set<LocalDate> excusedDates = Set.copyOf(row.excusedDates());
+        Map<SessionCandidate, AttendanceStatus> plannedAttendance = new LinkedHashMap<>();
+        for (SessionCandidate session : eligibleSessions) {
+            AttendanceStatus status = AttendanceStatus.PRESENT;
+            if (absentDates.contains(session.date())) {
+                status = AttendanceStatus.ABSENT;
+            } else if (excusedDates.contains(session.date())) {
+                status = AttendanceStatus.EXCUSED;
+            }
+            plannedAttendance.put(session, status);
+        }
+
+        List<LocalDate> presentDates = attendanceDates(plannedAttendance, AttendanceStatus.PRESENT);
+        List<LocalDate> plannedAbsentDates = attendanceDates(plannedAttendance, AttendanceStatus.ABSENT);
+        List<LocalDate> plannedExcusedDates = attendanceDates(plannedAttendance, AttendanceStatus.EXCUSED);
+        int consumingSessionCount = (int) plannedAttendance.values().stream()
+                .filter(enrollmentSessionService::consumesStatus)
+                .count();
+        int eligibleSessionCount = plannedAttendance.size();
+        int packageCycles = LegacyImportCycleCalculator.packageCycles(consumingSessionCount);
         int totalSessions = LegacyImportCycleCalculator.totalSessions(packageCycles);
-        int usedSessions = eligibleSessionCount;
-        int remainingSessions = LegacyImportCycleCalculator.remainingSessions(packageCycles, eligibleSessionCount);
+        int usedSessions = consumingSessionCount;
+        int remainingSessions = LegacyImportCycleCalculator.remainingSessions(packageCycles, consumingSessionCount);
         BigDecimal totalDebt = packagePrice.multiply(BigDecimal.valueOf(packageCycles));
 
         Long existingStudentId = null;
@@ -435,6 +498,28 @@ public class LegacyStudentImportService {
                 }
             }
         }
+        if (existingStudentId == null
+                && row.phone() == null
+                && row.studentName() != null
+                && row.learningStartDate() != null
+                && existingClassroom != null) {
+            List<Enrollment> matchingEnrollments = enrollmentRepository
+                    .findByClassroomIdOrderByStartDateDescIdDesc(existingClassroom.getId())
+                    .stream()
+                    .filter(enrollment -> enrollment.getStartDate().equals(row.learningStartDate()))
+                    .filter(enrollment -> {
+                        String existingName = LegacyImportNormalizer.normalizePersonName(
+                                enrollment.getStudent().getFullName()
+                        );
+                        return existingName != null && existingName.equalsIgnoreCase(row.studentName());
+                    })
+                    .toList();
+            if (matchingEnrollments.size() == 1) {
+                existingStudentId = matchingEnrollments.getFirst().getStudent().getId();
+            } else if (matchingEnrollments.size() > 1) {
+                errors.add("Không thể xác định học viên khi SĐT trống: có nhiều bản ghi trùng lớp, tên và ngày bắt đầu học.");
+            }
+        }
 
         Long existingEnrollmentId = null;
         boolean duplicateEnrollment = false;
@@ -448,6 +533,7 @@ public class LegacyStudentImportService {
                 duplicateEnrollment = true;
                 existingEnrollmentId = existing.getFirst().getId();
             }
+            validateExistingAttendance(existingStudentId, plannedAttendance, errors);
         }
 
         if (existingStudentId != null || reuseFromWorkbook) {
@@ -485,11 +571,18 @@ public class LegacyStudentImportService {
                 row.learningStartDate(),
                 sheet.classroomStartDate(),
                 eligibleSessionCount,
+                presentDates.size(),
+                plannedAbsentDates.size(),
+                plannedExcusedDates.size(),
+                consumingSessionCount,
+                presentDates,
+                plannedAbsentDates,
+                plannedExcusedDates,
                 packageCycles,
                 totalSessions,
                 usedSessions,
                 remainingSessions,
-                packageCycles,
+                duplicateEnrollment ? 0 : packageCycles,
                 totalDebt,
                 actions,
                 status,
@@ -499,6 +592,134 @@ public class LegacyStudentImportService {
                 errors,
                 warnings
         );
+    }
+
+    private SessionPlan buildSessionPlan(ParsedSheet parsed, Classroom existingClassroom, LocalDate today) {
+        if (existingClassroom == null) {
+            LocalDate to = today.isBefore(parsed.classroomStartDate()) ? parsed.classroomStartDate() : today;
+            List<LocalDate> plannedDates = classSessionService.plannedSessionDates(
+                    parsed.classroomStartDate(),
+                    parsed.daysOfWeek(),
+                    parsed.classroomStartDate(),
+                    to
+            );
+            List<SessionCandidate> candidates = plannedDates.stream()
+                    .filter(date -> !date.isAfter(today))
+                    .map(date -> new SessionCandidate(null, date))
+                    .toList();
+            return new SessionPlan(
+                    candidates,
+                    0,
+                    plannedDates.size(),
+                    plannedDates.isEmpty() ? null : plannedDates.getFirst(),
+                    plannedDates.isEmpty() ? null : plannedDates.getLast()
+            );
+        }
+
+        LocalDate from = existingClassroom.getStartDate();
+        LocalDate to = today.isBefore(from) ? from : today;
+        var generationPlan = classSessionService.planGeneration(existingClassroom, from, to);
+        List<ClassSession> existingSessions = classSessionRepository
+                .findByClassroomIdOrderBySessionDateAscStartTimeAsc(existingClassroom.getId())
+                .stream()
+                .filter(session -> !session.getSessionDate().isBefore(from)
+                        && !session.getSessionDate().isAfter(to))
+                .toList();
+
+        List<SessionCandidate> candidates = new ArrayList<>();
+        existingSessions.stream()
+                .filter(session -> session.getStatus() != ClassSessionStatus.CANCELED)
+                .filter(session -> !session.getSessionDate().isAfter(today))
+                .forEach(session -> candidates.add(new SessionCandidate(session.getId(), session.getSessionDate())));
+
+        for (LocalDate plannedDate : generationPlan.plannedDates()) {
+            if (plannedDate.isAfter(today)) {
+                continue;
+            }
+            boolean slotAlreadyExists = existingSessions.stream().anyMatch(session ->
+                    session.getSessionDate().equals(plannedDate)
+                            && session.getStartTime().equals(existingClassroom.getStartTime())
+                            && session.getEndTime().equals(existingClassroom.getEndTime()));
+            if (!slotAlreadyExists) {
+                candidates.add(new SessionCandidate(null, plannedDate));
+            }
+        }
+        candidates.sort(Comparator
+                .comparing(SessionCandidate::date)
+                .thenComparing(candidate -> candidate.sessionId() == null ? Long.MAX_VALUE : candidate.sessionId()));
+
+        return new SessionPlan(
+                List.copyOf(candidates),
+                generationPlan.existingSessionCount(),
+                generationPlan.sessionsToCreate(),
+                generationPlan.firstSessionDate(),
+                generationPlan.lastGeneratedSessionDate()
+        );
+    }
+
+    private void validateAttendanceDates(
+            List<LocalDate> dates,
+            String columnName,
+            String attendanceLabel,
+            LocalDate learningStartDate,
+            LocalDate businessDate,
+            Set<LocalDate> availableSessionDates,
+            List<String> errors
+    ) {
+        for (LocalDate date : dates) {
+            if (learningStartDate != null && date.isBefore(learningStartDate)) {
+                errors.add("Ngày " + attendanceLabel + " " + formatDate(date)
+                        + " nằm trước ngày bắt đầu học " + formatDate(learningStartDate) + ".");
+                continue;
+            }
+            if (date.isAfter(businessDate)) {
+                errors.add("Ngày " + formatDate(date) + " trong cột \"" + columnName
+                        + "\" nằm sau ngày nghiệp vụ hiện tại " + formatDate(businessDate) + ".");
+                continue;
+            }
+            if (!availableSessionDates.contains(date)) {
+                errors.add("Ngày " + formatDate(date) + " trong cột \"" + columnName
+                        + "\" không phải là buổi học hợp lệ của lớp.");
+            }
+        }
+    }
+
+    private void validateExistingAttendance(
+            Long studentId,
+            Map<SessionCandidate, AttendanceStatus> plannedAttendance,
+            List<String> errors
+    ) {
+        for (Map.Entry<SessionCandidate, AttendanceStatus> planned : plannedAttendance.entrySet()) {
+            Long sessionId = planned.getKey().sessionId();
+            if (sessionId == null) {
+                continue;
+            }
+            Optional<Attendance> existing = attendanceRepository.findBySessionIdAndStudentId(sessionId, studentId);
+            if (existing.isPresent()
+                    && Boolean.TRUE.equals(existing.get().getValid())
+                    && existing.get().getStatus() != planned.getValue()) {
+                errors.add("Buổi " + formatDate(planned.getKey().date()) + " đã có điểm danh "
+                        + existing.get().getStatus() + " nhưng file Excel yêu cầu " + planned.getValue() + ".");
+            }
+        }
+    }
+
+    private List<LocalDate> attendanceDates(
+            Map<SessionCandidate, AttendanceStatus> plannedAttendance,
+            AttendanceStatus status
+    ) {
+        return plannedAttendance.entrySet().stream()
+                .filter(entry -> entry.getValue() == status)
+                .map(entry -> entry.getKey().date())
+                .toList();
+    }
+
+    private String formatDate(LocalDate date) {
+        return DISPLAY_DATE_FORMATTER.format(date);
+    }
+
+    private LocalDate businessDate() {
+        return LocalDate.now(appTimeProperties.zoneId());
     }
 
     private Optional<Classroom> findExistingClassroom(String classCode, String normalizedNameKey) {
@@ -568,6 +789,18 @@ public class LegacyStudentImportService {
             int warningRows,
             int invalidRows,
             boolean canConfirm
+    ) {
+    }
+
+    private record SessionCandidate(Long sessionId, LocalDate date) {
+    }
+
+    private record SessionPlan(
+            List<SessionCandidate> candidates,
+            int existingSessionCount,
+            int sessionsToCreate,
+            LocalDate firstSessionDate,
+            LocalDate lastSessionDate
     ) {
     }
 }

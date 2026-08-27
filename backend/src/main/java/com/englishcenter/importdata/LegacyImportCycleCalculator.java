@@ -9,40 +9,40 @@ public final class LegacyImportCycleCalculator {
     private LegacyImportCycleCalculator() {
     }
 
-    public static int packageCycles(int eligibleSessionCount) {
-        if (eligibleSessionCount <= 0) {
+    public static int packageCycles(int consumingSessionCount) {
+        if (consumingSessionCount <= 0) {
             return 1;
         }
-        return (int) Math.ceil(eligibleSessionCount / (double) PACKAGE_SESSIONS);
+        return (int) Math.ceil(consumingSessionCount / (double) PACKAGE_SESSIONS);
     }
 
     public static int totalSessions(int packageCycles) {
         return packageCycles * PACKAGE_SESSIONS;
     }
 
-    public static int remainingSessions(int packageCycles, int eligibleSessionCount) {
-        return totalSessions(packageCycles) - Math.max(eligibleSessionCount, 0);
+    public static int remainingSessions(int packageCycles, int consumingSessionCount) {
+        return totalSessions(packageCycles) - Math.max(consumingSessionCount, 0);
     }
 
     /**
-     * Cycle N (1-based) starts at eligible session index (N-1)*8 + 1, or learningStartDate for cycle 1
-     * when no sessions exist.
+     * Cycle N (1-based) starts at consuming attendance index (N-1)*8 + 1, or learningStartDate
+     * for cycle 1 when no consuming attendance exists.
      */
     public static LocalDate cycleEffectiveDate(
             LocalDate learningStartDate,
-            List<LocalDate> eligibleSessionDates,
+            List<LocalDate> consumingSessionDates,
             int cycleNo
     ) {
         if (cycleNo < 1) {
             throw new IllegalArgumentException("cycleNo must be >= 1");
         }
-        if (eligibleSessionDates == null || eligibleSessionDates.isEmpty()) {
+        if (consumingSessionDates == null || consumingSessionDates.isEmpty()) {
             return learningStartDate;
         }
         int index = (cycleNo - 1) * PACKAGE_SESSIONS;
-        if (index < eligibleSessionDates.size()) {
-            return eligibleSessionDates.get(index);
+        if (index < consumingSessionDates.size()) {
+            return consumingSessionDates.get(index);
         }
-        return eligibleSessionDates.getLast();
+        return consumingSessionDates.getLast();
     }
 }

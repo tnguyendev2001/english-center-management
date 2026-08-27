@@ -1,6 +1,7 @@
 package com.englishcenter.importdata;
 
 import com.englishcenter.attendance.AttendanceService;
+import com.englishcenter.attendance.AttendanceStatus;
 import com.englishcenter.classpackage.ClassPackage;
 import com.englishcenter.classpackage.ClassPackageRepository;
 import com.englishcenter.classroom.Classroom;
@@ -13,6 +14,8 @@ import com.englishcenter.classsession.ClassSessionRepository;
 import com.englishcenter.classsession.ClassSessionService;
 import com.englishcenter.classsession.ClassSessionStatus;
 import com.englishcenter.classsession.dto.GenerateClassSessionsResponse;
+import com.englishcenter.common.config.AppTimeProperties;
+import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.enrollment.Enrollment;
 import com.englishcenter.enrollment.EnrollmentRepository;
 import com.englishcenter.enrollment.EnrollmentService;
@@ -28,10 +31,13 @@ import com.englishcenter.studentpackage.StudentPackageSourceType;
 import com.englishcenter.tuitionpackage.TuitionPackage;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +50,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class LegacyStudentImportWriter {
     private static final LocalTime DEFAULT_START_TIME = LocalTime.of(17, 0);
     private static final LocalTime DEFAULT_END_TIME = LocalTime.of(18, 30);
+    private static final DateTimeFormatter DISPLAY_DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final ClassroomRepository classroomRepository;
     private final ClassPackageRepository classPackageRepository;
@@ -56,6 +63,7 @@ public class LegacyStudentImportWriter {
     private final ClassroomRenewalService classroomRenewalService;
     private final AttendanceService attendanceService;
     private final EnrollmentSessionService enrollmentSessionService;
+    private final AppTimeProperties appTimeProperties;
 
     public LegacyStudentImportWriter(
             ClassroomRepository classroomRepository,
@@ -68,7 +76,8 @@ public class LegacyStudentImportWriter {
             EnrollmentService enrollmentService,
             ClassroomRenewalService classroomRenewalService,
             AttendanceService attendanceService,
-            EnrollmentSessionService enrollmentSessionService
+            EnrollmentSessionService enrollmentSessionService,
+            AppTimeProperties appTimeProperties
     ) {
         this.classroomRepository = classroomRepository;
         this.classPackageRepository = classPackageRepository;
@@ -81,6 +90,7 @@ public class LegacyStudentImportWriter {
         this.classroomRenewalService = classroomRenewalService;
         this.attendanceService = attendanceService;
         this.enrollmentSessionService = enrollmentSessionService;
+        this.appTimeProperties = appTimeProperties;
     }
 
     @Transactional
@@ -122,7 +132,7 @@ public class LegacyStudentImportWriter {
 
     @Transactional
     public GenerateClassSessionsResponse generateSessions(Classroom classroom) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = businessDate();
         LocalDate from = classroom.getStartDate();
         LocalDate to = today.isBefore(from) ? from : today;
         return classSessionService.generateUpToDate(classroom.getId(), from, to);
@@ -151,7 +161,7 @@ public class LegacyStudentImportWriter {
             );
         }
 
-        LocalDate today = LocalDate.now();
+        LocalDate today = businessDate();
         List<ClassSession> eligibleSessions = classSessionRepository
                 .findByClassroomIdAndSessionDateBetweenAndStatusNotOrderBySessionDateAscStartTimeAsc(
                         classroom.getId(),
@@ -159,8 +169,44 @@ public class LegacyStudentImportWriter {
                         today,
                         ClassSessionStatus.CANCELED
                 );
-        List<LocalDate> eligibleDates = eligibleSessions.stream().map(ClassSession::getSessionDate).toList();
-        int packageCycles = LegacyImportCycleCalculator.packageCycles(eligibleSessions.size());
+        Set<LocalDate> absentDates = Set.copyOf(row.absentDates());
+        Set<LocalDate> excusedDates = Set.copyOf(row.excusedDates());
+        Set<LocalDate> actualSessionDates = eligibleSessions.stream()
+                .map(ClassSession::getSessionDate)
+                .collect(java.util.stream.Collectors.toSet());
+        absentDates.stream()
+                .filter(date -> !actualSessionDates.contains(date))
+                .findFirst()
+                .ifPresent(date -> {
+                    throw new BusinessException(
+                            "Ngày " + DISPLAY_DATE_FORMATTER.format(date)
+                                    + " trong cột \"Nghỉ không phép\" không phải là buổi học hợp lệ của lớp."
+                    );
+                });
+        excusedDates.stream()
+                .filter(date -> !actualSessionDates.contains(date))
+                .findFirst()
+                .ifPresent(date -> {
+                    throw new BusinessException(
+                            "Ngày " + DISPLAY_DATE_FORMATTER.format(date)
+                                    + " trong cột \"Xin phép\" không phải là buổi học hợp lệ của lớp."
+                    );
+                });
+        Map<Long, AttendanceStatus> plannedAttendance = new LinkedHashMap<>();
+        List<LocalDate> consumingDates = new java.util.ArrayList<>();
+        for (ClassSession session : eligibleSessions) {
+            AttendanceStatus status = AttendanceStatus.PRESENT;
+            if (absentDates.contains(session.getSessionDate())) {
+                status = AttendanceStatus.ABSENT;
+            } else if (excusedDates.contains(session.getSessionDate())) {
+                status = AttendanceStatus.EXCUSED;
+            }
+            plannedAttendance.put(session.getId(), status);
+            if (enrollmentSessionService.consumesStatus(status)) {
+                consumingDates.add(session.getSessionDate());
+            }
+        }
+        int packageCycles = LegacyImportCycleCalculator.packageCycles(consumingDates.size());
 
         Enrollment enrollment = enrollmentService.enrollFromLegacyImport(
                 studentResult.student(),
@@ -176,7 +222,7 @@ public class LegacyStudentImportWriter {
         for (int cycle = currentMaxCycle + 1; cycle <= packageCycles; cycle++) {
             LocalDate effectiveDate = LegacyImportCycleCalculator.cycleEffectiveDate(
                     row.learningStartDate(),
-                    eligibleDates,
+                    consumingDates,
                     cycle
             );
             classroomRenewalService.renewPackage(new PackageRenewalCommand(
@@ -191,8 +237,11 @@ public class LegacyStudentImportWriter {
             packageCyclesCreated++;
         }
 
-        List<Long> sessionIds = eligibleSessions.stream().map(ClassSession::getId).toList();
-        int attendancesCreated = attendanceService.markLegacyAttendancePresent(enrollment.getId(), sessionIds);
+        int attendancesCreated = attendanceService.markLegacyAttendance(
+                enrollment.getId(),
+                plannedAttendance,
+                today
+        );
         enrollmentSessionService.recalculateEnrollmentProgress(enrollment.getId());
 
         return new StudentImportResult(
@@ -203,6 +252,10 @@ public class LegacyStudentImportWriter {
                 invoicesCreated,
                 packageCyclesCreated
         );
+    }
+
+    private LocalDate businessDate() {
+        return LocalDate.now(appTimeProperties.zoneId());
     }
 
     private StudentResolveResult resolveOrCreateStudent(

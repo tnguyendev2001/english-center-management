@@ -34,6 +34,7 @@ import com.englishcenter.enrollment.EnrollmentSessionService;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -659,6 +660,69 @@ class AttendanceServiceTest {
 
         assertThat(roster.students()).hasSize(1);
         assertThat(roster.students().getFirst().enrollmentId()).isEqualTo(first.getId());
+    }
+
+    @Test
+    void legacyAttendanceUsesSharedConsumptionAndExcusedMakeupRules() {
+        AttendanceService service = newService();
+        ClassSession session = session(ClassSessionStatus.SCHEDULED);
+        Student student = student();
+        Enrollment enrollment = enrollment(student, session.getClassroom());
+        mockEnrollmentSessions(enrollment, 8, 0);
+
+        when(enrollmentRepository.findById(4L)).thenReturn(Optional.of(enrollment));
+        when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
+        when(attendanceRepository.findBySessionIdAndStudentId(1L, 3L)).thenReturn(Optional.empty());
+        when(statusHistoryRepository.isActiveAt(4L, session.getSessionDate())).thenReturn(true);
+        when(attendanceRepository.save(any(Attendance.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(makeupCreditRepository.findByStudentIdAndSourceSessionIdAndReason(
+                3L,
+                1L,
+                MakeupCreditReason.EXCUSED_ABSENCE
+        )).thenReturn(Optional.empty());
+        when(makeupCreditRepository.save(any(MakeupCredit.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        int created = service.markLegacyAttendance(
+                4L,
+                Map.of(1L, AttendanceStatus.EXCUSED),
+                LocalDate.of(2026, 7, 1)
+        );
+
+        assertThat(created).isOne();
+        assertThat(enrollment.getUsedSessions()).isZero();
+        verify(makeupCreditRepository).save(any(MakeupCredit.class));
+    }
+
+    @Test
+    void legacyAttendanceReusesSameStatusButRejectsDifferentStatus() {
+        AttendanceService service = newService();
+        ClassSession session = session(ClassSessionStatus.COMPLETED);
+        Student student = student();
+        Enrollment enrollment = enrollment(student, session.getClassroom());
+        mockEnrollmentSessions(enrollment, 8, 1);
+        Attendance existing = new Attendance();
+        existing.setSession(session);
+        existing.setStudent(student);
+        existing.setStatus(AttendanceStatus.PRESENT);
+        existing.setValid(true);
+
+        when(enrollmentRepository.findById(4L)).thenReturn(Optional.of(enrollment));
+        when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
+        when(attendanceRepository.findBySessionIdAndStudentId(1L, 3L)).thenReturn(Optional.of(existing));
+
+        assertThat(service.markLegacyAttendance(
+                4L,
+                Map.of(1L, AttendanceStatus.PRESENT),
+                LocalDate.of(2026, 7, 1)
+        )).isZero();
+        assertThatThrownBy(() -> service.markLegacyAttendance(
+                4L,
+                Map.of(1L, AttendanceStatus.EXCUSED),
+                LocalDate.of(2026, 7, 1)
+        )).isInstanceOf(BusinessException.class)
+                .hasMessageContaining("đã có điểm danh PRESENT")
+                .hasMessageContaining("EXCUSED");
+        verify(attendanceRepository, never()).save(any(Attendance.class));
     }
 
     private AttendanceService newService() {

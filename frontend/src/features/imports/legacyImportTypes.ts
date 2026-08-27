@@ -19,6 +19,13 @@ export interface LegacyImportRowPreview {
   learningStartDate?: string | null
   classroomStartDate?: string | null
   eligibleSessionCount: number
+  presentCount: number
+  absentCount: number
+  excusedCount: number
+  consumingSessionCount: number
+  presentDates: string[]
+  absentDates: string[]
+  excusedDates: string[]
   packageCycles: number
   totalSessionsAfterImport: number
   usedSessionsAfterImport: number
