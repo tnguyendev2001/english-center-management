@@ -5,7 +5,6 @@ import com.englishcenter.classpackage.ClassPackageRepository;
 import com.englishcenter.classroom.Classroom;
 import com.englishcenter.classroom.ClassroomRepository;
 import com.englishcenter.classroom.ClassroomStatus;
-import com.englishcenter.classsession.ClassSession;
 import com.englishcenter.classsession.ClassSessionRepository;
 import com.englishcenter.classsession.ClassSessionStatus;
 import com.englishcenter.common.exception.BusinessException;
@@ -14,8 +13,11 @@ import com.englishcenter.enrollment.dto.EnrollStudentRequest;
 import com.englishcenter.enrollment.dto.CancelEnrollmentRequest;
 import com.englishcenter.enrollment.dto.EnrollmentResponse;
 import com.englishcenter.enrollment.dto.DuplicateEnrollmentGroupResponse;
+import com.englishcenter.enrollment.dto.EnrollmentLifecycleContextResponse;
 import com.englishcenter.enrollment.dto.EnrollmentStatusHistoryResponse;
 import com.englishcenter.enrollment.dto.HoldEnrollmentRequest;
+import com.englishcenter.enrollment.dto.PauseEnrollmentRequest;
+import com.englishcenter.enrollment.dto.ChangeLearningStartDateRequest;
 import com.englishcenter.enrollment.dto.ReactivateEnrollmentRequest;
 import com.englishcenter.enrollment.dto.StopEnrollmentRequest;
 import com.englishcenter.enrollment.dto.TransferEnrollmentRequest;
@@ -68,6 +70,7 @@ public class EnrollmentService {
     private final ClassSessionRepository classSessionRepository;
     private final AttendanceRepository attendanceRepository;
     private final PaymentRepository paymentRepository;
+    private final EnrollmentEligibilityService enrollmentEligibilityService;
     private final EnrollmentMapper enrollmentMapper;
     private final StudentMapper studentMapper;
 
@@ -83,6 +86,7 @@ public class EnrollmentService {
             ClassSessionRepository classSessionRepository,
             AttendanceRepository attendanceRepository,
             PaymentRepository paymentRepository,
+            EnrollmentEligibilityService enrollmentEligibilityService,
             EnrollmentMapper enrollmentMapper,
             StudentMapper studentMapper
     ) {
@@ -97,6 +101,7 @@ public class EnrollmentService {
         this.classSessionRepository = classSessionRepository;
         this.attendanceRepository = attendanceRepository;
         this.paymentRepository = paymentRepository;
+        this.enrollmentEligibilityService = enrollmentEligibilityService;
         this.enrollmentMapper = enrollmentMapper;
         this.studentMapper = studentMapper;
     }
@@ -306,6 +311,37 @@ public class EnrollmentService {
     }
 
     @Transactional(readOnly = true)
+    public EnrollmentLifecycleContextResponse getLifecycleContext(Long id) {
+        Enrollment enrollment = enrollmentRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Enrollment not found"));
+        LocalDate latestAttendanceDate = enrollmentEligibilityService
+                .getLatestAttendanceDate(enrollment)
+                .orElse(null);
+        LocalDate earliestInactiveDate = latestAttendanceDate == null
+                ? null
+                : latestAttendanceDate.plusDays(1);
+        LocalDate inactiveFrom = null;
+        if (enrollment.getStatus() == EnrollmentStatus.ON_HOLD
+                || enrollment.getStatus() == EnrollmentStatus.STOPPED) {
+            inactiveFrom = statusHistoryRepository
+                    .findByEnrollmentIdOrderByEffectiveFromAscIdAsc(id)
+                    .stream()
+                    .filter(history -> history.getEffectiveTo() == null)
+                    .reduce((first, second) -> second)
+                    .map(EnrollmentStatusHistory::getEffectiveFrom)
+                    .orElse(null);
+        }
+        return new EnrollmentLifecycleContextResponse(
+                latestAttendanceDate,
+                earliestInactiveDate,
+                inactiveFrom,
+                enrollment.getStartDate(),
+                enrollmentEligibilityService.getEarliestValidAttendanceDate(enrollment).orElse(null),
+                enrollmentEligibilityService.firstPeriodEndDate(enrollment).orElse(null)
+        );
+    }
+
+    @Transactional(readOnly = true)
     public List<DuplicateEnrollmentGroupResponse> getDuplicates() {
         Map<String, List<Enrollment>> groups = new LinkedHashMap<>();
         for (Enrollment enrollment : enrollmentRepository.findDuplicateStudentClassroomEnrollments()) {
@@ -344,12 +380,72 @@ public class EnrollmentService {
     }
 
     @Transactional
+    public EnrollmentResponse pause(Long id, PauseEnrollmentRequest request) {
+        if (request.status() != EnrollmentStatus.ON_HOLD && request.status() != EnrollmentStatus.STOPPED) {
+            throw new BusinessException(EnrollmentEligibilityService.PAUSE_STATUS_INVALID_MESSAGE);
+        }
+        if (request.status() == EnrollmentStatus.ON_HOLD) {
+            return hold(id, new HoldEnrollmentRequest(
+                    request.effectiveDate(),
+                    request.expectedReturnDate(),
+                    request.reason()
+            ));
+        }
+        return stop(id, new StopEnrollmentRequest(request.effectiveDate(), request.reason()));
+    }
+
+    @Transactional
+    public EnrollmentResponse changeLearningStartDate(Long id, ChangeLearningStartDateRequest request) {
+        Enrollment enrollment = findEnrollmentForLifecycle(
+                id,
+                List.of(EnrollmentStatus.ACTIVE)
+        );
+        LocalDate newStartDate = request.learningStartDate();
+        enrollmentEligibilityService.validateLearningStartDateChange(enrollment, newStartDate);
+
+        if (newStartDate.equals(enrollment.getStartDate())) {
+            return enrollmentMapper.toResponse(
+                    enrollment,
+                    findLatestStudentPackage(id),
+                    findLatestInvoice(id)
+            );
+        }
+
+        List<EnrollmentStatusHistory> histories = statusHistoryRepository
+                .findByEnrollmentIdOrderByEffectiveFromAscIdAsc(id);
+        if (histories.isEmpty()) {
+            throw new BusinessException("Enrollment status history is missing");
+        }
+
+        EnrollmentStatusHistory firstPeriod = histories.getFirst();
+        firstPeriod.setEffectiveFrom(newStartDate);
+        statusHistoryRepository.save(firstPeriod);
+
+        enrollment.setStartDate(newStartDate);
+        enrollment.setNote(appendLifecycleReason(
+                enrollment.getNote(),
+                "Chỉnh sửa",
+                request.reason()
+        ));
+        enrollmentRepository.save(enrollment);
+        return enrollmentMapper.toResponse(
+                enrollment,
+                findLatestStudentPackage(id),
+                findLatestInvoice(id)
+        );
+    }
+
+    @Transactional
     public EnrollmentResponse stop(Long id, StopEnrollmentRequest request) {
         Enrollment enrollment = findEnrollmentForLifecycle(
                 id,
                 List.of(EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD)
         );
-        LocalDate effectiveDate = request.effectiveDate() == null ? LocalDate.now() : request.effectiveDate();
+        LocalDate effectiveDate = requireEffectiveDate(
+                request.effectiveDate(),
+                EnrollmentEligibilityService.EFFECTIVE_DATE_REQUIRED_INACTIVE_MESSAGE
+        );
+        enrollmentEligibilityService.validateInactiveEffectiveDate(enrollment, effectiveDate);
 
         transitionHistory(enrollment, effectiveDate, EnrollmentStatus.STOPPED, request.reason(), null);
         enrollment.setStatus(EnrollmentStatus.STOPPED);
@@ -366,7 +462,11 @@ public class EnrollmentService {
     @Transactional
     public EnrollmentResponse hold(Long id, HoldEnrollmentRequest request) {
         Enrollment enrollment = findEnrollmentForLifecycle(id, List.of(EnrollmentStatus.ACTIVE));
-        LocalDate effectiveDate = request.effectiveDate() == null ? LocalDate.now() : request.effectiveDate();
+        LocalDate effectiveDate = requireEffectiveDate(
+                request.effectiveDate(),
+                EnrollmentEligibilityService.EFFECTIVE_DATE_REQUIRED_INACTIVE_MESSAGE
+        );
+        enrollmentEligibilityService.validateInactiveEffectiveDate(enrollment, effectiveDate);
         if (request.expectedReturnDate() != null
                 && !request.expectedReturnDate().isAfter(effectiveDate)) {
             throw new BusinessException("Expected return date must be after effective date");
@@ -377,7 +477,7 @@ public class EnrollmentService {
                 effectiveDate,
                 EnrollmentStatus.ON_HOLD,
                 request.reason(),
-                request.expectedReturnDate()
+                null
         );
         enrollment.setStatus(EnrollmentStatus.ON_HOLD);
         enrollment.setEndDate(null);
@@ -396,7 +496,10 @@ public class EnrollmentService {
                 id,
                 List.of(EnrollmentStatus.ON_HOLD, EnrollmentStatus.STOPPED)
         );
-        LocalDate requestedDate = request.effectiveDate() == null ? LocalDate.now() : request.effectiveDate();
+        LocalDate effectiveDate = requireEffectiveDate(
+                request.effectiveDate(),
+                EnrollmentEligibilityService.EFFECTIVE_DATE_REQUIRED_REACTIVATE_MESSAGE
+        );
         validateClassroomOpenForEnrollment(enrollment.getClassroom());
         if (enrollmentRepository.existsByStudentIdAndClassroomIdAndStatusAndIdNot(
                 enrollment.getStudent().getId(),
@@ -407,9 +510,7 @@ public class EnrollmentService {
             throw new BusinessException("Học viên đang học trong lớp này.");
         }
 
-        // Store the first attendance-eligible session date (half-open ACTIVE from this day).
-        // Office-visit dates that are not study days snap forward to the next non-canceled session.
-        LocalDate effectiveDate = resolveReactivationEffectiveDate(enrollment.getClassroom(), requestedDate);
+        enrollmentEligibilityService.validateReactivateEffectiveDate(enrollment, effectiveDate);
 
         transitionHistory(enrollment, effectiveDate, EnrollmentStatus.ACTIVE, request.reason(), null);
         enrollment.setStatus(EnrollmentStatus.ACTIVE);
@@ -665,8 +766,8 @@ public class EnrollmentService {
         if (latest.getStatus() != enrollment.getStatus()) {
             throw new BusinessException("Enrollment current status does not match its latest history");
         }
-        if (enrollment.getStatus() == EnrollmentStatus.ACTIVE && latest.getEffectiveTo() != null) {
-            throw new BusinessException("Active enrollment must have exactly one open history period");
+        if (latest.getEffectiveTo() != null && enrollment.getStatus() == EnrollmentStatus.ACTIVE) {
+            throw new BusinessException("Enrollment must have exactly one open history period");
         }
         // Half-open [from, to): if the action happens before the period starts
         // (e.g. cancel/stop in July while learning starts in August), collapse the
@@ -827,25 +928,11 @@ public class EnrollmentService {
         return requestedLearningStartDate;
     }
 
-    /**
-     * Resolves reactivation to the first attendance-eligible date on or after the requested date.
-     * Prefer an existing non-canceled class session; otherwise fall back to classroom study days.
-     */
-    private LocalDate resolveReactivationEffectiveDate(Classroom classroom, LocalDate requestedDate) {
-        List<ClassSession> sessions = classSessionRepository
-                .findByClassroomIdOrderBySessionDateAscStartTimeAsc(classroom.getId());
-        if (sessions != null && !sessions.isEmpty()) {
-            return sessions.stream()
-                    .filter(session -> session.getStatus() != ClassSessionStatus.CANCELED)
-                    .map(ClassSession::getSessionDate)
-                    .filter(sessionDate -> !sessionDate.isBefore(requestedDate))
-                    .findFirst()
-                    .orElseThrow(() -> new BusinessException(
-                            "Không còn buổi học hợp lệ để học lại từ ngày đã chọn."
-                    ));
+    private LocalDate requireEffectiveDate(LocalDate effectiveDate, String message) {
+        if (effectiveDate == null) {
+            throw new BusinessException(message);
         }
-
-        return EnrollmentLearningDateHelper.findFirstValidLearningDate(classroom, requestedDate);
+        return effectiveDate;
     }
 
     private void validateLearningStartDateAgainstExistingSessions(Long classroomId, LocalDate learningStartDate) {

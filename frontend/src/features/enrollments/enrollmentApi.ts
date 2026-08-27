@@ -7,10 +7,13 @@ import type {
   EnrollmentStatusHistory,
   EnrollStudentPayload,
   HoldEnrollmentPayload,
+  PauseEnrollmentPayload,
+  ChangeLearningStartDatePayload,
   ReactivateEnrollmentPayload,
   StopEnrollmentPayload,
   TransferEnrollmentPayload,
   TransferEnrollmentResult,
+  EnrollmentLifecycleContext,
 } from './enrollmentTypes'
 
 export async function getEnrollments(params: EnrollmentSearchParams) {
@@ -29,6 +32,27 @@ export async function getEnrollment(id: number) {
 
 export async function enrollStudent(payload: EnrollStudentPayload) {
   const response = await httpClient.post<ApiResponse<Enrollment>>('/enrollments', payload)
+
+  return response.data.data
+}
+
+export async function pauseEnrollment(id: number, payload: PauseEnrollmentPayload) {
+  const response = await httpClient.post<ApiResponse<Enrollment>>(
+    `/enrollments/${id}/pause`,
+    payload,
+  )
+
+  return response.data.data
+}
+
+export async function changeLearningStartDate(
+  id: number,
+  payload: ChangeLearningStartDatePayload,
+) {
+  const response = await httpClient.post<ApiResponse<Enrollment>>(
+    `/enrollments/${id}/learning-start-date`,
+    payload,
+  )
 
   return response.data.data
 }
@@ -81,6 +105,14 @@ export async function cancelEnrollment(id: number, payload: CancelEnrollmentPayl
 export async function getEnrollmentStatusHistory(id: number) {
   const response = await httpClient.get<ApiResponse<EnrollmentStatusHistory[]>>(
     `/enrollments/${id}/status-history`,
+  )
+
+  return response.data.data
+}
+
+export async function getEnrollmentLifecycleContext(id: number) {
+  const response = await httpClient.get<ApiResponse<EnrollmentLifecycleContext>>(
+    `/enrollments/${id}/lifecycle-context`,
   )
 
   return response.data.data

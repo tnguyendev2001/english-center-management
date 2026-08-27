@@ -1,17 +1,29 @@
-import { Alert, DatePicker, Descriptions, Form, Input, message, Modal, Select } from 'antd'
+import { Alert, DatePicker, Descriptions, Form, Input, message, Modal, Select, Typography } from 'antd'
 import { isAxiosError } from 'axios'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useEffect, useMemo } from 'react'
-import { useClassrooms } from '../../classrooms/classroomQueries'
+import type { ApiErrorResponse } from '../../../api/apiResponse'
+import { useClassSessions } from '../../classSessions/classSessionQueries'
+import { isDateMatchingDaysOfWeek } from '../../classrooms/classroomScheduleUtils'
+import type { ClassDayOfWeek } from '../../classrooms/classroomTypes'
+import { formatDaysOfWeek } from '../../classrooms/classroomTypes'
+import { useClassroomDetail, useClassrooms } from '../../classrooms/classroomQueries'
+import { renderClassStudyDayCell } from '../../classrooms/classStudyDatePicker'
 import {
   useCancelEnrollment,
-  useHoldEnrollment,
+  useChangeLearningStartDate,
+  useEnrollmentLifecycleContext,
+  usePauseEnrollment,
   useReactivateEnrollment,
-  useStopEnrollment,
   useTransferEnrollment,
 } from '../enrollmentQueries'
 
-export type EnrollmentLifecycleAction = 'hold' | 'reactivate' | 'stop' | 'transfer' | 'cancel'
+export type EnrollmentLifecycleAction =
+  | 'pause'
+  | 'reactivate'
+  | 'changeStartDate'
+  | 'transfer'
+  | 'cancel'
 
 export interface EnrollmentLifecycleTarget {
   id: number
@@ -20,11 +32,15 @@ export interface EnrollmentLifecycleTarget {
   classroomId: number
   classroomName: string
   remainingSessions: number
+  startDate?: string | null
+  status?: 'ACTIVE' | 'ON_HOLD' | 'STOPPED' | 'TRANSFERRED' | 'CANCELED'
 }
 
 interface EnrollmentLifecycleFormValues {
+  pauseStatus?: 'ON_HOLD' | 'STOPPED'
   effectiveDate?: Dayjs | null
   expectedReturnDate?: Dayjs | null
+  learningStartDate?: Dayjs | null
   targetClassroomId?: number
   targetLearningStartDate?: Dayjs | null
   reason?: string
@@ -39,9 +55,9 @@ interface EnrollmentLifecycleModalProps {
 }
 
 const actionLabels: Record<EnrollmentLifecycleAction, string> = {
-  hold: 'Bảo lưu',
+  pause: 'Tạm nghỉ',
   reactivate: 'Học lại',
-  stop: 'Ngừng học',
+  changeStartDate: 'Chỉnh sửa',
   transfer: 'Chuyển lớp',
   cancel: 'Hủy ghi danh',
 }
@@ -55,12 +71,65 @@ export function EnrollmentLifecycleModal({
 }: EnrollmentLifecycleModalProps) {
   const [form] = Form.useForm<EnrollmentLifecycleFormValues>()
   const classroomsQuery = useClassrooms({ page: 0, size: 100 })
-  const holdEnrollment = useHoldEnrollment()
+  const classroomQuery = useClassroomDetail(enrollment?.classroomId ?? Number.NaN)
+  const targetClassroomId = Form.useWatch('targetClassroomId', form)
+  const pauseStatus = Form.useWatch('pauseStatus', form)
+  const pauseEnrollment = usePauseEnrollment()
+  const changeLearningStartDate = useChangeLearningStartDate()
   const reactivateEnrollment = useReactivateEnrollment()
-  const stopEnrollment = useStopEnrollment()
   const transferEnrollment = useTransferEnrollment()
   const cancelEnrollment = useCancelEnrollment()
+  const needsLifecycleContext =
+    action === 'pause' || action === 'reactivate' || action === 'changeStartDate'
+  const lifecycleContextQuery = useEnrollmentLifecycleContext(
+    enrollment?.id,
+    open && needsLifecycleContext,
+  )
+  const upcomingSessionsQuery = useClassSessions(
+    {
+      classroomId: enrollment?.classroomId,
+      fromDate: dayjs().format('YYYY-MM-DD'),
+      page: 0,
+      size: 8,
+      sort: 'sessionDate',
+      direction: 'ASC',
+    },
+    open && action === 'reactivate' && enrollment != null,
+  )
 
+  const latestAttendanceDate = lifecycleContextQuery.data?.latestAttendanceDate ?? null
+  const earliestInactiveDate = lifecycleContextQuery.data?.earliestInactiveDate ?? null
+  const inactiveFrom = lifecycleContextQuery.data?.inactiveFrom ?? null
+  const currentLearningStartDate =
+    lifecycleContextQuery.data?.learningStartDate ?? enrollment?.startDate ?? null
+  const earliestValidAttendanceDate =
+    lifecycleContextQuery.data?.earliestValidAttendanceDate ?? null
+  const firstPeriodEndDate = lifecycleContextQuery.data?.firstPeriodEndDate ?? null
+  const upcomingSessionDates = useMemo(
+    () =>
+      (upcomingSessionsQuery.data?.data?.content ?? [])
+        .filter((session) => session.status !== 'CANCELED')
+        .map((session) => session.sessionDate),
+    [upcomingSessionsQuery.data?.data?.content],
+  )
+
+  const currentClassroom = classroomQuery.data
+  const classDaysOfWeek = currentClassroom?.daysOfWeek ?? []
+  const classStudyDayCellRender = useMemo(
+    () => renderClassStudyDayCell(classDaysOfWeek),
+    [classDaysOfWeek],
+  )
+  const classScheduleLabel = classDaysOfWeek.length > 0 ? formatDaysOfWeek(classDaysOfWeek) : null
+
+  const targetClassroom = useMemo(
+    () => (classroomsQuery.data?.data ?? []).find((classroom) => classroom.id === targetClassroomId),
+    [classroomsQuery.data?.data, targetClassroomId],
+  )
+  const targetDaysOfWeek = targetClassroom?.daysOfWeek ?? []
+  const targetStudyDayCellRender = useMemo(
+    () => renderClassStudyDayCell(targetDaysOfWeek),
+    [targetDaysOfWeek],
+  )
   const targetClassrooms = useMemo(
     () =>
       (classroomsQuery.data?.data ?? []).filter(
@@ -71,22 +140,50 @@ export function EnrollmentLifecycleModal({
     [classroomsQuery.data?.data, enrollment?.classroomId],
   )
 
+  const pauseStatusOptions =
+    enrollment?.status === 'ON_HOLD'
+      ? [{ value: 'STOPPED' as const, label: 'Ngừng học' }]
+      : [
+          { value: 'ON_HOLD' as const, label: 'Bảo lưu' },
+          { value: 'STOPPED' as const, label: 'Ngừng học' },
+        ]
+
   useEffect(() => {
     if (!open) {
       return
     }
 
     form.resetFields()
+    if (action === 'transfer') {
+      form.setFieldsValue({
+        targetLearningStartDate: dayjs(),
+      })
+    }
+    if (action === 'pause') {
+      form.setFieldsValue({
+        pauseStatus: enrollment?.status === 'ON_HOLD' ? 'STOPPED' : undefined,
+      })
+    }
+    if (action === 'changeStartDate' && enrollment?.startDate) {
+      form.setFieldsValue({
+        learningStartDate: dayjs(enrollment.startDate),
+      })
+    }
+  }, [form, open, action, enrollment?.id, enrollment?.startDate, enrollment?.status])
+
+  useEffect(() => {
+    if (!open || action !== 'changeStartDate' || !currentLearningStartDate) {
+      return
+    }
     form.setFieldsValue({
-      effectiveDate: dayjs(),
-      targetLearningStartDate: dayjs(),
+      learningStartDate: dayjs(currentLearningStartDate),
     })
-  }, [form, open, action, enrollment?.id])
+  }, [form, open, action, currentLearningStartDate])
 
   const submitting =
-    holdEnrollment.isPending ||
+    pauseEnrollment.isPending ||
+    changeLearningStartDate.isPending ||
     reactivateEnrollment.isPending ||
-    stopEnrollment.isPending ||
     transferEnrollment.isPending ||
     cancelEnrollment.isPending
 
@@ -103,18 +200,46 @@ export function EnrollmentLifecycleModal({
 
     const reason = values.reason?.trim() ?? ''
 
-    if (action === 'hold') {
-      holdEnrollment.mutate(
+    if (action === 'pause') {
+      if (!values.pauseStatus || !values.effectiveDate) {
+        return
+      }
+      pauseEnrollment.mutate(
         {
           id: enrollment.id,
           payload: {
-            effectiveDate: values.effectiveDate?.format('YYYY-MM-DD') ?? null,
-            expectedReturnDate: values.expectedReturnDate?.format('YYYY-MM-DD') ?? null,
+            status: values.pauseStatus,
+            effectiveDate: values.effectiveDate.format('YYYY-MM-DD'),
+            expectedReturnDate:
+              values.pauseStatus === 'ON_HOLD'
+                ? (values.expectedReturnDate?.format('YYYY-MM-DD') ?? null)
+                : null,
             reason,
           },
         },
         {
-          onSuccess: () => finishSuccess('Đã bảo lưu'),
+          onSuccess: () =>
+            finishSuccess(values.pauseStatus === 'ON_HOLD' ? 'Đã bảo lưu' : 'Đã ngừng học'),
+          onError: showErrorMessage,
+        },
+      )
+      return
+    }
+
+    if (action === 'changeStartDate') {
+      if (!values.learningStartDate) {
+        return
+      }
+      changeLearningStartDate.mutate(
+        {
+          id: enrollment.id,
+          payload: {
+            learningStartDate: values.learningStartDate.format('YYYY-MM-DD'),
+            reason: reason || null,
+          },
+        },
+        {
+          onSuccess: () => finishSuccess('Đã chỉnh sửa ngày bắt đầu học'),
           onError: showErrorMessage,
         },
       )
@@ -122,33 +247,19 @@ export function EnrollmentLifecycleModal({
     }
 
     if (action === 'reactivate') {
+      if (!values.effectiveDate) {
+        return
+      }
       reactivateEnrollment.mutate(
         {
           id: enrollment.id,
           payload: {
-            effectiveDate: values.effectiveDate?.format('YYYY-MM-DD') ?? null,
+            effectiveDate: values.effectiveDate.format('YYYY-MM-DD'),
             reason: reason || null,
           },
         },
         {
           onSuccess: () => finishSuccess('Đã cho học lại'),
-          onError: showErrorMessage,
-        },
-      )
-      return
-    }
-
-    if (action === 'stop') {
-      stopEnrollment.mutate(
-        {
-          id: enrollment.id,
-          payload: {
-            effectiveDate: values.effectiveDate?.format('YYYY-MM-DD') ?? null,
-            reason,
-          },
-        },
-        {
-          onSuccess: () => finishSuccess('Đã ngừng học'),
           onError: showErrorMessage,
         },
       )
@@ -214,6 +325,11 @@ export function EnrollmentLifecycleModal({
               {enrollment.remainingSessions}
             </Descriptions.Item>
           ) : null}
+          {action === 'changeStartDate' && currentLearningStartDate ? (
+            <Descriptions.Item label="Ngày bắt đầu học hiện tại">
+              {formatDate(currentLearningStartDate)}
+            </Descriptions.Item>
+          ) : null}
         </Descriptions>
       ) : null}
 
@@ -226,24 +342,133 @@ export function EnrollmentLifecycleModal({
         />
       ) : null}
 
+      {action === 'pause' ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={
+            latestAttendanceDate
+              ? `Buổi đã điểm danh gần nhất: ${formatDate(latestAttendanceDate)}. Ngày nghỉ sớm nhất có thể chọn: ${formatDate(earliestInactiveDate ?? latestAttendanceDate)}.`
+              : 'Ngày bắt đầu nghỉ phải sau buổi điểm danh còn hiệu lực gần nhất. Hệ thống không tự xóa dữ liệu điểm danh cũ.'
+          }
+        />
+      ) : null}
+
+      {action === 'changeStartDate' ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="Chỉnh sửa sẽ thay đổi các buổi học viên xuất hiện trên điểm danh."
+          description={
+            earliestValidAttendanceDate
+              ? `Điểm danh còn hiệu lực sớm nhất: ${formatDate(earliestValidAttendanceDate)}. Không thể chọn ngày sau ngày này, trừ khi hoàn tác các buổi điểm danh đó.`
+              : 'Chỉ các buổi điểm danh còn hiệu lực (chưa hoàn tác) mới chặn việc dời ngày bắt đầu học sang sau.'
+          }
+        />
+      ) : null}
+
+      {action === 'reactivate' && inactiveFrom ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={`Đã nghỉ từ: ${formatDate(inactiveFrom)}`}
+          description={
+            upcomingSessionDates.length > 0 ? (
+              <Typography.Text type="secondary">
+                Ngày học sắp tới: {upcomingSessionDates.map((date) => formatDate(date)).join(', ')}
+              </Typography.Text>
+            ) : null
+          }
+        />
+      ) : null}
+
       <Form form={form} layout="vertical" onFinish={handleSubmit}>
-        {action === 'hold' || action === 'reactivate' || action === 'stop' ? (
+        {action === 'pause' ? (
+          <>
+            <Form.Item
+              label="Trạng thái"
+              name="pauseStatus"
+              rules={[{ required: true, message: 'Vui lòng chọn trạng thái' }]}
+            >
+              <Select
+                placeholder="Chọn Bảo lưu hoặc Ngừng học"
+                options={pauseStatusOptions}
+              />
+            </Form.Item>
+            <Form.Item
+              label="Ngày bắt đầu nghỉ"
+              name="effectiveDate"
+              rules={[{ required: true, message: 'Vui lòng chọn ngày bắt đầu nghỉ' }]}
+            >
+              <DatePicker
+                format="DD/MM/YYYY"
+                style={{ width: '100%' }}
+                disabledDate={(current) => disableInactiveDate(current, latestAttendanceDate)}
+              />
+            </Form.Item>
+            {pauseStatus === 'ON_HOLD' ? (
+              <Form.Item label="Ngày dự kiến học lại" name="expectedReturnDate">
+                <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} />
+              </Form.Item>
+            ) : null}
+          </>
+        ) : null}
+
+        {action === 'changeStartDate' ? (
           <Form.Item
-            label="Ngày hiệu lực"
-            name="effectiveDate"
+            label="Ngày bắt đầu học"
+            name="learningStartDate"
+            rules={[{ required: true, message: 'Vui lòng chọn ngày bắt đầu học' }]}
             extra={
-              action === 'reactivate'
-                ? 'Nếu ngày chọn không có buổi học, hệ thống sẽ lấy ngày buổi học hợp lệ gần nhất để điểm danh trở lại.'
+              classScheduleLabel
+                ? `Ngày học của lớp: ${classScheduleLabel}. Các ngày này được tô sáng trên lịch.`
                 : undefined
             }
           >
-            <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} />
+            <DatePicker
+              format="DD/MM/YYYY"
+              style={{ width: '100%' }}
+              cellRender={classStudyDayCellRender}
+              disabledDate={(current) =>
+                disableLearningStartDate(
+                  current,
+                  currentClassroom?.startDate,
+                  classDaysOfWeek,
+                  earliestValidAttendanceDate,
+                  firstPeriodEndDate,
+                )
+              }
+            />
           </Form.Item>
         ) : null}
 
-        {action === 'hold' ? (
-          <Form.Item label="Ngày dự kiến học lại" name="expectedReturnDate">
-            <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} />
+        {action === 'reactivate' ? (
+          <Form.Item
+            label="Ngày bắt đầu học lại"
+            name="effectiveDate"
+            rules={[{ required: true, message: 'Vui lòng chọn ngày bắt đầu học lại' }]}
+            extra={
+              classScheduleLabel
+                ? `Ngày học của lớp: ${classScheduleLabel}. Các ngày này được tô sáng trên lịch.`
+                : undefined
+            }
+          >
+            <DatePicker
+              format="DD/MM/YYYY"
+              style={{ width: '100%' }}
+              cellRender={classStudyDayCellRender}
+              disabledDate={(current) =>
+                disableReactivateDate(
+                  current,
+                  inactiveFrom,
+                  currentClassroom?.startDate,
+                  classDaysOfWeek,
+                )
+              }
+            />
           </Form.Item>
         ) : null}
 
@@ -269,8 +494,24 @@ export function EnrollmentLifecycleModal({
               label="Ngày bắt đầu học"
               name="targetLearningStartDate"
               rules={[{ required: true, message: 'Vui lòng chọn ngày bắt đầu học' }]}
+              extra={
+                targetDaysOfWeek.length > 0
+                  ? `Ngày học của lớp chuyển đến: ${formatDaysOfWeek(targetDaysOfWeek)}. Các ngày này được tô sáng trên lịch.`
+                  : 'Chọn lớp chuyển đến để thấy ngày học cố định'
+              }
             >
-              <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} />
+              <DatePicker
+                format="DD/MM/YYYY"
+                style={{ width: '100%' }}
+                cellRender={targetStudyDayCellRender}
+                disabledDate={(current) =>
+                  disableNonClassStudyDate(
+                    current,
+                    targetClassroom?.startDate,
+                    targetDaysOfWeek,
+                  )
+                }
+              />
             </Form.Item>
           </>
         ) : null}
@@ -279,14 +520,18 @@ export function EnrollmentLifecycleModal({
           label="Lý do"
           name="reason"
           rules={
-            action === 'reactivate'
+            action === 'reactivate' || action === 'changeStartDate'
               ? undefined
               : [{ required: true, whitespace: true, message: 'Vui lòng nhập lý do' }]
           }
         >
           <Input.TextArea
             rows={3}
-            placeholder={action === 'reactivate' ? 'Nhập lý do (không bắt buộc)' : 'Nhập lý do'}
+            placeholder={
+              action === 'reactivate' || action === 'changeStartDate'
+                ? 'Nhập lý do (không bắt buộc)'
+                : 'Nhập lý do'
+            }
           />
         </Form.Item>
       </Form>
@@ -294,9 +539,77 @@ export function EnrollmentLifecycleModal({
   )
 }
 
+function formatDate(value: string) {
+  return dayjs(value).format('DD/MM/YYYY')
+}
+
+function disableInactiveDate(current: Dayjs, latestAttendanceDate?: string | null) {
+  if (!latestAttendanceDate) {
+    return false
+  }
+  return !current.isAfter(dayjs(latestAttendanceDate), 'day')
+}
+
+function disableLearningStartDate(
+  current: Dayjs,
+  classroomStartDate?: string,
+  daysOfWeek: ClassDayOfWeek[] = [],
+  earliestValidAttendanceDate?: string | null,
+  firstPeriodEndDate?: string | null,
+) {
+  if (disableNonClassStudyDate(current, classroomStartDate, daysOfWeek)) {
+    return true
+  }
+  if (earliestValidAttendanceDate && current.isAfter(dayjs(earliestValidAttendanceDate), 'day')) {
+    return true
+  }
+  if (firstPeriodEndDate && !current.isBefore(dayjs(firstPeriodEndDate), 'day')) {
+    return true
+  }
+  return false
+}
+
+function disableReactivateDate(
+  current: Dayjs,
+  inactiveFrom?: string | null,
+  classroomStartDate?: string,
+  daysOfWeek: ClassDayOfWeek[] = [],
+) {
+  if (inactiveFrom && !current.isAfter(dayjs(inactiveFrom), 'day')) {
+    return true
+  }
+
+  return disableNonClassStudyDate(current, classroomStartDate, daysOfWeek)
+}
+
+function disableNonClassStudyDate(
+  current: Dayjs,
+  classroomStartDate?: string,
+  daysOfWeek: ClassDayOfWeek[] = [],
+) {
+  if (classroomStartDate && current.isBefore(dayjs(classroomStartDate), 'day')) {
+    return true
+  }
+
+  if (daysOfWeek.length === 0) {
+    return false
+  }
+
+  return !isDateMatchingDaysOfWeek(current, daysOfWeek)
+}
+
 function showErrorMessage(error: unknown) {
   if (isAxiosError(error)) {
-    message.error(error.response?.data?.message ?? 'Có lỗi xảy ra')
+    const data = error.response?.data as ApiErrorResponse | undefined
+    const fieldMessage = data?.errors?.[0]?.message
+    const text =
+      data?.message && data.message !== 'Validation failed'
+        ? data.message
+        : (fieldMessage ?? 'Có lỗi xảy ra')
+    message.error({
+      content: <span style={{ whiteSpace: 'pre-line' }}>{text}</span>,
+      duration: 8,
+    })
     return
   }
 

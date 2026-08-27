@@ -2,7 +2,6 @@ package com.englishcenter.classsession;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,8 +14,11 @@ import com.englishcenter.classroom.ClassroomRepository;
 import com.englishcenter.classsession.dto.CancelClassSessionRequest;
 import com.englishcenter.classsession.mapper.ClassSessionMapper;
 import com.englishcenter.common.exception.BusinessException;
+import com.englishcenter.enrollment.Enrollment;
+import com.englishcenter.enrollment.EnrollmentEligibilityService;
 import com.englishcenter.enrollment.EnrollmentRepository;
 import com.englishcenter.enrollment.EnrollmentSessionService;
+import com.englishcenter.enrollment.EnrollmentStatus;
 import com.englishcenter.enrollment.EnrollmentStatusHistoryRepository;
 import com.englishcenter.makeupcredit.MakeupCredit;
 import com.englishcenter.makeupcredit.MakeupCreditRepository;
@@ -28,6 +30,8 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -73,6 +77,50 @@ class ClassSessionServiceTest {
         assertThat(attendance.getVoidReason()).isEqualTo("Marked wrong session");
         assertThat(attendance.getVoidedAt()).isNotNull();
         verify(attendanceRepository).save(attendance);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = EnrollmentStatus.class, names = {"ACTIVE", "STOPPED", "ON_HOLD"})
+    void correctionCancelReversesUsedSessionsRegardlessOfCurrentStatus(EnrollmentStatus status) {
+        ClassSessionService service = newService();
+        ClassSession session = completedSession();
+        Attendance attendance = attendance(session);
+        Enrollment enrollment = enrollment(attendance.getStudent(), session.getClassroom(), status, 8, 3);
+        when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
+        when(attendanceRepository.existsBySessionId(1L)).thenReturn(true);
+        when(makeupCreditRepository.findBySourceSessionId(1L)).thenReturn(List.of());
+        when(attendanceRepository.findBySessionId(1L)).thenReturn(List.of(attendance));
+        when(enrollmentRepository.findByStudentIdAndClassroomIdOrderByStartDateAscIdAsc(3L, 2L))
+                .thenReturn(List.of(enrollment));
+        when(enrollmentRepository.save(enrollment)).thenReturn(enrollment);
+        when(classSessionRepository.save(session)).thenReturn(session);
+
+        service.correctionCancel(1L, new CancelClassSessionRequest("Marked wrong session"));
+
+        assertThat(enrollment.getUsedSessions()).isEqualTo(2);
+        assertThat(enrollment.getTotalSessions() - enrollment.getUsedSessions()).isEqualTo(6);
+        verify(enrollmentRepository).save(enrollment);
+    }
+
+    @Test
+    void correctionCancelDoesNotReverseUsedSessionsForExcused() {
+        ClassSessionService service = newService();
+        ClassSession session = completedSession();
+        Attendance attendance = attendance(session);
+        attendance.setStatus(AttendanceStatus.EXCUSED);
+        Enrollment enrollment = enrollment(attendance.getStudent(), session.getClassroom(), EnrollmentStatus.ACTIVE, 8, 3);
+        when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
+        when(attendanceRepository.existsBySessionId(1L)).thenReturn(true);
+        when(makeupCreditRepository.findBySourceSessionId(1L)).thenReturn(List.of());
+        when(attendanceRepository.findBySessionId(1L)).thenReturn(List.of(attendance));
+        when(enrollmentRepository.findByStudentIdAndClassroomIdOrderByStartDateAscIdAsc(3L, 2L))
+                .thenReturn(List.of(enrollment));
+        when(classSessionRepository.save(session)).thenReturn(session);
+
+        service.correctionCancel(1L, new CancelClassSessionRequest("Marked wrong session"));
+
+        assertThat(enrollment.getUsedSessions()).isEqualTo(3);
+        verify(enrollmentRepository, never()).save(enrollment);
     }
 
     @Test
@@ -133,7 +181,16 @@ class ClassSessionServiceTest {
                 attendanceRepository,
                 makeupCreditRepository,
                 enrollmentRepository,
-                new EnrollmentSessionService(statusHistoryRepository, enrollmentRepository, attendanceRepository),
+                new EnrollmentSessionService(
+                        new EnrollmentEligibilityService(
+                                enrollmentRepository,
+                                statusHistoryRepository,
+                                attendanceRepository,
+                                classSessionRepository
+                        ),
+                        enrollmentRepository,
+                        attendanceRepository
+                ),
                 classSessionMapper
         );
     }
@@ -166,5 +223,23 @@ class ClassSessionServiceTest {
         attendance.setStatus(AttendanceStatus.PRESENT);
         attendance.setValid(true);
         return attendance;
+    }
+
+    private Enrollment enrollment(
+            Student student,
+            Classroom classroom,
+            EnrollmentStatus status,
+            int totalSessions,
+            int usedSessions
+    ) {
+        Enrollment enrollment = new Enrollment();
+        enrollment.setId(4L);
+        enrollment.setStudent(student);
+        enrollment.setClassroom(classroom);
+        enrollment.setStatus(status);
+        enrollment.setStartDate(LocalDate.of(2026, 6, 1));
+        enrollment.setTotalSessions(totalSessions);
+        enrollment.setUsedSessions(usedSessions);
+        return enrollment;
     }
 }

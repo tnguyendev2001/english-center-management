@@ -3,8 +3,8 @@ package com.englishcenter.enrollment.dto;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
 
-public record ReactivateEnrollmentRequest(
-        @NotNull(message = "Vui lòng chọn ngày bắt đầu học lại") LocalDate effectiveDate,
+public record ChangeLearningStartDateRequest(
+        @NotNull(message = "Vui lòng chọn ngày bắt đầu học") LocalDate learningStartDate,
         String reason
 ) {
 }

@@ -10,6 +10,7 @@ import {
   disableInvalidClassroomStartDates,
   isDateMatchingDaysOfWeek,
 } from '../classroomScheduleUtils'
+import { renderClassStudyDayCell } from '../classStudyDatePicker'
 
 interface ClassroomFormValues {
   classCode: string
@@ -57,6 +58,7 @@ export function ClassroomFormModal({
     () => disableInvalidClassroomStartDates(daysOfWeek),
     [daysOfWeek],
   )
+  const startDayCellRender = useMemo(() => renderClassStudyDayCell(daysOfWeek), [daysOfWeek])
   const startDateMismatch = useMemo(() => {
     if (!startDate || daysOfWeek.length === 0) {
       return false
@@ -237,7 +239,7 @@ export function ClassroomFormModal({
                 },
               },
             ]}
-            extra="Ngày bắt đầu phải là buổi học đầu tiên và trùng lịch học đã chọn"
+            extra="Ngày bắt đầu phải là buổi học đầu tiên và trùng lịch học đã chọn. Các ngày học được tô sáng trên lịch."
             style={{ width: 320 }}
           >
             <DatePicker
@@ -245,6 +247,7 @@ export function ClassroomFormModal({
               style={{ width: '100%' }}
               disabled={daysOfWeek.length === 0}
               disabledDate={disableStartDate}
+              cellRender={startDayCellRender}
             />
           </Form.Item>
 

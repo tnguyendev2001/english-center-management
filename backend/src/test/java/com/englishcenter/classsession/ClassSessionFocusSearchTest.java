@@ -11,6 +11,7 @@ import com.englishcenter.classroom.Classroom;
 import com.englishcenter.classroom.ClassroomRepository;
 import com.englishcenter.classsession.dto.ClassSessionSearchResponse;
 import com.englishcenter.classsession.mapper.ClassSessionMapper;
+import com.englishcenter.enrollment.EnrollmentEligibilityService;
 import com.englishcenter.enrollment.EnrollmentRepository;
 import com.englishcenter.enrollment.EnrollmentSessionService;
 import com.englishcenter.enrollment.EnrollmentStatus;
@@ -214,7 +215,16 @@ class ClassSessionFocusSearchTest {
                 attendanceRepository,
                 makeupCreditRepository,
                 enrollmentRepository,
-                new EnrollmentSessionService(statusHistoryRepository, enrollmentRepository, attendanceRepository),
+                new EnrollmentSessionService(
+                        new EnrollmentEligibilityService(
+                                enrollmentRepository,
+                                statusHistoryRepository,
+                                attendanceRepository,
+                                classSessionRepository
+                        ),
+                        enrollmentRepository,
+                        attendanceRepository
+                ),
                 classSessionMapper
         );
     }

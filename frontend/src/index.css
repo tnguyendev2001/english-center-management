@@ -60,3 +60,26 @@ body {
   opacity: 0.55;
   color: rgba(0, 0, 0, 0.45);
 }
+
+.ant-picker-cell-inner.class-study-day-cell {
+  color: #1677ff;
+  font-weight: 600;
+  background: #e6f4ff;
+}
+
+.ant-picker-cell-selected .ant-picker-cell-inner.class-study-day-cell,
+.ant-picker-cell-range-start .ant-picker-cell-inner.class-study-day-cell,
+.ant-picker-cell-range-end .ant-picker-cell-inner.class-study-day-cell {
+  color: #fff;
+  background: #1677ff;
+}
+
+.ant-picker-cell-today .ant-picker-cell-inner.class-study-day-cell {
+  border-color: #1677ff;
+}
+
+.ant-picker-cell-disabled .ant-picker-cell-inner.class-study-day-cell {
+  color: rgba(0, 0, 0, 0.25);
+  background: transparent;
+  font-weight: 400;
+}

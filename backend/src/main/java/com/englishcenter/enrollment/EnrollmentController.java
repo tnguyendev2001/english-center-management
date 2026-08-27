@@ -6,8 +6,11 @@ import com.englishcenter.enrollment.dto.EnrollStudentRequest;
 import com.englishcenter.enrollment.dto.CancelEnrollmentRequest;
 import com.englishcenter.enrollment.dto.EnrollmentResponse;
 import com.englishcenter.enrollment.dto.DuplicateEnrollmentGroupResponse;
+import com.englishcenter.enrollment.dto.EnrollmentLifecycleContextResponse;
 import com.englishcenter.enrollment.dto.EnrollmentStatusHistoryResponse;
 import com.englishcenter.enrollment.dto.HoldEnrollmentRequest;
+import com.englishcenter.enrollment.dto.PauseEnrollmentRequest;
+import com.englishcenter.enrollment.dto.ChangeLearningStartDateRequest;
 import com.englishcenter.enrollment.dto.ReactivateEnrollmentRequest;
 import com.englishcenter.enrollment.dto.StopEnrollmentRequest;
 import com.englishcenter.enrollment.dto.TransferEnrollmentRequest;
@@ -66,9 +69,30 @@ public class EnrollmentController {
         return ApiResponse.success(enrollmentService.getStatusHistory(id));
     }
 
+    @GetMapping("/{id}/lifecycle-context")
+    public ApiResponse<EnrollmentLifecycleContextResponse> getLifecycleContext(@PathVariable Long id) {
+        return ApiResponse.success(enrollmentService.getLifecycleContext(id));
+    }
+
     @GetMapping("/duplicates")
     public ApiResponse<List<DuplicateEnrollmentGroupResponse>> getDuplicates() {
         return ApiResponse.success(enrollmentService.getDuplicates());
+    }
+
+    @PostMapping("/{id}/pause")
+    public ApiResponse<EnrollmentResponse> pause(
+            @PathVariable Long id,
+            @Valid @RequestBody PauseEnrollmentRequest request
+    ) {
+        return ApiResponse.success(enrollmentService.pause(id, request));
+    }
+
+    @PostMapping("/{id}/learning-start-date")
+    public ApiResponse<EnrollmentResponse> changeLearningStartDate(
+            @PathVariable Long id,
+            @Valid @RequestBody ChangeLearningStartDateRequest request
+    ) {
+        return ApiResponse.success(enrollmentService.changeLearningStartDate(id, request));
     }
 
     @PostMapping("/{id}/hold")

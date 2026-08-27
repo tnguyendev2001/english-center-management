@@ -13,16 +13,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class EnrollmentSessionService {
-    private final EnrollmentStatusHistoryRepository statusHistoryRepository;
+    private final EnrollmentEligibilityService enrollmentEligibilityService;
     private final EnrollmentRepository enrollmentRepository;
     private final AttendanceRepository attendanceRepository;
 
     public EnrollmentSessionService(
-            EnrollmentStatusHistoryRepository statusHistoryRepository,
+            EnrollmentEligibilityService enrollmentEligibilityService,
             EnrollmentRepository enrollmentRepository,
             AttendanceRepository attendanceRepository
     ) {
-        this.statusHistoryRepository = statusHistoryRepository;
+        this.enrollmentEligibilityService = enrollmentEligibilityService;
         this.enrollmentRepository = enrollmentRepository;
         this.attendanceRepository = attendanceRepository;
     }
@@ -52,7 +52,7 @@ public class EnrollmentSessionService {
             return false;
         }
 
-        if (statusHistoryRepository.isActiveAt(enrollment.getId(), session.getSessionDate())) {
+        if (enrollmentEligibilityService.isActiveOnDate(enrollment, session.getSessionDate())) {
             return true;
         }
 
@@ -73,7 +73,8 @@ public class EnrollmentSessionService {
             AttendanceStatus newStatus
     ) {
         boolean oldConsumes = consumesSession(existingAttendance, session, enrollment);
-        boolean newConsumes = consumesStatus(newStatus);
+        boolean newConsumes = session.getStatus() != ClassSessionStatus.CANCELED
+                && consumesStatus(newStatus);
 
         if (!oldConsumes && newConsumes) {
             if (remainingSessions(enrollment) <= 0) {

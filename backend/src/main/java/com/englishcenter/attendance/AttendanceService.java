@@ -15,9 +15,9 @@ import com.englishcenter.classsession.ClassSessionStatus;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.common.exception.NotFoundException;
 import com.englishcenter.enrollment.Enrollment;
+import com.englishcenter.enrollment.EnrollmentEligibilityService;
 import com.englishcenter.enrollment.EnrollmentRepository;
 import com.englishcenter.enrollment.EnrollmentSessionService;
-import com.englishcenter.enrollment.EnrollmentStatusHistoryRepository;
 import com.englishcenter.makeupcredit.MakeupCredit;
 import com.englishcenter.makeupcredit.MakeupCreditReason;
 import com.englishcenter.makeupcredit.MakeupCreditRepository;
@@ -51,7 +51,7 @@ public class AttendanceService {
     private final AttendanceRepository attendanceRepository;
     private final ClassSessionRepository classSessionRepository;
     private final EnrollmentRepository enrollmentRepository;
-    private final EnrollmentStatusHistoryRepository statusHistoryRepository;
+    private final EnrollmentEligibilityService enrollmentEligibilityService;
     private final StudentRepository studentRepository;
     private final MakeupCreditRepository makeupCreditRepository;
     private final EnrollmentSessionService enrollmentSessionService;
@@ -61,7 +61,7 @@ public class AttendanceService {
             AttendanceRepository attendanceRepository,
             ClassSessionRepository classSessionRepository,
             EnrollmentRepository enrollmentRepository,
-            EnrollmentStatusHistoryRepository statusHistoryRepository,
+            EnrollmentEligibilityService enrollmentEligibilityService,
             StudentRepository studentRepository,
             MakeupCreditRepository makeupCreditRepository,
             EnrollmentSessionService enrollmentSessionService,
@@ -70,7 +70,7 @@ public class AttendanceService {
         this.attendanceRepository = attendanceRepository;
         this.classSessionRepository = classSessionRepository;
         this.enrollmentRepository = enrollmentRepository;
-        this.statusHistoryRepository = statusHistoryRepository;
+        this.enrollmentEligibilityService = enrollmentEligibilityService;
         this.studentRepository = studentRepository;
         this.makeupCreditRepository = makeupCreditRepository;
         this.enrollmentSessionService = enrollmentSessionService;
@@ -220,7 +220,12 @@ public class AttendanceService {
         }
         if (enrollment == null) {
             rejectIfNotEligibleForAttendance(session, item.studentId());
-            throw new BusinessException("Student is not actively enrolled in this classroom");
+            throw new BusinessException(EnrollmentEligibilityService.NOT_ACTIVE_ON_SESSION_DATE_MESSAGE);
+        }
+
+        if (existingOptional.isEmpty()
+                && !enrollmentEligibilityService.isActiveOnDate(enrollment, session.getSessionDate())) {
+            throw new BusinessException(EnrollmentEligibilityService.NOT_ACTIVE_ON_SESSION_DATE_MESSAGE);
         }
 
         Student student = enrollment.getStudent();
@@ -458,7 +463,7 @@ public class AttendanceService {
         List<Enrollment> enrollments = enrollmentRepository
                 .findByStudentIdAndClassroomIdOrderByStartDateAscIdAsc(studentId, classroomId);
         for (Enrollment enrollment : enrollments) {
-            if (statusHistoryRepository.isActiveAt(enrollment.getId(), sessionDate)) {
+            if (enrollmentEligibilityService.isActiveOnDate(enrollment, sessionDate)) {
                 return enrollment;
             }
         }
@@ -483,8 +488,8 @@ public class AttendanceService {
                 session.getSessionDate()
         );
         if (enrollment == null
-                || !statusHistoryRepository.isActiveAt(enrollment.getId(), session.getSessionDate())) {
-            throw new BusinessException("Student is not actively enrolled in this classroom");
+                || !enrollmentEligibilityService.isActiveOnDate(enrollment, session.getSessionDate())) {
+            throw new BusinessException(EnrollmentEligibilityService.NOT_ACTIVE_ON_SESSION_DATE_MESSAGE);
         }
     }
 

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 import { attendanceKeys } from '../attendance/attendanceQueries'
+import { classSessionKeys } from '../classSessions/classSessionQueries'
 import { classroomKeys } from '../classrooms/classroomQueries'
 import { dashboardKeys } from '../dashboard/dashboardQueries'
 import { debtKeys } from '../debts/debtQueries'
@@ -12,9 +13,12 @@ import {
   cancelEnrollment,
   enrollStudent,
   getEnrollment,
+  getEnrollmentLifecycleContext,
   getEnrollmentStatusHistory,
   getEnrollments,
   holdEnrollment,
+  pauseEnrollment,
+  changeLearningStartDate,
   reactivateEnrollment,
   stopEnrollment,
   transferEnrollment,
@@ -23,6 +27,8 @@ import type {
   CancelEnrollmentPayload,
   EnrollmentSearchParams,
   HoldEnrollmentPayload,
+  PauseEnrollmentPayload,
+  ChangeLearningStartDatePayload,
   ReactivateEnrollmentPayload,
   StopEnrollmentPayload,
   TransferEnrollmentPayload,
@@ -33,6 +39,7 @@ export const enrollmentKeys = {
   list: (params: EnrollmentSearchParams) => ['enrollments', 'list', params] as const,
   detail: (id: number) => ['enrollments', 'detail', id] as const,
   statusHistory: (id: number) => ['enrollments', 'status-history', id] as const,
+  lifecycleContext: (id: number) => ['enrollments', 'lifecycle-context', id] as const,
 }
 
 export function useEnrollments(params: EnrollmentSearchParams) {
@@ -54,6 +61,14 @@ export function useEnrollmentStatusHistory(id?: number, enabled = true) {
   return useQuery({
     queryKey: enrollmentKeys.statusHistory(id ?? 0),
     queryFn: () => getEnrollmentStatusHistory(id as number),
+    enabled: enabled && id != null && Number.isFinite(id),
+  })
+}
+
+export function useEnrollmentLifecycleContext(id?: number, enabled = true) {
+  return useQuery({
+    queryKey: enrollmentKeys.lifecycleContext(id ?? 0),
+    queryFn: () => getEnrollmentLifecycleContext(id as number),
     enabled: enabled && id != null && Number.isFinite(id),
   })
 }
@@ -82,6 +97,7 @@ function invalidateEnrollmentLifecycleQueries(queryClient: QueryClient, includeF
   void queryClient.invalidateQueries({ queryKey: studentKeys.all })
   void queryClient.invalidateQueries({ queryKey: studentPackageKeys.all })
   void queryClient.invalidateQueries({ queryKey: attendanceKeys.all })
+  void queryClient.invalidateQueries({ queryKey: classSessionKeys.all })
   void queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
   void queryClient.invalidateQueries({ queryKey: reportKeys.all })
 
@@ -89,6 +105,26 @@ function invalidateEnrollmentLifecycleQueries(queryClient: QueryClient, includeF
     void queryClient.invalidateQueries({ queryKey: invoiceKeys.all })
     void queryClient.invalidateQueries({ queryKey: debtKeys.all })
   }
+}
+
+export function usePauseEnrollment() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: PauseEnrollmentPayload }) =>
+      pauseEnrollment(id, payload),
+    onSuccess: () => invalidateEnrollmentLifecycleQueries(queryClient),
+  })
+}
+
+export function useChangeLearningStartDate() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: ChangeLearningStartDatePayload }) =>
+      changeLearningStartDate(id, payload),
+    onSuccess: () => invalidateEnrollmentLifecycleQueries(queryClient),
+  })
 }
 
 export function useStopEnrollment() {

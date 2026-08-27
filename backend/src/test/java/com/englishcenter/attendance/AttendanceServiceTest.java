@@ -20,6 +20,7 @@ import com.englishcenter.classsession.ClassSessionRepository;
 import com.englishcenter.classsession.ClassSessionStatus;
 import com.englishcenter.common.exception.BusinessException;
 import com.englishcenter.enrollment.Enrollment;
+import com.englishcenter.enrollment.EnrollmentEligibilityService;
 import com.englishcenter.enrollment.EnrollmentRepository;
 import com.englishcenter.enrollment.EnrollmentStatus;
 import com.englishcenter.enrollment.EnrollmentStatusHistoryRepository;
@@ -245,9 +246,10 @@ class AttendanceServiceTest {
         credit.setUsedSessions(0);
 
         when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
-        mockEligibleEnrollments(session, enrollment, 12, 0);
+        mockEligibleEnrollments(session, enrollment, 12, 3);
         when(attendanceRepository.findBySessionIdAndStudentId(1L, 3L)).thenReturn(Optional.of(existing));
         when(attendanceRepository.save(existing)).thenReturn(existing);
+        when(enrollmentRepository.save(enrollment)).thenReturn(enrollment);
         when(makeupCreditRepository.findByStudentIdAndSourceSessionIdAndReason(
                 3L,
                 1L,
@@ -259,6 +261,7 @@ class AttendanceServiceTest {
 
         assertThat(existing.getStatus()).isEqualTo(AttendanceStatus.EXCUSED);
         assertThat(credit.getStatus()).isEqualTo(MakeupCreditStatus.AVAILABLE);
+        assertThat(enrollment.getUsedSessions()).isEqualTo(2);
     }
 
     @Test
@@ -293,6 +296,7 @@ class AttendanceServiceTest {
         assertThat(existing.getStatus()).isEqualTo(AttendanceStatus.EXCUSED);
         assertThat(credit.getStatus()).isEqualTo(MakeupCreditStatus.AVAILABLE);
         assertThat(credit.getUsedSessions()).isZero();
+        assertThat(enrollment.getUsedSessions()).isZero();
     }
 
     @Test
@@ -355,6 +359,68 @@ class AttendanceServiceTest {
     }
 
     @Test
+    void markPresentToExcusedDecrementsUsedSessions() {
+        AttendanceService service = newService();
+        ClassSession session = session(ClassSessionStatus.COMPLETED);
+        Student student = student();
+        Enrollment enrollment = enrollment(student, session.getClassroom());
+        Attendance existing = new Attendance();
+        existing.setId(10L);
+        existing.setSession(session);
+        existing.setStudent(student);
+        existing.setStatus(AttendanceStatus.PRESENT);
+        existing.setValid(true);
+
+        when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
+        mockEligibleEnrollments(session, enrollment, 8, 3);
+        when(attendanceRepository.findBySessionIdAndStudentId(1L, 3L)).thenReturn(Optional.of(existing));
+        when(attendanceRepository.save(existing)).thenReturn(existing);
+        when(enrollmentRepository.save(enrollment)).thenReturn(enrollment);
+        when(makeupCreditRepository.findByStudentIdAndSourceSessionIdAndReason(
+                3L,
+                1L,
+                MakeupCreditReason.EXCUSED_ABSENCE
+        )).thenReturn(Optional.empty());
+        when(makeupCreditRepository.save(any(MakeupCredit.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.mark(markRequest(AttendanceStatus.EXCUSED));
+
+        assertThat(enrollment.getUsedSessions()).isEqualTo(2);
+        assertThat(enrollment.getTotalSessions() - enrollment.getUsedSessions()).isEqualTo(6);
+    }
+
+    @Test
+    void markAbsentToExcusedDecrementsUsedSessions() {
+        AttendanceService service = newService();
+        ClassSession session = session(ClassSessionStatus.COMPLETED);
+        Student student = student();
+        Enrollment enrollment = enrollment(student, session.getClassroom());
+        Attendance existing = new Attendance();
+        existing.setId(10L);
+        existing.setSession(session);
+        existing.setStudent(student);
+        existing.setStatus(AttendanceStatus.ABSENT);
+        existing.setValid(true);
+
+        when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
+        mockEligibleEnrollments(session, enrollment, 8, 3);
+        when(attendanceRepository.findBySessionIdAndStudentId(1L, 3L)).thenReturn(Optional.of(existing));
+        when(attendanceRepository.save(existing)).thenReturn(existing);
+        when(enrollmentRepository.save(enrollment)).thenReturn(enrollment);
+        when(makeupCreditRepository.findByStudentIdAndSourceSessionIdAndReason(
+                3L,
+                1L,
+                MakeupCreditReason.EXCUSED_ABSENCE
+        )).thenReturn(Optional.empty());
+        when(makeupCreditRepository.save(any(MakeupCredit.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.mark(markRequest(AttendanceStatus.EXCUSED));
+
+        assertThat(enrollment.getUsedSessions()).isEqualTo(2);
+        assertThat(enrollment.getTotalSessions() - enrollment.getUsedSessions()).isEqualTo(6);
+    }
+
+    @Test
     void markExcusedToAbsentIncrementsUsedSessions() {
         AttendanceService service = newService();
         ClassSession session = session(ClassSessionStatus.COMPLETED);
@@ -381,6 +447,7 @@ class AttendanceServiceTest {
         service.mark(markRequest(AttendanceStatus.ABSENT, "Corrected from excused"));
 
         assertThat(enrollment.getUsedSessions()).isEqualTo(1);
+        assertThat(enrollment.getTotalSessions() - enrollment.getUsedSessions()).isEqualTo(3);
     }
 
     @Test
@@ -400,11 +467,10 @@ class AttendanceServiceTest {
         when(attendanceRepository.findBySessionIdAndStudentId(1L, 3L)).thenReturn(Optional.empty());
         when(enrollmentRepository.findByStudentIdAndClassroomIdOrderByStartDateAscIdAsc(3L, 2L))
                 .thenReturn(List.of(enrollment));
-        when(statusHistoryRepository.isActiveAt(4L, session.getSessionDate())).thenReturn(false);
 
         assertThatThrownBy(() -> service.mark(markRequest(AttendanceStatus.PRESENT)))
                 .isInstanceOf(BusinessException.class)
-                .hasMessage("Student is not actively enrolled in this classroom");
+                .hasMessage(EnrollmentEligibilityService.NOT_ACTIVE_ON_SESSION_DATE_MESSAGE);
 
         verify(attendanceRepository, never()).save(any(Attendance.class));
     }
@@ -413,7 +479,7 @@ class AttendanceServiceTest {
     void markRejectsNewAttendanceOnOrAfterStopEffectiveDate() {
         AttendanceService service = newService();
         ClassSession session = session(ClassSessionStatus.SCHEDULED);
-        session.setSessionDate(LocalDate.of(2026, 7, 8));
+        session.setSessionDate(LocalDate.of(2026, 7, 20));
         Student student = student();
         Enrollment enrollment = enrollment(student, session.getClassroom());
         enrollment.setStatus(EnrollmentStatus.STOPPED);
@@ -432,7 +498,7 @@ class AttendanceServiceTest {
 
         assertThatThrownBy(() -> service.mark(markRequest(AttendanceStatus.PRESENT)))
                 .isInstanceOf(BusinessException.class)
-                .hasMessage("Student is not actively enrolled in this classroom");
+                .hasMessage(EnrollmentEligibilityService.NOT_ACTIVE_ON_SESSION_DATE_MESSAGE);
 
         verify(attendanceRepository, never()).save(any(Attendance.class));
     }
@@ -481,18 +547,22 @@ class AttendanceServiceTest {
         enrollment.setStatus(EnrollmentStatus.ACTIVE);
         mockEnrollmentSessions(enrollment, 8, 2);
 
-        // ACTIVE [01, 09) + ACTIVE [15, null) after stop day 09 / reactivate day 15
+        // ACTIVE [01, 11) + ACTIVE [25, null) after stop 11/07 / reactivate 25/07
         for (LocalDate date : List.of(
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 2),
-                LocalDate.of(2026, 7, 15),
-                LocalDate.of(2026, 7, 16)
+                LocalDate.of(2026, 7, 9),
+                LocalDate.of(2026, 7, 10),
+                LocalDate.of(2026, 7, 25),
+                LocalDate.of(2026, 7, 26)
         )) {
             assertRosterContainsStudentForDate(service, enrollment, date, true);
         }
         for (LocalDate date : List.of(
-                LocalDate.of(2026, 7, 9),
-                LocalDate.of(2026, 7, 10)
+                LocalDate.of(2026, 7, 11),
+                LocalDate.of(2026, 7, 15),
+                LocalDate.of(2026, 7, 20),
+                LocalDate.of(2026, 7, 24)
         )) {
             assertRosterContainsStudentForDate(service, enrollment, date, false);
         }
@@ -592,14 +662,20 @@ class AttendanceServiceTest {
     }
 
     private AttendanceService newService() {
+        EnrollmentEligibilityService eligibilityService = new EnrollmentEligibilityService(
+                enrollmentRepository,
+                statusHistoryRepository,
+                attendanceRepository,
+                classSessionRepository
+        );
         return new AttendanceService(
                 attendanceRepository,
                 classSessionRepository,
                 enrollmentRepository,
-                statusHistoryRepository,
+                eligibilityService,
                 studentRepository,
                 makeupCreditRepository,
-                new EnrollmentSessionService(statusHistoryRepository, enrollmentRepository, attendanceRepository),
+                new EnrollmentSessionService(eligibilityService, enrollmentRepository, attendanceRepository),
                 attendanceMapper
         );
     }
@@ -654,8 +730,8 @@ class AttendanceServiceTest {
     }
 
     private boolean isActiveOnStopReactivateTimeline(LocalDate sessionDate) {
-        LocalDate stopEffectiveDate = LocalDate.of(2026, 7, 9);
-        LocalDate reactivateEffectiveDate = LocalDate.of(2026, 7, 15);
+        LocalDate stopEffectiveDate = LocalDate.of(2026, 7, 11);
+        LocalDate reactivateEffectiveDate = LocalDate.of(2026, 7, 25);
         boolean inFirstActive = !sessionDate.isBefore(LocalDate.of(2026, 7, 1))
                 && sessionDate.isBefore(stopEffectiveDate);
         boolean inSecondActive = !sessionDate.isBefore(reactivateEffectiveDate);

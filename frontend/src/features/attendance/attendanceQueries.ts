@@ -67,6 +67,9 @@ export function useMarkAttendance() {
       queryClient.invalidateQueries({ queryKey: makeupCreditKeys.all })
       queryClient.invalidateQueries({ queryKey: classSessionKeys.all })
       queryClient.invalidateQueries({ queryKey: studentPackageKeys.all })
+      queryClient.invalidateQueries({ queryKey: ['enrollments'] })
+      queryClient.invalidateQueries({ queryKey: ['classrooms'] })
+      queryClient.invalidateQueries({ queryKey: ['students'] })
       queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
       queryClient.invalidateQueries({ queryKey: reportKeys.all })
     },

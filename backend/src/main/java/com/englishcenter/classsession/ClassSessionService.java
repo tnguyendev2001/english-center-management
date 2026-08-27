@@ -2,7 +2,6 @@ package com.englishcenter.classsession;
 
 import com.englishcenter.attendance.Attendance;
 import com.englishcenter.attendance.AttendanceRepository;
-import com.englishcenter.attendance.AttendanceStatus;
 import com.englishcenter.classroom.ClassDayOfWeek;
 import com.englishcenter.classroom.Classroom;
 import com.englishcenter.classroom.ClassroomRepository;
@@ -457,19 +456,14 @@ public class ClassSessionService {
         String voidReason = request.reason().trim();
         LocalDateTime voidedAt = LocalDateTime.now();
         for (Attendance attendance : attendanceRepository.findBySessionId(id)) {
-            if (Boolean.TRUE.equals(attendance.getValid())
-                    && (attendance.getStatus() == AttendanceStatus.PRESENT
-                    || attendance.getStatus() == AttendanceStatus.ABSENT)) {
-                Enrollment enrollment = enrollmentRepository
-                        .findByClassroomIdAndStatus(session.getClassroom().getId(), EnrollmentStatus.ACTIVE)
-                        .stream()
-                        .filter(item -> item.getStudent().getId().equals(attendance.getStudent().getId()))
-                        .findFirst()
-                        .orElse(null);
-                if (enrollment != null) {
-                    enrollmentSessionService.reverseConsumedSession(enrollment);
-                    enrollmentRepository.save(enrollment);
-                }
+            Enrollment enrollment = findEnrollmentForAttendance(
+                    attendance.getStudent().getId(),
+                    session.getClassroom().getId()
+            );
+            if (enrollment != null
+                    && enrollmentSessionService.consumesSession(attendance, session, enrollment)) {
+                enrollmentSessionService.reverseConsumedSession(enrollment);
+                enrollmentRepository.save(enrollment);
             }
 
             attendance.setValid(false);
@@ -494,6 +488,19 @@ public class ClassSessionService {
         session.setStatus(ClassSessionStatus.SCHEDULED);
         session.setCancelReason(null);
         return classSessionMapper.toResponse(classSessionRepository.save(session));
+    }
+
+    private Enrollment findEnrollmentForAttendance(Long studentId, Long classroomId) {
+        List<Enrollment> enrollments = enrollmentRepository
+                .findByStudentIdAndClassroomIdOrderByStartDateAscIdAsc(studentId, classroomId);
+        if (enrollments.isEmpty()) {
+            return null;
+        }
+
+        return enrollments.stream()
+                .filter(enrollment -> enrollment.getStatus() != EnrollmentStatus.CANCELED)
+                .reduce((first, second) -> second)
+                .orElse(enrollments.getFirst());
     }
 
     private int normalizePageSize(int size) {

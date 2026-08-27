@@ -6,6 +6,8 @@ import { formatStudentLabel, STUDENT_SEARCH_PLACEHOLDER } from '../../../compone
 import { MoneyText } from '../../../components/common/MoneyText'
 import type { ClassPackage } from '../../classPackages/classPackageTypes'
 import type { ClassDayOfWeek } from '../../classrooms/classroomTypes'
+import { formatDaysOfWeek } from '../../classrooms/classroomTypes'
+import { renderClassStudyDayCell } from '../../classrooms/classStudyDatePicker'
 import type { ClassSession } from '../../classSessions/classSessionTypes'
 import type { Student } from '../../students/studentTypes'
 import {
@@ -71,6 +73,10 @@ export function EnrollStudentModal({
   const disableLearningDate = useMemo(
     () => disableInvalidLearningDates(classroomStartDate, classroomDaysOfWeek),
     [classroomDaysOfWeek, classroomStartDate],
+  )
+  const learningDayCellRender = useMemo(
+    () => renderClassStudyDayCell(classroomDaysOfWeek),
+    [classroomDaysOfWeek],
   )
 
   useEffect(() => {
@@ -189,11 +195,17 @@ export function EnrollStudentModal({
             label="Ngày bắt đầu học"
             name="learningStartDate"
             rules={[{ required: true, message: 'Vui lòng chọn ngày bắt đầu học' }]}
+            extra={
+              classroomDaysOfWeek.length > 0
+                ? `Ngày học của lớp: ${formatDaysOfWeek(classroomDaysOfWeek)}. Các ngày này được tô sáng trên lịch.`
+                : undefined
+            }
           >
             <DatePicker
               format="DD/MM/YYYY"
               style={{ width: '100%' }}
               disabledDate={disableLearningDate}
+              cellRender={learningDayCellRender}
             />
           </Form.Item>
         )}

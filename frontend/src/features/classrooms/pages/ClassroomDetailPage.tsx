@@ -305,7 +305,7 @@ export function ClassroomDetailPage() {
       selectedSessionId={attendanceSessionId}
       onSelectedSessionIdChange={setAttendanceSessionId}
       onRenewNow={() => setRenewalModalOpen(true)}
-      onStopEnrollment={(enrollmentId) => openLifecycleAction('stop', enrollmentId)}
+      onStopEnrollment={(enrollmentId) => openLifecycleAction('pause', enrollmentId)}
       onTransferEnrollment={(enrollmentId) => openLifecycleAction('transfer', enrollmentId)}
       isActive={activeTab === 'attendance'}
     />
@@ -551,15 +551,15 @@ export function ClassroomDetailPage() {
                                 </Tooltip>
                                 <Button
                                   type="link"
-                                  onClick={() => openLifecycleAction('hold', enrollment.id)}
+                                  onClick={() => openLifecycleAction('pause', enrollment.id)}
                                 >
-                                  Bảo lưu
+                                  Tạm nghỉ
                                 </Button>
                                 <Button
                                   type="link"
-                                  onClick={() => openLifecycleAction('stop', enrollment.id)}
+                                  onClick={() => openLifecycleAction('changeStartDate', enrollment.id)}
                                 >
-                                  Ngừng học
+                                  Chỉnh sửa
                                 </Button>
                                 <Button
                                   type="link"
@@ -586,9 +586,9 @@ export function ClassroomDetailPage() {
                                 </Button>
                                 <Button
                                   type="link"
-                                  onClick={() => openLifecycleAction('stop', enrollment.id)}
+                                  onClick={() => openLifecycleAction('pause', enrollment.id)}
                                 >
-                                  Ngừng học
+                                  Tạm nghỉ
                                 </Button>
                               </>
                             ) : null}
@@ -683,7 +683,7 @@ export function ClassroomDetailPage() {
 
       <EnrollmentLifecycleModal
         open={Boolean(lifecycleAction)}
-        action={lifecycleAction?.action ?? 'stop'}
+        action={lifecycleAction?.action ?? 'pause'}
         enrollment={
           lifecycleAction
             ? {

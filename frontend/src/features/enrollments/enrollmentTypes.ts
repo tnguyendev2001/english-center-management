@@ -50,18 +50,30 @@ export interface EnrollmentSearchParams {
 }
 
 export interface StopEnrollmentPayload {
-  effectiveDate?: string | null
+  effectiveDate: string
   reason: string
 }
 
 export interface HoldEnrollmentPayload {
-  effectiveDate?: string | null
+  effectiveDate: string
   expectedReturnDate?: string | null
   reason: string
 }
 
+export interface PauseEnrollmentPayload {
+  status: 'ON_HOLD' | 'STOPPED'
+  effectiveDate: string
+  expectedReturnDate?: string | null
+  reason: string
+}
+
+export interface ChangeLearningStartDatePayload {
+  learningStartDate: string
+  reason?: string | null
+}
+
 export interface ReactivateEnrollmentPayload {
-  effectiveDate?: string | null
+  effectiveDate: string
   reason?: string | null
 }
 
@@ -90,4 +102,13 @@ export interface EnrollmentStatusHistory {
   effectiveTo?: string | null
   reason?: string | null
   createdAt: string
+}
+
+export interface EnrollmentLifecycleContext {
+  latestAttendanceDate?: string | null
+  earliestInactiveDate?: string | null
+  inactiveFrom?: string | null
+  learningStartDate?: string | null
+  earliestValidAttendanceDate?: string | null
+  firstPeriodEndDate?: string | null
 }

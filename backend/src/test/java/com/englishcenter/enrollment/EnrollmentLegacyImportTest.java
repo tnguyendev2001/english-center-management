@@ -81,6 +81,12 @@ class EnrollmentLegacyImportTest {
                 classSessionRepository,
                 attendanceRepository,
                 paymentRepository,
+                new EnrollmentEligibilityService(
+                        enrollmentRepository,
+                        statusHistoryRepository,
+                        attendanceRepository,
+                        classSessionRepository
+                ),
                 new EnrollmentMapper(new StudentPackageMapper(), new InvoiceMapper()),
                 new StudentMapper()
         );

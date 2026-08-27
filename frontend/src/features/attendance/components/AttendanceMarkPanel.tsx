@@ -344,7 +344,7 @@ export function AttendanceMarkPanel({
                           Gia hạn
                         </Button>
                         <Button type="link" onClick={() => onStopEnrollment?.(student.enrollmentId)}>
-                          Ngừng học
+                          Tạm nghỉ
                         </Button>
                         <Button
                           type="link"

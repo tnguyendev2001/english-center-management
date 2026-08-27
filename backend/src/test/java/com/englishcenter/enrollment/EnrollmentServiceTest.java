@@ -15,7 +15,6 @@ import com.englishcenter.classroom.ClassDayOfWeek;
 import com.englishcenter.classroom.Classroom;
 import com.englishcenter.classroom.ClassroomRepository;
 import com.englishcenter.classroom.ClassroomStatus;
-import com.englishcenter.classsession.ClassSession;
 import com.englishcenter.classsession.ClassSessionRepository;
 import com.englishcenter.classsession.ClassSessionStatus;
 import com.englishcenter.common.exception.BusinessException;
@@ -27,6 +26,8 @@ import com.englishcenter.enrollment.dto.TransferEnrollmentRequest;
 import com.englishcenter.enrollment.dto.TransferEnrollmentResponse;
 import com.englishcenter.enrollment.dto.EnrollmentResponse;
 import com.englishcenter.enrollment.dto.HoldEnrollmentRequest;
+import com.englishcenter.enrollment.dto.PauseEnrollmentRequest;
+import com.englishcenter.enrollment.dto.ChangeLearningStartDateRequest;
 import com.englishcenter.enrollment.dto.ReactivateEnrollmentRequest;
 import com.englishcenter.enrollment.mapper.EnrollmentMapper;
 import com.englishcenter.invoice.Invoice;
@@ -301,7 +302,7 @@ class EnrollmentServiceTest {
     }
 
     @Test
-    void holdCreatesClosedOnHoldPeriodWithoutFinancialRecords() {
+    void holdCreatesOpenOnHoldPeriodWithoutFinancialRecords() {
         EnrollmentService service = newService();
         Enrollment enrollment = activeEnrollment(8, 2);
         when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
@@ -318,7 +319,7 @@ class EnrollmentServiceTest {
         assertThat(enrollment.getStatus()).isEqualTo(EnrollmentStatus.ON_HOLD);
         assertThat(historyCaptor.getValue().getStatus()).isEqualTo(EnrollmentStatus.ON_HOLD);
         assertThat(historyCaptor.getValue().getEffectiveFrom()).isEqualTo(LocalDate.of(2026, 7, 20));
-        assertThat(historyCaptor.getValue().getEffectiveTo()).isEqualTo(LocalDate.of(2026, 8, 3));
+        assertThat(historyCaptor.getValue().getEffectiveTo()).isNull();
         verify(invoiceRepository, never()).save(any(Invoice.class));
         verify(studentPackageRepository, never()).save(any(StudentPackage.class));
     }
@@ -330,15 +331,15 @@ class EnrollmentServiceTest {
         enrollment.setStatus(EnrollmentStatus.ON_HOLD);
         when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
         EnrollmentStatusHistory onHoldHistory = new EnrollmentStatusHistory();
+        onHoldHistory.setId(2L);
         onHoldHistory.setStatus(EnrollmentStatus.ON_HOLD);
         onHoldHistory.setEffectiveFrom(LocalDate.of(2026, 7, 20));
-        onHoldHistory.setEffectiveTo(LocalDate.of(2026, 8, 3));
         when(statusHistoryRepository.latestForUpdate(10L)).thenReturn(Optional.of(onHoldHistory));
+        when(statusHistoryRepository.findByEnrollmentIdOrderByEffectiveFromAscIdAsc(10L))
+                .thenReturn(List.of(onHoldHistory));
         when(enrollmentRepository.existsByStudentIdAndClassroomIdAndStatusAndIdNot(
                 1L, 2L, EnrollmentStatus.ACTIVE, 10L
         )).thenReturn(false);
-        when(classSessionRepository.findByClassroomIdOrderBySessionDateAscStartTimeAsc(2L))
-                .thenReturn(List.of());
 
         EnrollmentResponse response = service.reactivate(
                 10L,
@@ -346,37 +347,41 @@ class EnrollmentServiceTest {
         );
 
         assertThat(response.status()).isEqualTo(EnrollmentStatus.ACTIVE);
+        assertThat(response.id()).isEqualTo(10L);
         assertThat(response.totalSessions()).isEqualTo(8);
         assertThat(response.usedSessions()).isEqualTo(5);
         verify(invoiceRepository, never()).save(any(Invoice.class));
         verify(studentPackageRepository, never()).save(any(StudentPackage.class));
+        verify(paymentRepository, never()).save(any(Payment.class));
     }
 
     @Test
-    void reactivateResolvesNonStudyDateToNextValidSessionDate() {
+    void reactivateUsesRequestedEffectiveDateWithoutShifting() {
         EnrollmentService service = newService();
         Enrollment enrollment = activeEnrollment(8, 5);
         enrollment.setStatus(EnrollmentStatus.ON_HOLD);
         enrollment.getClassroom().setStatus(ClassroomStatus.ONGOING);
         when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
         EnrollmentStatusHistory onHoldHistory = new EnrollmentStatusHistory();
+        onHoldHistory.setId(2L);
         onHoldHistory.setStatus(EnrollmentStatus.ON_HOLD);
         onHoldHistory.setEffectiveFrom(LocalDate.of(2026, 7, 20));
         when(statusHistoryRepository.latestForUpdate(10L)).thenReturn(Optional.of(onHoldHistory));
+        when(statusHistoryRepository.findByEnrollmentIdOrderByEffectiveFromAscIdAsc(10L))
+                .thenReturn(List.of(onHoldHistory));
         when(enrollmentRepository.existsByStudentIdAndClassroomIdAndStatusAndIdNot(
                 1L, 2L, EnrollmentStatus.ACTIVE, 10L
         )).thenReturn(false);
-        when(classSessionRepository.findByClassroomIdOrderBySessionDateAscStartTimeAsc(2L))
-                .thenReturn(List.of(
-                        classSession(LocalDate.of(2026, 7, 20)),
-                        classSession(LocalDate.of(2026, 7, 22)),
-                        classSession(LocalDate.of(2026, 7, 27))
-                ));
+        when(classSessionRepository.countByClassroomId(2L)).thenReturn(3);
+        when(classSessionRepository.existsByClassroomIdAndSessionDateAndStatusNot(
+                2L,
+                LocalDate.of(2026, 7, 27),
+                ClassSessionStatus.CANCELED
+        )).thenReturn(true);
 
-        // Requested Friday 24/07; next non-canceled session is Monday 27/07.
         EnrollmentResponse response = service.reactivate(
                 10L,
-                new ReactivateEnrollmentRequest(LocalDate.of(2026, 7, 24), "Xin học lại trước buổi tới")
+                new ReactivateEnrollmentRequest(LocalDate.of(2026, 7, 27), "Xin học lại")
         );
 
         assertThat(response.status()).isEqualTo(EnrollmentStatus.ACTIVE);
@@ -410,6 +415,8 @@ class EnrollmentServiceTest {
         when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
         when(statusHistoryRepository.latestForUpdate(10L))
                 .thenAnswer(invocation -> Optional.of(latest.get()));
+        when(statusHistoryRepository.findByEnrollmentIdOrderByEffectiveFromAscIdAsc(10L))
+                .thenAnswer(invocation -> List.of(activeHistory, latest.get()));
         when(statusHistoryRepository.save(any(EnrollmentStatusHistory.class))).thenAnswer(invocation -> {
             EnrollmentStatusHistory history = invocation.getArgument(0);
             if (history.getId() == null) {
@@ -423,37 +430,40 @@ class EnrollmentServiceTest {
         when(enrollmentRepository.existsByStudentIdAndClassroomIdAndStatusAndIdNot(
                 1L, 2L, EnrollmentStatus.ACTIVE, 10L
         )).thenReturn(false);
-        when(classSessionRepository.findByClassroomIdOrderBySessionDateAscStartTimeAsc(2L))
-                .thenReturn(List.of(
-                        classSession(LocalDate.of(2026, 7, 1)),
-                        classSession(LocalDate.of(2026, 7, 2)),
-                        classSession(LocalDate.of(2026, 7, 9)),
-                        classSession(LocalDate.of(2026, 7, 10)),
-                        classSession(LocalDate.of(2026, 7, 15)),
-                        classSession(LocalDate.of(2026, 7, 16))
-                ));
+        when(attendanceRepository.findLatestValidAttendanceDate(1L, 2L, LocalDate.of(2026, 7, 1)))
+                .thenReturn(Optional.of(LocalDate.of(2026, 7, 10)));
+        when(classSessionRepository.countByClassroomId(2L)).thenReturn(10);
+        when(classSessionRepository.existsByClassroomIdAndSessionDateAndStatusNot(
+                2L,
+                LocalDate.of(2026, 7, 25),
+                ClassSessionStatus.CANCELED
+        )).thenReturn(true);
 
-        service.stop(10L, new StopEnrollmentRequest(LocalDate.of(2026, 7, 9), "Ngừng học"));
-        assertThat(activeHistory.getEffectiveTo()).isEqualTo(LocalDate.of(2026, 7, 9));
+        service.stop(10L, new StopEnrollmentRequest(LocalDate.of(2026, 7, 11), "Ngừng học"));
+        assertThat(activeHistory.getEffectiveTo()).isEqualTo(LocalDate.of(2026, 7, 11));
         assertThat(latest.get().getStatus()).isEqualTo(EnrollmentStatus.STOPPED);
-        assertThat(latest.get().getEffectiveFrom()).isEqualTo(LocalDate.of(2026, 7, 9));
+        assertThat(latest.get().getEffectiveFrom()).isEqualTo(LocalDate.of(2026, 7, 11));
         assertThat(latest.get().getEffectiveTo()).isNull();
+        verify(attendanceRepository, never()).save(any());
+        verify(attendanceRepository, never()).delete(any());
 
         EnrollmentStatusHistory stoppedHistory = latest.get();
         service.reactivate(
                 10L,
-                new ReactivateEnrollmentRequest(LocalDate.of(2026, 7, 14), "Học lại")
+                new ReactivateEnrollmentRequest(LocalDate.of(2026, 7, 25), "Học lại")
         );
 
-        assertThat(stoppedHistory.getEffectiveTo()).isEqualTo(LocalDate.of(2026, 7, 15));
+        assertThat(stoppedHistory.getEffectiveTo()).isEqualTo(LocalDate.of(2026, 7, 25));
         assertThat(latest.get().getStatus()).isEqualTo(EnrollmentStatus.ACTIVE);
-        assertThat(latest.get().getEffectiveFrom()).isEqualTo(LocalDate.of(2026, 7, 15));
+        assertThat(latest.get().getEffectiveFrom()).isEqualTo(LocalDate.of(2026, 7, 25));
         assertThat(latest.get().getEffectiveTo()).isNull();
+        assertThat(enrollment.getId()).isEqualTo(10L);
         assertThat(enrollment.getStatus()).isEqualTo(EnrollmentStatus.ACTIVE);
         assertThat(enrollment.getUsedSessions()).isEqualTo(2);
         assertThat(enrollment.getTotalSessions()).isEqualTo(8);
         verify(invoiceRepository, never()).save(any(Invoice.class));
         verify(studentPackageRepository, never()).save(any(StudentPackage.class));
+        verify(paymentRepository, never()).save(any(Payment.class));
     }
 
     @Test
@@ -500,10 +510,11 @@ class EnrollmentServiceTest {
     void cancelBeforeLearningStartIsAllowed() {
         EnrollmentService service = newService();
         Enrollment enrollment = activeEnrollment(8, 0);
-        enrollment.setStartDate(LocalDate.of(2026, 8, 3));
+        LocalDate learningStartDate = LocalDate.now().plusMonths(1);
+        enrollment.setStartDate(learningStartDate);
         EnrollmentStatusHistory activeHistory = new EnrollmentStatusHistory();
         activeHistory.setStatus(EnrollmentStatus.ACTIVE);
-        activeHistory.setEffectiveFrom(LocalDate.of(2026, 8, 3));
+        activeHistory.setEffectiveFrom(learningStartDate);
         when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
         when(statusHistoryRepository.latestForUpdate(10L)).thenReturn(Optional.of(activeHistory));
         when(invoiceRepository.findAllByEnrollmentIdOrderByCreatedAtDesc(10L)).thenReturn(List.of());
@@ -512,7 +523,7 @@ class EnrollmentServiceTest {
         EnrollmentResponse response = service.cancel(10L, new CancelEnrollmentRequest("Đổi ý trước khi vào học"));
 
         assertThat(response.status()).isEqualTo(EnrollmentStatus.CANCELED);
-        assertThat(activeHistory.getEffectiveTo()).isEqualTo(LocalDate.of(2026, 8, 3));
+        assertThat(activeHistory.getEffectiveTo()).isEqualTo(learningStartDate);
     }
 
     @Test
@@ -522,22 +533,170 @@ class EnrollmentServiceTest {
         enrollment.setStatus(EnrollmentStatus.ON_HOLD);
         when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
         EnrollmentStatusHistory onHoldHistory = new EnrollmentStatusHistory();
+        onHoldHistory.setId(2L);
         onHoldHistory.setStatus(EnrollmentStatus.ON_HOLD);
         onHoldHistory.setEffectiveFrom(LocalDate.of(2026, 7, 20));
-        onHoldHistory.setEffectiveTo(LocalDate.of(2026, 8, 3));
-        when(statusHistoryRepository.latestForUpdate(10L)).thenReturn(Optional.of(onHoldHistory));
+        when(statusHistoryRepository.findByEnrollmentIdOrderByEffectiveFromAscIdAsc(10L))
+                .thenReturn(List.of(onHoldHistory));
         when(enrollmentRepository.existsByStudentIdAndClassroomIdAndStatusAndIdNot(
                 1L, 2L, EnrollmentStatus.ACTIVE, 10L
         )).thenReturn(false);
-        when(classSessionRepository.findByClassroomIdOrderBySessionDateAscStartTimeAsc(2L))
-                .thenReturn(List.of());
 
         assertThatThrownBy(() -> service.reactivate(
                 10L,
                 new ReactivateEnrollmentRequest(LocalDate.of(2026, 7, 15), "Quay lại sớm hơn kỳ bảo lưu")
         ))
                 .isInstanceOf(BusinessException.class)
-                .hasMessage("Effective date must not be before the current period start date");
+                .hasMessage(EnrollmentEligibilityService.REACTIVATE_BEFORE_INACTIVE_MESSAGE);
+    }
+
+    @Test
+    void stopRejectsEffectiveDateOnOrBeforeLatestAttendance() {
+        EnrollmentService service = newService();
+        Enrollment enrollment = activeEnrollment(8, 4);
+        when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
+        when(attendanceRepository.findLatestValidAttendanceDate(1L, 2L, LocalDate.of(2026, 7, 1)))
+                .thenReturn(Optional.of(LocalDate.of(2026, 7, 10)));
+
+        assertThatThrownBy(() -> service.stop(
+                10L,
+                new StopEnrollmentRequest(LocalDate.of(2026, 7, 3), "Nghỉ sớm")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("10/07/2026");
+        assertThat(enrollment.getStatus()).isEqualTo(EnrollmentStatus.ACTIVE);
+        verify(attendanceRepository, never()).save(any());
+        verify(attendanceRepository, never()).delete(any());
+
+        assertThatThrownBy(() -> service.stop(
+                10L,
+                new StopEnrollmentRequest(LocalDate.of(2026, 7, 10), "Nghỉ đúng ngày điểm danh")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("10/07/2026");
+    }
+
+    @Test
+    void stopRequiresEffectiveDate() {
+        EnrollmentService service = newService();
+        Enrollment enrollment = activeEnrollment(8, 0);
+        when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
+
+        assertThatThrownBy(() -> service.stop(10L, new StopEnrollmentRequest(null, "Thiếu ngày")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage(EnrollmentEligibilityService.EFFECTIVE_DATE_REQUIRED_INACTIVE_MESSAGE);
+    }
+
+    @Test
+    void pauseWithOnHoldStatusCreatesOpenHoldPeriod() {
+        EnrollmentService service = newService();
+        Enrollment enrollment = activeEnrollment(8, 2);
+        when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
+
+        EnrollmentResponse response = service.pause(10L, new PauseEnrollmentRequest(
+                EnrollmentStatus.ON_HOLD,
+                LocalDate.of(2026, 7, 20),
+                LocalDate.of(2026, 8, 3),
+                "Tạm nghỉ"
+        ));
+
+        assertThat(response.status()).isEqualTo(EnrollmentStatus.ON_HOLD);
+        assertThat(enrollment.getEndDate()).isNull();
+        verify(invoiceRepository, never()).save(any(Invoice.class));
+    }
+
+    @Test
+    void pauseWithStoppedStatusClosesEnrollment() {
+        EnrollmentService service = newService();
+        Enrollment enrollment = activeEnrollment(8, 5);
+        when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
+        when(enrollmentRepository.save(enrollment)).thenReturn(enrollment);
+
+        EnrollmentResponse response = service.pause(10L, new PauseEnrollmentRequest(
+                EnrollmentStatus.STOPPED,
+                LocalDate.of(2026, 7, 20),
+                null,
+                "Không tiếp tục học"
+        ));
+
+        assertThat(response.status()).isEqualTo(EnrollmentStatus.STOPPED);
+        assertThat(response.endDate()).isEqualTo(LocalDate.of(2026, 7, 20));
+        assertThat(response.usedSessions()).isEqualTo(5);
+    }
+
+    @Test
+    void pauseRejectsActiveStatus() {
+        EnrollmentService service = newService();
+
+        assertThatThrownBy(() -> service.pause(10L, new PauseEnrollmentRequest(
+                EnrollmentStatus.ACTIVE,
+                LocalDate.of(2026, 7, 20),
+                null,
+                "Sai trạng thái"
+        )))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage(EnrollmentEligibilityService.PAUSE_STATUS_INVALID_MESSAGE);
+        verify(enrollmentRepository, never()).findByIdForUpdate(anyLong());
+    }
+
+    @Test
+    void changeLearningStartDateUpdatesEnrollmentAndFirstHistoryPeriod() {
+        EnrollmentService service = newService();
+        Enrollment enrollment = activeEnrollment(8, 2);
+        EnrollmentStatusHistory firstPeriod = new EnrollmentStatusHistory();
+        firstPeriod.setId(1L);
+        firstPeriod.setStatus(EnrollmentStatus.ACTIVE);
+        firstPeriod.setEffectiveFrom(LocalDate.of(2026, 7, 1));
+        when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
+        when(statusHistoryRepository.findByEnrollmentIdOrderByEffectiveFromAscIdAsc(10L))
+                .thenReturn(List.of(firstPeriod));
+        when(enrollmentRepository.save(enrollment)).thenReturn(enrollment);
+
+        EnrollmentResponse response = service.changeLearningStartDate(
+                10L,
+                new ChangeLearningStartDateRequest(LocalDate.of(2026, 7, 8), "Vào học muộn hơn")
+        );
+
+        assertThat(response.startDate()).isEqualTo(LocalDate.of(2026, 7, 8));
+        assertThat(firstPeriod.getEffectiveFrom()).isEqualTo(LocalDate.of(2026, 7, 8));
+        verify(statusHistoryRepository).save(firstPeriod);
+        verify(attendanceRepository, never()).save(any());
+        verify(attendanceRepository, never()).delete(any());
+    }
+
+    @Test
+    void changeLearningStartDateRejectsDateAfterValidAttendance() {
+        EnrollmentService service = newService();
+        Enrollment enrollment = activeEnrollment(8, 2);
+        when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
+        when(attendanceRepository.findEarliestValidAttendanceDate(1L, 2L))
+                .thenReturn(Optional.of(LocalDate.of(2026, 7, 6)));
+
+        assertThatThrownBy(() -> service.changeLearningStartDate(
+                10L,
+                new ChangeLearningStartDateRequest(LocalDate.of(2026, 7, 8), null)
+        ))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("06/07/2026");
+        assertThat(enrollment.getStartDate()).isEqualTo(LocalDate.of(2026, 7, 1));
+        verify(attendanceRepository, never()).save(any());
+        verify(attendanceRepository, never()).delete(any());
+    }
+
+    @Test
+    void changeLearningStartDateRejectsNonActiveEnrollment() {
+        EnrollmentService service = newService();
+        Enrollment enrollment = activeEnrollment(8, 2);
+        enrollment.setStatus(EnrollmentStatus.STOPPED);
+        when(enrollmentRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(enrollment));
+
+        assertThatThrownBy(() -> service.changeLearningStartDate(
+                10L,
+                new ChangeLearningStartDateRequest(LocalDate.of(2026, 7, 8), null)
+        ))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Enrollment status does not allow this action");
+        assertThat(enrollment.getStartDate()).isEqualTo(LocalDate.of(2026, 7, 1));
     }
 
     @Test
@@ -679,6 +838,17 @@ class EnrollmentServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(statusHistoryRepository.save(any(EnrollmentStatusHistory.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(attendanceRepository.findLatestValidAttendanceDate(any(), any(), any()))
+                .thenReturn(Optional.empty());
+        lenient().when(classSessionRepository.countByClassroomId(anyLong())).thenReturn(0);
+        lenient().when(statusHistoryRepository.findByEnrollmentIdOrderByEffectiveFromAscIdAsc(anyLong()))
+                .thenAnswer(invocation -> {
+                    EnrollmentStatusHistory history = new EnrollmentStatusHistory();
+                    history.setId(1L);
+                    history.setEffectiveFrom(LocalDate.of(2026, 7, 1));
+                    history.setStatus(EnrollmentStatus.ACTIVE);
+                    return List.of(history);
+                });
         return new EnrollmentService(
                 enrollmentRepository,
                 statusHistoryRepository,
@@ -691,6 +861,12 @@ class EnrollmentServiceTest {
                 classSessionRepository,
                 attendanceRepository,
                 paymentRepository,
+                new EnrollmentEligibilityService(
+                        enrollmentRepository,
+                        statusHistoryRepository,
+                        attendanceRepository,
+                        classSessionRepository
+                ),
                 enrollmentMapper,
                 studentMapper
         );
@@ -771,13 +947,6 @@ class EnrollmentServiceTest {
         classroom.setStartDate(LocalDate.of(2026, 7, 1));
         classroom.setDaysOfWeek(Set.of(ClassDayOfWeek.MONDAY, ClassDayOfWeek.WEDNESDAY));
         return classroom;
-    }
-
-    private ClassSession classSession(LocalDate sessionDate) {
-        ClassSession session = new ClassSession();
-        session.setSessionDate(sessionDate);
-        session.setStatus(ClassSessionStatus.SCHEDULED);
-        return session;
     }
 
     private TuitionPackage tuitionPackage() {

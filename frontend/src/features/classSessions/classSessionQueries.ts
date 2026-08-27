@@ -14,6 +14,7 @@ import type {
 } from './classSessionTypes'
 import { dashboardKeys } from '../dashboard/dashboardQueries'
 import { makeupCreditKeys } from '../makeupCredits/makeupCreditQueries'
+import { reportKeys } from '../reports/reportQueries'
 import { studentPackageKeys } from '../studentPackages/studentPackageQueries'
 
 export const classSessionKeys = {
@@ -78,12 +79,16 @@ export function useCorrectionCancelClassSession() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: CancelClassSessionPayload }) =>
       correctionCancelClassSession(id, payload),
-    onSuccess: (_session, variables) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: classSessionKeys.all })
       queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
-      queryClient.invalidateQueries({ queryKey: ['attendance', 'session', variables.id] })
+      queryClient.invalidateQueries({ queryKey: ['attendance'] })
       queryClient.invalidateQueries({ queryKey: studentPackageKeys.all })
       queryClient.invalidateQueries({ queryKey: makeupCreditKeys.all })
+      queryClient.invalidateQueries({ queryKey: ['enrollments'] })
+      queryClient.invalidateQueries({ queryKey: ['classrooms'] })
+      queryClient.invalidateQueries({ queryKey: ['students'] })
+      queryClient.invalidateQueries({ queryKey: reportKeys.all })
     },
   })
 }

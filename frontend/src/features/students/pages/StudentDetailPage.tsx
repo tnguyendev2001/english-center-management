@@ -135,15 +135,17 @@ export function StudentDetailPage() {
                     <>
                       <Button
                         type="link"
-                        onClick={() => setLifecycleAction({ action: 'hold', enrollment: record })}
+                        onClick={() => setLifecycleAction({ action: 'pause', enrollment: record })}
                       >
-                        Bảo lưu
+                        Tạm nghỉ
                       </Button>
                       <Button
                         type="link"
-                        onClick={() => setLifecycleAction({ action: 'stop', enrollment: record })}
+                        onClick={() =>
+                          setLifecycleAction({ action: 'changeStartDate', enrollment: record })
+                        }
                       >
-                        Ngừng học
+                        Chỉnh sửa
                       </Button>
                       <Button
                         type="link"
@@ -175,9 +177,9 @@ export function StudentDetailPage() {
                       </Button>
                       <Button
                         type="link"
-                        onClick={() => setLifecycleAction({ action: 'stop', enrollment: record })}
+                        onClick={() => setLifecycleAction({ action: 'pause', enrollment: record })}
                       >
-                        Ngừng học
+                        Tạm nghỉ
                       </Button>
                     </>
                   ) : null}
@@ -212,7 +214,7 @@ export function StudentDetailPage() {
 
       <EnrollmentLifecycleModal
         open={Boolean(lifecycleAction)}
-        action={lifecycleAction?.action ?? 'stop'}
+        action={lifecycleAction?.action ?? 'pause'}
         enrollment={
           lifecycleAction
             ? {
@@ -222,6 +224,8 @@ export function StudentDetailPage() {
                 classroomId: lifecycleAction.enrollment.classroomId,
                 classroomName: lifecycleAction.enrollment.classroomName,
                 remainingSessions: lifecycleAction.enrollment.remainingSessions,
+                startDate: lifecycleAction.enrollment.startDate,
+                status: lifecycleAction.enrollment.status,
               }
             : undefined
         }

@@ -59,6 +59,36 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
     );
 
     @Query("""
+            SELECT MAX(session.sessionDate)
+            FROM Attendance attendance
+            JOIN attendance.session session
+            WHERE attendance.student.id = :studentId
+              AND session.classroom.id = :classroomId
+              AND attendance.valid = true
+              AND session.status <> com.englishcenter.classsession.ClassSessionStatus.CANCELED
+              AND session.sessionDate >= :startDate
+            """)
+    Optional<LocalDate> findLatestValidAttendanceDate(
+            @Param("studentId") Long studentId,
+            @Param("classroomId") Long classroomId,
+            @Param("startDate") LocalDate startDate
+    );
+
+    @Query("""
+            SELECT MIN(session.sessionDate)
+            FROM Attendance attendance
+            JOIN attendance.session session
+            WHERE attendance.student.id = :studentId
+              AND session.classroom.id = :classroomId
+              AND attendance.valid = true
+              AND session.status <> com.englishcenter.classsession.ClassSessionStatus.CANCELED
+            """)
+    Optional<LocalDate> findEarliestValidAttendanceDate(
+            @Param("studentId") Long studentId,
+            @Param("classroomId") Long classroomId
+    );
+
+    @Query("""
             SELECT COUNT(attendance)
             FROM Attendance attendance
             JOIN attendance.session session
