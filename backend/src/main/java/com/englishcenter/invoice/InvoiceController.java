@@ -4,6 +4,7 @@ import com.englishcenter.common.api.ApiResponse;
 import com.englishcenter.common.api.PageMeta;
 import com.englishcenter.invoice.dto.InvoiceResponse;
 import com.englishcenter.invoice.dto.StudentTuitionSummaryResponse;
+import com.englishcenter.invoice.dto.TuitionNoticeResponse;
 import com.englishcenter.invoice.dto.TuitionOverviewResponse;
 import java.time.LocalDate;
 import java.util.List;
@@ -19,9 +20,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/invoices")
 public class InvoiceController {
     private final InvoiceService invoiceService;
+    private final TuitionNoticeService tuitionNoticeService;
 
-    public InvoiceController(InvoiceService invoiceService) {
+    public InvoiceController(InvoiceService invoiceService, TuitionNoticeService tuitionNoticeService) {
         this.invoiceService = invoiceService;
+        this.tuitionNoticeService = tuitionNoticeService;
     }
 
     @GetMapping
@@ -68,6 +71,11 @@ public class InvoiceController {
     @GetMapping("/{id}")
     public ApiResponse<InvoiceResponse> getById(@PathVariable Long id) {
         return ApiResponse.success(invoiceService.getById(id));
+    }
+
+    @GetMapping("/{id}/tuition-notice")
+    public ApiResponse<TuitionNoticeResponse> getTuitionNotice(@PathVariable Long id) {
+        return ApiResponse.success(tuitionNoticeService.getByInvoiceId(id));
     }
 
     private PageMeta toMeta(Page<?> page) {

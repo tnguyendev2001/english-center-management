@@ -5,7 +5,7 @@ import type {
   StudentTuitionSummary,
   TuitionOverview,
 } from '../financial/financialSummaryTypes'
-import type { Invoice, InvoiceSearchParams } from './invoiceTypes'
+import type { Invoice, InvoiceSearchParams, TuitionNotice } from './invoiceTypes'
 
 export async function getInvoices(params: InvoiceSearchParams) {
   const response = await httpClient.get<ApiResponse<Invoice[]>>('/invoices', {
@@ -31,6 +31,12 @@ export async function getTuitionStudentSummaries(params?: StudentSummarySearchPa
 
 export async function getInvoice(id: number) {
   const response = await httpClient.get<ApiResponse<Invoice>>(`/invoices/${id}`)
+
+  return response.data.data
+}
+
+export async function getTuitionNotice(invoiceId: number) {
+  const response = await httpClient.get<ApiResponse<TuitionNotice>>(`/invoices/${invoiceId}/tuition-notice`)
 
   return response.data.data
 }
