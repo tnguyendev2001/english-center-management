@@ -14,9 +14,9 @@ app:
   security:
     admin:
       username: ${ADMIN_USERNAME:admin}
-      password-hash: ${ADMIN_PASSWORD_HASH:Admin@123456}
+      password-hash: ${ADMIN_PASSWORD_HASH:$2y$12$RPKRqKLjxVwj9WX67C3C9eqI7FN4dz85ihL3z/qNb.MFKVnmY3uJS}
     jwt:
-      secret: ${JWT_SECRET:fYovQeGxBc9FxJK+mPqYveVJd1XbCnQ7MtZq3Brm+kE=}
+      secret: ${JWT_SECRET:9CbFNjoKXibbNWlh/VmG3Q2aiYQsn4EoOWADPgLHmaw=}
       expiration-minutes: ${JWT_EXPIRATION_MINUTES:480}
       issuer: ${JWT_ISSUER:school-management-api}
 
