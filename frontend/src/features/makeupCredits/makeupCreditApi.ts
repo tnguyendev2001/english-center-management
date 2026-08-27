@@ -9,3 +9,8 @@ export async function getMakeupCredits() {
 
   return response.data.data
 }
+
+export async function cancelMakeupCredit(id: number) {
+  const response = await httpClient.post<ApiResponse<MakeupCredit>>(`/makeup-credits/${id}/cancel`)
+  return response.data.data
+}

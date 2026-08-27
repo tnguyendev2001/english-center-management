@@ -236,7 +236,7 @@ public class AttendanceService {
             if (correctionReason == null) {
                 throw new BusinessException("Correction reason is required when changing excused attendance");
             }
-            cancelMakeupCreditForExcusedCorrection(session, student, correctionReason);
+            cancelLeaveRecordForExcusedCorrection(session, student, correctionReason);
         }
 
         enrollmentSessionService.applyAttendanceDelta(
@@ -260,7 +260,7 @@ public class AttendanceService {
         Attendance saved = attendanceRepository.save(attendance);
 
         if (item.status() == AttendanceStatus.EXCUSED) {
-            ensureMakeupCredit(session, student);
+            ensureLeaveRecord(session, student);
         }
 
         return saved;
@@ -274,7 +274,7 @@ public class AttendanceService {
         return trimToNull(item.note());
     }
 
-    private void cancelMakeupCreditForExcusedCorrection(
+    private void cancelLeaveRecordForExcusedCorrection(
             ClassSession session,
             Student student,
             String correctionReason
@@ -296,7 +296,11 @@ public class AttendanceService {
         }
     }
 
-    private void ensureMakeupCredit(ClassSession session, Student student) {
+    /**
+     * Creates or preserves one approved-leave tracking row for EXCUSED attendance.
+     * Does not add ClassSession, totalSessions, or remainingSessions.
+     */
+    private void ensureLeaveRecord(ClassSession session, Student student) {
         Optional<MakeupCredit> creditOptional = makeupCreditRepository.findByStudentIdAndSourceSessionIdAndReason(
                 student.getId(),
                 session.getId(),
@@ -322,8 +326,11 @@ public class AttendanceService {
             return;
         }
 
-        if (credit.getStatus() == MakeupCreditStatus.CANCELED) {
+        // USED is legacy and is not a consumption state in V1.
+        if (credit.getStatus() == MakeupCreditStatus.CANCELED
+                || credit.getStatus() == MakeupCreditStatus.USED) {
             credit.setStatus(MakeupCreditStatus.AVAILABLE);
+            credit.setUsedSessions(0);
             credit.setNote("Reactivated from excused absence");
             makeupCreditRepository.save(credit);
         }

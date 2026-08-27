@@ -56,7 +56,7 @@ class EnrollmentProgressServiceTest {
         when(studentPackageRepository.findTopByEnrollmentIdOrderByCycleNoDescIdDesc(10L))
                 .thenReturn(java.util.Optional.of(latestPackage));
         when(makeupCreditRepository.countAvailableMakeupCredits(1L, 2L, MakeupCreditStatus.AVAILABLE))
-                .thenReturn(0);
+                .thenReturn(4);
 
         List<EnrollmentLearningProgressResponse> progress = service.getByClassroomId(2L);
 
@@ -66,6 +66,7 @@ class EnrollmentProgressServiceTest {
         assertThat(progress.getFirst().latestPackagePrice()).isEqualByComparingTo("700000");
         assertThat(progress.getFirst().totalSessions()).isEqualTo(12);
         assertThat(progress.getFirst().remainingSessions()).isEqualTo(12);
+        assertThat(progress.getFirst().makeupAvailableSessions()).isEqualTo(4);
         assertThat(progress.getFirst().overusedSessions()).isZero();
         assertThat(progress.getFirst().warningType()).isEqualTo(LearningProgressWarningType.OK);
     }

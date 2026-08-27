@@ -60,7 +60,7 @@ function App() {
             { key: '/invoices', label: 'Học phí' },
             { key: '/payments', label: 'Thanh toán' },
             { key: '/finance', label: 'Quản lý thu chi' },
-            { key: '/makeup-credits', label: 'Buổi bù' },
+            { key: '/makeup-credits', label: 'Nghỉ phép' },
             { key: '/reports', label: 'Báo cáo' },
             { key: '/debts', label: 'Công nợ' },
             { key: '/tuition-packages', label: 'Gói học phí' },

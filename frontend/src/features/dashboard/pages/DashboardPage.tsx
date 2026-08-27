@@ -303,7 +303,7 @@ export function DashboardPage() {
         <Col xs={24} sm={8}>
           <Card size="small" loading={summaryQuery.isLoading}>
             <Statistic
-              title="Buổi bù đang có"
+              title="Nghỉ phép đã ghi nhận"
               value={summary?.totalPendingMakeupCredits ?? 0}
               valueStyle={{ fontSize: 20 }}
             />

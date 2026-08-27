@@ -5,6 +5,7 @@ import com.englishcenter.studentpackage.LearningProgressWarningType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+/** Enrollment progress. remainingSessions is totalSessions - usedSessions; makeupAvailableSessions is leave count only. */
 public record EnrollmentLearningProgressResponse(
         Long enrollmentId,
         EnrollmentStatus status,

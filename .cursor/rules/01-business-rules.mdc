@@ -61,17 +61,18 @@ Always follow these rules.
 
 - PRESENT counts as one used session.
 - ABSENT counts as one used session.
-- EXCUSED does not count as used session and creates makeup credit.
+- EXCUSED does not count as used session and records approved leave.
 - CANCELED class session does not count for any student.
 - Do not mark attendance for canceled sessions.
 - One student has one attendance record per session.
 
-## Makeup
+## Approved leave (V1)
 
-- Approved/excused absence creates makeup credit.
-- Unexcused absence does not create makeup credit.
-- Canceled class session should allow creating makeup session for the class.
-- Do not automatically refund money for absence in V1.
+- EXCUSED creates or preserves one leave-tracking record (internal MakeupCredit table).
+- Leave tracking does not add ClassSession, totalSessions, or remainingSessions.
+- AVAILABLE displays as "Đã ghi nhận"; CANCELED as "Đã hủy".
+- USED is legacy and must not appear in UI or progress calculations.
+- Do not treat leave records as extra makeup classes. A future extra class should be "Buổi học bổ sung" using ClassSession.
 
 ## Package change
 

@@ -163,6 +163,7 @@ public class PackageChangeService {
         int usedSessions = enrollment.getUsedSessions();
         validateModeAllowed(changeMode, usedSessions, newTuitionPackage);
         int remainingSessions = Math.max(enrollment.getTotalSessions() - usedSessions, 0);
+        // Leave-record count for display only; not added to remainingSessions or package money.
         int makeupAvailableSessions = makeupCreditRepository.countAvailableMakeupCredits(
                 oldStudentPackage.getStudent().getId(),
                 oldStudentPackage.getClassroom().getId(),

@@ -448,7 +448,7 @@ public class ClassSessionService {
 
         List<MakeupCredit> linkedCredits = makeupCreditRepository.findBySourceSessionId(id);
         for (MakeupCredit credit : linkedCredits) {
-            if (credit.getStatus() == MakeupCreditStatus.AVAILABLE) {
+            if (credit.getStatus() != MakeupCreditStatus.CANCELED) {
                 credit.setStatus(MakeupCreditStatus.CANCELED);
                 makeupCreditRepository.save(credit);
             }

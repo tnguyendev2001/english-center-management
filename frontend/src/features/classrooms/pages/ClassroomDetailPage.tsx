@@ -510,12 +510,6 @@ export function ClassroomDetailPage() {
                         ?? enrollment.remainingSessions,
                     },
                     {
-                      title: 'Buổi bù',
-                      key: 'makeupAvailableSessions',
-                      render: (_, enrollment) =>
-                        progressByEnrollmentId.get(enrollment.id)?.makeupAvailableSessions ?? '-',
-                    },
-                    {
                       title: 'Ngày bắt đầu',
                       dataIndex: 'startDate',
                       key: 'startDate',

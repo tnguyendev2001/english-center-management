@@ -114,6 +114,8 @@ class AttendanceServiceTest {
 
         assertThat(responses).hasSize(1);
         assertThat(responses.getFirst().status()).isEqualTo(AttendanceStatus.EXCUSED);
+        assertThat(enrollment.getUsedSessions()).isZero();
+        assertThat(enrollment.getTotalSessions()).isEqualTo(12);
         verify(makeupCreditRepository).save(any(MakeupCredit.class));
     }
 
@@ -257,6 +259,40 @@ class AttendanceServiceTest {
 
         assertThat(existing.getStatus()).isEqualTo(AttendanceStatus.EXCUSED);
         assertThat(credit.getStatus()).isEqualTo(MakeupCreditStatus.AVAILABLE);
+    }
+
+    @Test
+    void markExcusedReactivatesLegacyUsedLeaveRecordAsAvailable() {
+        AttendanceService service = newService();
+        ClassSession session = session(ClassSessionStatus.COMPLETED);
+        Student student = student();
+        Enrollment enrollment = enrollment(student, session.getClassroom());
+        Attendance existing = new Attendance();
+        existing.setId(10L);
+        existing.setSession(session);
+        existing.setStudent(student);
+        existing.setStatus(AttendanceStatus.PRESENT);
+        existing.setValid(true);
+        MakeupCredit credit = new MakeupCredit();
+        credit.setStatus(MakeupCreditStatus.USED);
+        credit.setUsedSessions(1);
+
+        when(classSessionRepository.findById(1L)).thenReturn(Optional.of(session));
+        mockEligibleEnrollments(session, enrollment, 12, 1);
+        when(attendanceRepository.findBySessionIdAndStudentId(1L, 3L)).thenReturn(Optional.of(existing));
+        when(attendanceRepository.save(existing)).thenReturn(existing);
+        when(makeupCreditRepository.findByStudentIdAndSourceSessionIdAndReason(
+                3L,
+                1L,
+                MakeupCreditReason.EXCUSED_ABSENCE
+        )).thenReturn(Optional.of(credit));
+        when(makeupCreditRepository.save(credit)).thenReturn(credit);
+
+        service.mark(markRequest(AttendanceStatus.EXCUSED, null));
+
+        assertThat(existing.getStatus()).isEqualTo(AttendanceStatus.EXCUSED);
+        assertThat(credit.getStatus()).isEqualTo(MakeupCreditStatus.AVAILABLE);
+        assertThat(credit.getUsedSessions()).isZero();
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.englishcenter.dashboard.dto;
 
 import java.math.BigDecimal;
 
+/** Dashboard counters. totalPendingMakeupCredits is recorded-leave count, not extra sessions. */
 public record DashboardSummaryResponse(
         long totalActiveStudents,
         long totalActiveClassrooms,

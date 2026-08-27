@@ -13,6 +13,7 @@ import {
 } from 'antd'
 import type { TablePaginationConfig } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
+import type { FilterValue, SorterResult } from 'antd/es/table/interface'
 import { CalendarOutlined, ClockCircleOutlined } from '@ant-design/icons'
 import { isAxiosError } from 'axios'
 import dayjs, { type Dayjs } from 'dayjs'
@@ -28,6 +29,7 @@ import {
 import type {
   CancelClassSessionPayload,
   ClassSession,
+  ClassSessionSearchParams,
   ClassSessionStatus,
   FocusSessionTarget,
   GenerateClassSessionsPayload,
@@ -45,6 +47,17 @@ const { RangePicker } = DatePicker
 
 type CancelSessionMode = 'normal' | 'correction'
 type QuickNavKey = 'today' | 'next' | 'latest' | 'all'
+type SessionSortDirection = NonNullable<ClassSessionSearchParams['direction']>
+
+const DEFAULT_DIRECTION: SessionSortDirection = 'DESC'
+
+function toAntdSortOrder(direction: SessionSortDirection): 'ascend' | 'descend' {
+  return direction === 'ASC' ? 'ascend' : 'descend'
+}
+
+function resolveSortDirection(order: SorterResult<ClassSession>['order']): SessionSortDirection {
+  return order === 'ascend' ? 'ASC' : DEFAULT_DIRECTION
+}
 
 interface ClassroomSessionsPanelProps {
   classroomId: number
@@ -59,6 +72,7 @@ export function ClassroomSessionsPanel({
 }: ClassroomSessionsPanelProps) {
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(10)
+  const [direction, setDirection] = useState<SessionSortDirection>(DEFAULT_DIRECTION)
   const [fromDate, setFromDate] = useState<string>()
   const [toDate, setToDate] = useState<string>()
   const [status, setStatus] = useState<ClassSessionStatus>()
@@ -81,12 +95,12 @@ export function ClassroomSessionsPanel({
       page,
       size,
       sort: 'sessionDate' as const,
-      direction: 'DESC' as const,
+      direction,
       fromDate,
       toDate,
       status,
     }),
-    [classroomId, fromDate, page, size, status, toDate],
+    [classroomId, direction, fromDate, page, size, status, toDate],
   )
 
   const sessionsQuery = useClassSessions(params)
@@ -106,6 +120,7 @@ export function ClassroomSessionsPanel({
     scrolledSessionRef.current = null
     pendingFocusPageRef.current = null
     setPage(0)
+    setDirection(DEFAULT_DIRECTION)
     setFocusedSessionId(undefined)
     setFiltersActive(false)
     setFromDate(undefined)
@@ -226,10 +241,23 @@ export function ClassroomSessionsPanel({
     setScrollRequestId((value) => value + 1)
   }
 
-  function handleTableChange(pagination: TablePaginationConfig) {
+  function handleTableChange(
+    pagination: TablePaginationConfig,
+    _filters: Record<string, FilterValue | null>,
+    tableSorter: SorterResult<ClassSession> | SorterResult<ClassSession>[],
+  ) {
     autoFocusEnabledRef.current = false
-    setPage((pagination.current ?? 1) - 1)
-    setSize(pagination.pageSize ?? 10)
+    const nextSorter = Array.isArray(tableSorter) ? tableSorter[0] : tableSorter
+    const nextDirection = resolveSortDirection(nextSorter?.order)
+    const sortChanged = nextDirection !== direction
+
+    setDirection(nextDirection)
+    setSize(pagination.pageSize ?? size)
+    setPage(sortChanged ? 0 : (pagination.current ?? 1) - 1)
+
+    if (sortChanged) {
+      setFocusedSessionId(undefined)
+    }
   }
 
   function handleOpenAttendance(sessionId: number) {
@@ -311,6 +339,10 @@ export function ClassroomSessionsPanel({
       dataIndex: 'sessionDate',
       key: 'sessionDate',
       width: 140,
+      sorter: true,
+      sortDirections: ['descend', 'ascend'],
+      sortOrder: toAntdSortOrder(direction),
+      showSorterTooltip: { title: 'Sắp xếp theo ngày học' },
       render: (value: string, session) => (
         <Space direction="vertical" size={0}>
           <Text strong={isFocusedOrToday(session)}>{dayjs(value).format('DD/MM/YYYY')}</Text>

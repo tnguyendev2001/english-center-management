@@ -19,6 +19,7 @@ public interface MakeupCreditRepository extends JpaRepository<MakeupCredit, Long
 
     Page<MakeupCredit> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
+    /** Counts recorded leave rows (AVAILABLE). Not extra remaining sessions. */
     @Query("""
             SELECT COUNT(c)
             FROM MakeupCredit c

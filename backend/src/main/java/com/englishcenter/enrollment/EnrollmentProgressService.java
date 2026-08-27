@@ -79,6 +79,7 @@ public class EnrollmentProgressService {
                 MakeupCreditStatus.AVAILABLE
         );
 
+        // makeupAvailableSessions is leave-record count only; remainingSessions stays total - used.
         return enrollmentLearningProgressMapper.toResponse(
                 enrollment,
                 latestStudentPackage,

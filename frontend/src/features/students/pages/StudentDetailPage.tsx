@@ -7,8 +7,8 @@ import { StatusTag } from '../../../components/common/StatusTag'
 import { useClassPackages } from '../../classPackages/classPackageQueries'
 import { RenewAllPackagesModal } from '../../classrooms/components/RenewAllPackagesModal'
 import { classroomDetailPath } from '../../classrooms/classroomRoutes'
+import { LeaveHistoryTable } from '../../makeupCredits/components/LeaveHistoryTable'
 import { useMakeupCredits } from '../../makeupCredits/makeupCreditQueries'
-import type { MakeupCredit } from '../../makeupCredits/makeupCreditTypes'
 import {
   EnrollmentLifecycleModal,
   type EnrollmentLifecycleAction,
@@ -110,7 +110,6 @@ export function StudentDetailPage() {
               key: 'remainingSessions',
               render: (_: unknown, record: EnrollmentLearningProgress) => record.remainingSessions,
             },
-            { title: 'Buổi bù', dataIndex: 'makeupAvailableSessions', key: 'makeupAvailableSessions' },
             {
               title: 'Thời gian học',
               key: 'learningDates',
@@ -202,42 +201,12 @@ export function StudentDetailPage() {
         />
       </Card>
 
-      <Card title="Buổi bù">
-        <Table
-          rowKey="id"
+      <Card title="Lịch sử nghỉ phép">
+        <LeaveHistoryTable
           dataSource={makeupCredits}
           loading={makeupCreditsQuery.isLoading}
+          showStudent={false}
           pagination={false}
-          columns={[
-            {
-              title: 'Lớp học',
-              dataIndex: 'classroomName',
-              key: 'classroomName',
-              render: (classroomName: string, record: MakeupCredit) => (
-                <Link to={classroomDetailPath(record.classroomId)}>{classroomName}</Link>
-              ),
-            },
-            {
-              title: 'Nguồn',
-              dataIndex: 'reason',
-              key: 'reason',
-              render: (reason: string) => (reason === 'EXCUSED_ABSENCE' ? 'Xin nghỉ' : reason),
-            },
-            { title: 'Số buổi bù', dataIndex: 'creditSessions', key: 'creditSessions' },
-            { title: 'Đã dùng', dataIndex: 'usedSessions', key: 'usedSessions' },
-            {
-              title: 'Trạng thái',
-              dataIndex: 'status',
-              key: 'status',
-              render: (status: string) => <StatusTag status={status} />,
-            },
-            {
-              title: 'Ghi chú',
-              dataIndex: 'note',
-              key: 'note',
-              render: (value?: string | null) => value || '-',
-            },
-          ]}
         />
       </Card>
 

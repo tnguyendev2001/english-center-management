@@ -51,7 +51,7 @@ export function CancelSessionModal({
       {isCorrection ? (
         <p>
           Buổi học #{session?.sessionNo} đã điểm danh sẽ bị hủy. Điểm danh vẫn được giữ để đối chiếu
-          nhưng sẽ không còn tính vào buổi đã học. Buổi bù phát sinh từ buổi này cũng sẽ bị hủy.
+          nhưng sẽ không còn tính vào buổi đã học. Ghi nhận nghỉ phép phát sinh từ buổi này cũng sẽ bị hủy.
         </p>
       ) : (
         <p>Buổi học #{session?.sessionNo} sẽ không tính là buổi đã học.</p>

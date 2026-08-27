@@ -91,6 +91,7 @@ public class StudentPackageService {
                 MakeupCreditStatus.AVAILABLE
         );
 
+        // makeupAvailableSessions is leave-record count only; remainingSessions stays total - used.
         return studentPackageMapper.toProgressResponse(
                 studentPackage,
                 usedSessions,

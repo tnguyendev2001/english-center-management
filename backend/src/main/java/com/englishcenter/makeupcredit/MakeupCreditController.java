@@ -6,9 +6,12 @@ import com.englishcenter.makeupcredit.dto.MakeupCreditResponse;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/** Leave-history API backed by MakeupCredit. Path kept as /makeup-credits for compatibility. */
 @RestController
 public class MakeupCreditController {
     private final MakeupCreditService makeupCreditService;
@@ -30,5 +33,10 @@ public class MakeupCreditController {
                 credits.getTotalPages()
         );
         return ApiResponse.success(credits.getContent(), meta);
+    }
+
+    @PostMapping("/api/makeup-credits/{id}/cancel")
+    public ApiResponse<MakeupCreditResponse> cancel(@PathVariable Long id) {
+        return ApiResponse.success(makeupCreditService.cancel(id));
     }
 }

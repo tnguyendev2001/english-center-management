@@ -37,7 +37,8 @@ Do not generate payment, invoice, debt, revenue, or package-change code without 
 - PRESENT counts as used session.
 - ABSENT counts as used session.
 - EXCUSED does not count as used session.
-- EXCUSED creates makeup credit.
+- EXCUSED creates or preserves a leave-tracking record.
+- Leave records are not extra sessions and cannot be marked used.
 - Canceled class session does not count.
 - Cannot mark attendance for canceled session.
 - One student has one attendance record per session.

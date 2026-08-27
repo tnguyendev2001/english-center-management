@@ -20,6 +20,14 @@ import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * V1 approved-leave tracking record.
+ *
+ * <p>The {@code makeup_credits} table is kept for compatibility. It does not represent
+ * an extra {@code ClassSession}, and {@code creditSessions}/{@code usedSessions} are not
+ * used in enrollment progress. A future real replacement class should be a separate
+ * "Buổi học bổ sung" feature based on {@code ClassSession}.
+ */
 @Getter
 @Setter
 @Entity
@@ -45,9 +53,11 @@ public class MakeupCredit {
     @Column(name = "reason", nullable = false, length = 30)
     private MakeupCreditReason reason;
 
+    /** Leftover compatibility column; not used in V1 progress or UI. */
     @Column(name = "credit_sessions", nullable = false)
     private Integer creditSessions;
 
+    /** Leftover compatibility column; V1 does not mark leave records as used. */
     @Column(name = "used_sessions", nullable = false)
     private Integer usedSessions;
 

@@ -49,6 +49,7 @@ export interface EnrollmentLearningProgress {
   latestPackagePrice?: number | null
   latestPackageTotalSessions?: number | null
   latestTuitionPackageId: number
+  /** Recorded-leave count only; not added to remainingSessions. */
   makeupAvailableSessions: number
   warningType: LearningProgressWarningType
   warningMessage?: string | null
