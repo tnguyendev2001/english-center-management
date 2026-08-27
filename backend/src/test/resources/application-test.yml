@@ -15,6 +15,14 @@ spring:
 app:
   cors:
     allowed-origins: http://localhost:5173
+  security:
+    admin:
+      username: admin
+      password-hash: $2a$12$3UMv/0FkHugy8PvbhwCmJ.w14LK3I4DkN3R42Y4O6Jzdt4EY4ppb.
+    jwt:
+      secret: MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
+      expiration-minutes: 480
+      issuer: school-management-api-test
   time:
     zone-id: Asia/Ho_Chi_Minh
   finance:

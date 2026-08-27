@@ -1,5 +1,13 @@
-import { Layout, Menu, Typography } from 'antd'
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { LogoutOutlined } from '@ant-design/icons'
+import { Button, Layout, Menu, Typography } from 'antd'
+import {
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom'
 import { ClassroomDetailPage } from './features/classrooms/pages/ClassroomDetailPage'
 import { ClassroomListPage } from './features/classrooms/pages/ClassroomListPage'
 import { DashboardPage } from './features/dashboard/pages/DashboardPage'
@@ -12,10 +20,14 @@ import { StudentDetailPage } from './features/students/pages/StudentDetailPage'
 import { StudentListPage } from './features/students/pages/StudentListPage'
 import { LegacyStudentImportPage } from './features/imports/pages/LegacyStudentImportPage'
 import { TuitionPackageListPage } from './features/tuitionPackages/pages/TuitionPackageListPage'
+import { useAuth } from './features/auth/AuthContext'
+import { LoginPage } from './features/auth/LoginPage'
+import { ProtectedRoute } from './features/auth/ProtectedRoute'
 
-function App() {
+function ApplicationLayout() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { logout } = useAuth()
   const selectedKey = location.pathname.startsWith('/dashboard')
     ? '/dashboard'
     : location.pathname.startsWith('/tuition-packages')
@@ -66,27 +78,60 @@ function App() {
         />
       </Layout.Sider>
       <Layout>
-        <Layout.Header className="app-header">Quản lý trung tâm tiếng Anh</Layout.Header>
+        <Layout.Header className="app-header">
+          <span>Quản lý trung tâm tiếng Anh</span>
+          <Button
+            type="text"
+            icon={<LogoutOutlined />}
+            onClick={() => {
+              logout()
+              navigate('/login', { replace: true })
+            }}
+          >
+            Đăng xuất
+          </Button>
+        </Layout.Header>
         <Layout.Content className="app-content">
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/students" element={<StudentListPage />} />
-            <Route path="/students/:id" element={<StudentDetailPage />} />
-            <Route path="/classrooms" element={<ClassroomListPage />} />
-            <Route path="/classrooms/:id" element={<ClassroomDetailPage />} />
-            <Route path="/tuition-packages" element={<TuitionPackageListPage />} />
-            <Route path="/imports/legacy-students" element={<LegacyStudentImportPage />} />
-            <Route path="/invoices" element={<InvoiceListPage />} />
-            <Route path="/payments" element={<PaymentListPage />} />
-            <Route path="/finance" element={<FinancePage />} />
-            <Route path="/debts" element={<Navigate to="/invoices?tab=debt" replace />} />
-            <Route path="/makeup-credits" element={<MakeupCreditPage />} />
-            <Route path="/reports" element={<ReportsPage />} />
-          </Routes>
+          <Outlet />
         </Layout.Content>
       </Layout>
     </Layout>
+  )
+}
+
+function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route element={<ProtectedRoute />}>
+        <Route element={<ApplicationLayout />}>
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/students" element={<StudentListPage />} />
+          <Route path="/students/:id" element={<StudentDetailPage />} />
+          <Route path="/classrooms" element={<ClassroomListPage />} />
+          <Route path="/classrooms/:id" element={<ClassroomDetailPage />} />
+          <Route
+            path="/tuition-packages"
+            element={<TuitionPackageListPage />}
+          />
+          <Route
+            path="/imports/legacy-students"
+            element={<LegacyStudentImportPage />}
+          />
+          <Route path="/invoices" element={<InvoiceListPage />} />
+          <Route path="/payments" element={<PaymentListPage />} />
+          <Route path="/finance" element={<FinancePage />} />
+          <Route
+            path="/debts"
+            element={<Navigate to="/invoices?tab=debt" replace />}
+          />
+          <Route path="/makeup-credits" element={<MakeupCreditPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
+        </Route>
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }
 

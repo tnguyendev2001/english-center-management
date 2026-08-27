@@ -22,12 +22,47 @@ body {
   padding: 0 24px;
   background: #ffffff;
   border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-weight: 600;
-  line-height: 56px;
 }
 
 .app-content {
   padding: 24px;
+}
+
+.auth-full-page,
+.login-page {
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.login-page {
+  background: linear-gradient(135deg, #f0f7ff 0%, #f5f5f5 55%, #ffffff 100%);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+}
+
+.login-title,
+.login-subtitle {
+  text-align: center;
+}
+
+.login-title {
+  margin-bottom: 4px !important;
+}
+
+.login-subtitle {
+  margin-bottom: 24px !important;
+}
+
+.login-alert {
+  margin-bottom: 20px;
 }
 
 .session-attention-card {

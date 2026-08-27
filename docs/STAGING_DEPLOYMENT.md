@@ -98,6 +98,9 @@ Optional: connect with DBeaver after first backend deploy to verify Flyway creat
    - `SPRING_DATASOURCE_USERNAME`
    - `SPRING_DATASOURCE_PASSWORD`
    - `CORS_ALLOWED_ORIGINS` (temporary: `http://localhost:5173` until Vercel URL is known)
+   - `ADMIN_USERNAME`
+   - `ADMIN_PASSWORD_HASH` (BCrypt hash, never the plaintext password)
+   - `JWT_SECRET` (Base64-encoded random 32+ byte secret)
 6. Deploy.
 
 #### Option B — Manual Web Service
@@ -124,8 +127,17 @@ Environment variables:
 | `SPRING_DATASOURCE_USERNAME` | Neon user | **Yes** |
 | `SPRING_DATASOURCE_PASSWORD` | Neon password | **Yes** |
 | `CORS_ALLOWED_ORIGINS` | see Step 5 | No |
+| `ADMIN_USERNAME` | administrator login name | No |
+| `ADMIN_PASSWORD_HASH` | BCrypt hash generated locally | **Yes** |
+| `JWT_SECRET` | Base64 random 32+ byte secret | **Yes** |
+| `JWT_EXPIRATION_MINUTES` | `480` | No |
+| `JWT_ISSUER` | `school-management-api` | No |
 | `DB_MAX_POOL_SIZE` | `5` | No |
 | `DB_MIN_IDLE` | `0` | No |
+
+Generate `ADMIN_PASSWORD_HASH` and `JWT_SECRET` using the commands in the
+[Authentication section](../README.md#authentication). Do not configure these
+backend secrets in Vercel.
 
 After deploy, copy backend URL, e.g.:
 
@@ -169,7 +181,7 @@ Expected: `{"status":"UP"}`
 After you have the real Vercel URL, update Render env var:
 
 ```text
-CORS_ALLOWED_ORIGINS=http://localhost:5173,https://YOUR_FRONTEND.vercel.app
+CORS_ALLOWED_ORIGINS=https://YOUR_FRONTEND.vercel.app
 ```
 
 Save → Render redeploys backend automatically.
@@ -183,17 +195,20 @@ Optional: set `FRONTEND_URL=https://YOUR_FRONTEND.vercel.app` on Render.
 | # | Test | Expected |
 |---|------|----------|
 | 1 | `GET /actuator/health` | `UP` |
-| 2 | Open Vercel app | Dashboard loads |
-| 3 | Browser DevTools → Network | No requests to `localhost` |
-| 4 | Student CRUD | Works |
-| 5 | Classroom CRUD | Works |
-| 6 | Tuition package | Works |
-| 7 | Enrollment | Works |
-| 8 | Invoice / Payment / Debt | Works |
-| 9 | Class session / Attendance | Works |
-| 10 | Package change | Works |
-| 11 | Direct URL refresh `/students` | No 404 (Vercel SPA rewrite) |
-| 12 | Redeploy backend | Data persists (Neon + Flyway) |
+| 2 | Open Vercel app | Redirects to `/login` |
+| 3 | Wrong admin password | Generic error; remains on login |
+| 4 | Correct admin credentials | Dashboard loads |
+| 5 | Browser DevTools → Network | Bearer header is present; no requests to `localhost` |
+| 6 | Refresh an authenticated page | `/api/auth/me` succeeds; login remains active |
+| 7 | Student and classroom CRUD | Works |
+| 8 | Tuition package and enrollment | Works |
+| 9 | Invoice / Payment / Debt | Works |
+| 10 | Class session / Attendance | Works |
+| 11 | Dashboard, finance, and reports | Work |
+| 12 | Change token in session storage to `abc123` and refresh | Token is removed; redirects to login |
+| 13 | Log out, then open `/students` | Redirects to login |
+| 14 | Direct URL refresh `/students` while authenticated | No 404 (Vercel SPA rewrite) |
+| 15 | Redeploy backend | Data persists (Neon + Flyway) |
 
 ---
 
@@ -253,7 +268,12 @@ npm run dev
 | `SPRING_DATASOURCE_URL` | default localhost | Neon JDBC | — | **Yes** (prod) |
 | `SPRING_DATASOURCE_USERNAME` | `postgres` | Neon user | — | **Yes** (prod) |
 | `SPRING_DATASOURCE_PASSWORD` | `postgres` | Neon password | — | **Yes** |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | localhost + Vercel URL | — | No |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | exact Vercel URL | — | No |
+| `ADMIN_USERNAME` | required | required | — | No |
+| `ADMIN_PASSWORD_HASH` | required | required BCrypt hash | — | **Yes** |
+| `JWT_SECRET` | required | required Base64 secret | — | **Yes** |
+| `JWT_EXPIRATION_MINUTES` | `480` | `480` | — | No |
+| `JWT_ISSUER` | `school-management-api` | `school-management-api` | — | No |
 | `VITE_API_BASE_URL` | `.env.development` | — | Render URL + `/api` | No |
 | `PORT` | `8080` | set by Render | — | No |
 | `DB_MAX_POOL_SIZE` | `5` | `5` | — | No |
