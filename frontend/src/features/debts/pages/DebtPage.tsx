@@ -17,29 +17,17 @@ import { useClassrooms } from '../../classrooms/classroomQueries'
 import { StudentInvoiceListDrawer } from '../../financial/components/StudentInvoiceListDrawer'
 import type { StudentDebtSummary } from '../../financial/financialSummaryTypes'
 import type { Invoice } from '../../invoices/invoiceTypes'
+import { getCollectibleInvoice } from '../../invoices/findCollectibleInvoice'
 import { PaymentFormModal } from '../../payments/components/PaymentFormModal'
 import { useCreatePayment } from '../../payments/paymentQueries'
 import type { CreatePaymentPayload } from '../../payments/paymentTypes'
 import { useRevenueSummary } from '../../revenue/revenueQueries'
-import { useDebts, useDebtStudentSummaries } from '../debtQueries'
+import { useDebtStudentSummaries } from '../debtQueries'
 
 const { Title, Text } = Typography
 
-const FETCH_SIZE = 100
-
 function summaryRowKey(summary: StudentDebtSummary) {
   return `${summary.studentId}-${summary.classroomId}`
-}
-
-function findCollectibleInvoice(invoices: Invoice[], studentId: number, classroomId: number) {
-  return invoices
-    .filter(
-      (invoice) =>
-        invoice.studentId === studentId &&
-        invoice.classroomId === classroomId &&
-        (invoice.status === 'UNPAID' || invoice.status === 'PARTIALLY_PAID'),
-    )
-    .sort((left, right) => dayjs(left.dueDate).valueOf() - dayjs(right.dueDate).valueOf())[0]
 }
 
 export function DebtPage() {
@@ -49,13 +37,12 @@ export function DebtPage() {
   const [keyword, setKeyword] = useState('')
   const [classroomId, setClassroomId] = useState<number>()
   const [collectingInvoice, setCollectingInvoice] = useState<Invoice>()
+  const [collectingKey, setCollectingKey] = useState<string>()
   const [detailSummary, setDetailSummary] = useState<StudentDebtSummary>()
 
   const summaryParams = useMemo(() => ({ classroomId }), [classroomId])
-  const debtsParams = useMemo(() => ({ page: 0, size: FETCH_SIZE }), [])
 
   const summariesQuery = useDebtStudentSummaries(summaryParams)
-  const debtsQuery = useDebts(debtsParams)
   const revenueQuery = useRevenueSummary()
   const classroomsQuery = useClassrooms({ page: 0, size: 100 })
   const createPayment = useCreatePayment()
@@ -127,7 +114,11 @@ export function DebtPage() {
       key: 'actions',
       render: (_, summary) => (
         <Space size="small">
-          <Button type="link" onClick={() => handleCollectFromSummary(summary)}>
+          <Button
+            type="link"
+            loading={collectingKey === summaryRowKey(summary)}
+            onClick={() => handleCollectFromSummary(summary)}
+          >
             Thu tiền
           </Button>
           <Button type="link" onClick={() => setDetailSummary(summary)}>
@@ -141,19 +132,24 @@ export function DebtPage() {
     },
   ]
 
-  function handleCollectFromSummary(summary: StudentDebtSummary) {
-    const invoice = findCollectibleInvoice(
-      debtsQuery.data?.data ?? [],
-      summary.studentId,
-      summary.classroomId,
-    )
+  async function handleCollectFromSummary(summary: StudentDebtSummary) {
+    const key = summaryRowKey(summary)
+    setCollectingKey(key)
 
-    if (!invoice) {
-      message.warning('Không tìm thấy hóa đơn cần thu')
-      return
+    try {
+      const invoice = await getCollectibleInvoice(summary.studentId, summary.classroomId)
+
+      if (!invoice) {
+        message.warning('Không tìm thấy hóa đơn cần thu')
+        return
+      }
+
+      setCollectingInvoice(invoice)
+    } catch (error) {
+      showErrorMessage(error)
+    } finally {
+      setCollectingKey(undefined)
     }
-
-    setCollectingInvoice(invoice)
   }
 
   function handleTableChange(pagination: TablePaginationConfig) {

@@ -38,6 +38,7 @@ import { useCreatePayment } from '../../payments/paymentQueries'
 import type { CreatePaymentPayload } from '../../payments/paymentTypes'
 import { useRevenueSummary } from '../../revenue/revenueQueries'
 import { InvoiceDetailModal } from '../components/InvoiceDetailModal'
+import { getCollectibleInvoice } from '../findCollectibleInvoice'
 import { useInvoices, useTuitionStudentSummaries } from '../invoiceQueries'
 import type { Invoice, InvoiceSearchParams, InvoiceStatus } from '../invoiceTypes'
 
@@ -60,17 +61,6 @@ function summaryRowKey(summary: StudentTuitionSummary) {
   return `${summary.studentId}-${summary.classroomId}`
 }
 
-function findCollectibleInvoice(invoices: Invoice[], studentId: number, classroomId: number) {
-  return invoices
-    .filter(
-      (invoice) =>
-        invoice.studentId === studentId &&
-        invoice.classroomId === classroomId &&
-        (invoice.status === 'UNPAID' || invoice.status === 'PARTIALLY_PAID'),
-    )
-    .sort((left, right) => dayjs(left.dueDate).valueOf() - dayjs(right.dueDate).valueOf())[0]
-}
-
 export function InvoiceListPage() {
   const [tab, setTab] = useState<InvoiceTab>('by-student')
   const [page, setPage] = useState(0)
@@ -80,6 +70,7 @@ export function InvoiceListPage() {
   const [classroomId, setClassroomId] = useState<number>()
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>()
   const [collectingInvoice, setCollectingInvoice] = useState<Invoice>()
+  const [collectingKey, setCollectingKey] = useState<string>()
   const [detailInvoice, setDetailInvoice] = useState<Invoice>()
   const [detailSummary, setDetailSummary] = useState<StudentTuitionSummary>()
 
@@ -115,7 +106,6 @@ export function InvoiceListPage() {
   const studentSummariesQuery = useTuitionStudentSummaries(summaryParams, isStudentTab)
   const invoicesQuery = useInvoices(invoiceParams, !isStudentTab && !useDebtsQuery)
   const debtsQuery = useDebts(debtsParams, !isStudentTab && useDebtsQuery)
-  const collectibleInvoicesQuery = useDebts(debtsParams, isStudentTab)
   const debtSummaryQuery = useDebts({ page: 0, size: FETCH_SIZE })
   const revenueQuery = useRevenueSummary()
   const classroomsQuery = useClassrooms({ page: 0, size: 100 })
@@ -248,7 +238,11 @@ export function InvoiceListPage() {
       render: (_, summary) => (
         <Space size="small">
           {summary.remainingDebt > 0 ? (
-            <Button type="link" onClick={() => handleCollectFromSummary(summary)}>
+            <Button
+              type="link"
+              loading={collectingKey === summaryRowKey(summary)}
+              onClick={() => handleCollectFromSummary(summary)}
+            >
               Thu tiền
             </Button>
           ) : null}
@@ -325,19 +319,24 @@ export function InvoiceListPage() {
     },
   ]
 
-  function handleCollectFromSummary(summary: StudentTuitionSummary) {
-    const invoice = findCollectibleInvoice(
-      collectibleInvoicesQuery.data?.data ?? [],
-      summary.studentId,
-      summary.classroomId,
-    )
+  async function handleCollectFromSummary(summary: StudentTuitionSummary) {
+    const key = summaryRowKey(summary)
+    setCollectingKey(key)
 
-    if (!invoice) {
-      message.warning('Không tìm thấy hóa đơn cần thu')
-      return
+    try {
+      const invoice = await getCollectibleInvoice(summary.studentId, summary.classroomId)
+
+      if (!invoice) {
+        message.warning('Không tìm thấy hóa đơn cần thu')
+        return
+      }
+
+      setCollectingInvoice(invoice)
+    } catch (error) {
+      showErrorMessage(error)
+    } finally {
+      setCollectingKey(undefined)
     }
-
-    setCollectingInvoice(invoice)
   }
 
   function handleTableChange(pagination: TablePaginationConfig) {
