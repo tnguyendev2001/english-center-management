@@ -17,6 +17,7 @@ import com.englishcenter.enrollment.EnrollmentSessionService;
 import com.englishcenter.enrollment.EnrollmentStatus;
 import com.englishcenter.enrollment.EnrollmentStatusHistoryRepository;
 import com.englishcenter.makeupcredit.MakeupCreditRepository;
+import com.englishcenter.studentpackage.PackageTimelineService;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -46,6 +47,9 @@ class ClassSessionFocusSearchTest {
 
     @Mock
     private EnrollmentStatusHistoryRepository statusHistoryRepository;
+
+    @Mock
+    private PackageTimelineService packageTimelineService;
 
     private final ClassSessionMapper classSessionMapper = new ClassSessionMapper();
 
@@ -225,7 +229,8 @@ class ClassSessionFocusSearchTest {
                         enrollmentRepository,
                         attendanceRepository
                 ),
-                classSessionMapper
+                classSessionMapper,
+                packageTimelineService
         );
     }
 

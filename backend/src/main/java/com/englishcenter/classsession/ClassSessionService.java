@@ -23,6 +23,7 @@ import com.englishcenter.enrollment.EnrollmentStatus;
 import com.englishcenter.makeupcredit.MakeupCredit;
 import com.englishcenter.makeupcredit.MakeupCreditRepository;
 import com.englishcenter.makeupcredit.MakeupCreditStatus;
+import com.englishcenter.studentpackage.PackageTimelineService;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -48,6 +49,7 @@ public class ClassSessionService {
     private final EnrollmentRepository enrollmentRepository;
     private final EnrollmentSessionService enrollmentSessionService;
     private final ClassSessionMapper classSessionMapper;
+    private final PackageTimelineService packageTimelineService;
 
     public ClassSessionService(
             ClassSessionRepository classSessionRepository,
@@ -56,7 +58,8 @@ public class ClassSessionService {
             MakeupCreditRepository makeupCreditRepository,
             EnrollmentRepository enrollmentRepository,
             EnrollmentSessionService enrollmentSessionService,
-            ClassSessionMapper classSessionMapper
+            ClassSessionMapper classSessionMapper,
+            PackageTimelineService packageTimelineService
     ) {
         this.classSessionRepository = classSessionRepository;
         this.classroomRepository = classroomRepository;
@@ -65,6 +68,7 @@ public class ClassSessionService {
         this.enrollmentRepository = enrollmentRepository;
         this.enrollmentSessionService = enrollmentSessionService;
         this.classSessionMapper = classSessionMapper;
+        this.packageTimelineService = packageTimelineService;
     }
 
     /**
@@ -464,6 +468,7 @@ public class ClassSessionService {
                     && enrollmentSessionService.consumesSession(attendance, session, enrollment)) {
                 enrollmentSessionService.reverseConsumedSession(enrollment);
                 enrollmentRepository.save(enrollment);
+                packageTimelineService.markNeedsRecalculation(enrollment.getId());
             }
 
             attendance.setValid(false);

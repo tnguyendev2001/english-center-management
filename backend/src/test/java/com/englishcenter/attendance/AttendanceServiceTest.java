@@ -31,6 +31,7 @@ import com.englishcenter.makeupcredit.MakeupCreditStatus;
 import com.englishcenter.student.Student;
 import com.englishcenter.student.StudentRepository;
 import com.englishcenter.enrollment.EnrollmentSessionService;
+import com.englishcenter.studentpackage.PackageTimelineService;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -60,6 +61,9 @@ class AttendanceServiceTest {
 
     @Mock
     private EnrollmentStatusHistoryRepository statusHistoryRepository;
+
+    @Mock
+    private PackageTimelineService packageTimelineService;
 
     private final AttendanceMapper attendanceMapper = new AttendanceMapper();
 
@@ -388,6 +392,7 @@ class AttendanceServiceTest {
 
         assertThat(enrollment.getUsedSessions()).isEqualTo(2);
         assertThat(enrollment.getTotalSessions() - enrollment.getUsedSessions()).isEqualTo(6);
+        verify(packageTimelineService).markNeedsRecalculation(4L);
     }
 
     @Test
@@ -740,7 +745,8 @@ class AttendanceServiceTest {
                 studentRepository,
                 makeupCreditRepository,
                 new EnrollmentSessionService(eligibilityService, enrollmentRepository, attendanceRepository),
-                attendanceMapper
+                attendanceMapper,
+                packageTimelineService
         );
     }
 

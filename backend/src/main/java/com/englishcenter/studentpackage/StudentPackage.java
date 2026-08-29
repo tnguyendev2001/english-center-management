@@ -72,6 +72,18 @@ public class StudentPackage {
     @Column(name = "end_date")
     private LocalDate endDate;
 
+    @Column(name = "calculated_period_start_date")
+    private LocalDate calculatedPeriodStartDate;
+
+    @Column(name = "calculated_period_end_date")
+    private LocalDate calculatedPeriodEndDate;
+
+    @Column(name = "manual_period_start_date")
+    private LocalDate manualPeriodStartDate;
+
+    @Column(name = "period_needs_recalculation", nullable = false)
+    private Boolean periodNeedsRecalculation = true;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private StudentPackageStatus status;
@@ -92,6 +104,12 @@ public class StudentPackage {
     @PrePersist
     void prePersist() {
         LocalDateTime now = LocalDateTime.now();
+        if (calculatedPeriodStartDate == null) {
+            calculatedPeriodStartDate = startDate;
+        }
+        if (periodNeedsRecalculation == null) {
+            periodNeedsRecalculation = true;
+        }
         createdAt = now;
         updatedAt = now;
     }
@@ -99,5 +117,9 @@ public class StudentPackage {
     @PreUpdate
     void preUpdate() {
         updatedAt = LocalDateTime.now();
+    }
+
+    public LocalDate getEffectivePeriodStartDate() {
+        return manualPeriodStartDate != null ? manualPeriodStartDate : calculatedPeriodStartDate;
     }
 }

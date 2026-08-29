@@ -6,11 +6,15 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface StudentPackageRepository extends JpaRepository<StudentPackage, Long> {
     List<StudentPackage> findAllByEnrollmentId(Long enrollmentId);
+
+    @EntityGraph(attributePaths = {"student", "classroom", "enrollment", "tuitionPackage"})
+    List<StudentPackage> findByEnrollmentIdOrderByCycleNoAscIdAsc(Long enrollmentId);
 
     @EntityGraph(attributePaths = {"student", "classroom", "enrollment", "tuitionPackage"})
     List<StudentPackage> findByEnrollmentIdAndStatusOrderByStartDateDesc(
@@ -78,4 +82,12 @@ public interface StudentPackageRepository extends JpaRepository<StudentPackage, 
 
     @EntityGraph(attributePaths = {"student", "classroom", "enrollment", "tuitionPackage"})
     Optional<StudentPackage> findTopByEnrollmentIdOrderByCycleNoDescIdDesc(Long enrollmentId);
+
+    @Modifying
+    @Query("""
+            UPDATE StudentPackage studentPackage
+            SET studentPackage.periodNeedsRecalculation = true
+            WHERE studentPackage.enrollment.id = :enrollmentId
+            """)
+    int markPeriodNeedsRecalculationByEnrollmentId(@Param("enrollmentId") Long enrollmentId);
 }

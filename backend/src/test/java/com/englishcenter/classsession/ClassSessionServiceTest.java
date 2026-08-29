@@ -24,6 +24,7 @@ import com.englishcenter.makeupcredit.MakeupCredit;
 import com.englishcenter.makeupcredit.MakeupCreditRepository;
 import com.englishcenter.makeupcredit.MakeupCreditStatus;
 import com.englishcenter.student.Student;
+import com.englishcenter.studentpackage.PackageTimelineService;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -55,6 +56,9 @@ class ClassSessionServiceTest {
 
     @Mock
     private EnrollmentStatusHistoryRepository statusHistoryRepository;
+
+    @Mock
+    private PackageTimelineService packageTimelineService;
 
     private final ClassSessionMapper classSessionMapper = new ClassSessionMapper();
 
@@ -191,7 +195,8 @@ class ClassSessionServiceTest {
                         enrollmentRepository,
                         attendanceRepository
                 ),
-                classSessionMapper
+                classSessionMapper,
+                packageTimelineService
         );
     }
 

@@ -6,17 +6,25 @@ import { paymentKeys } from '../payments/paymentQueries'
 import { reportKeys } from '../reports/reportQueries'
 import { studentKeys } from '../students/studentQueries'
 import {
+  adjustStudentPackagePeriodStart,
   changePackage,
   getClassroomStudentPackages,
+  getStudentPackagePeriod,
   getStudentPackages,
   previewChangePackage,
+  recalculatePackageTimeline,
 } from './studentPackageApi'
-import type { ChangePackagePayload, ChangePackagePreviewPayload } from './studentPackageTypes'
+import type {
+  AdjustPackagePeriodStartPayload,
+  ChangePackagePayload,
+  ChangePackagePreviewPayload,
+} from './studentPackageTypes'
 
 export const studentPackageKeys = {
   all: ['studentPackages'] as const,
   byStudent: (studentId: number) => ['studentPackages', 'student', studentId] as const,
   byClassroom: (classroomId: number) => ['studentPackages', 'classroom', classroomId] as const,
+  period: (studentPackageId: number) => ['studentPackages', 'period', studentPackageId] as const,
 }
 
 export function useStudentPackages(studentId: number) {
@@ -32,6 +40,14 @@ export function useClassroomStudentPackages(classroomId: number) {
     queryKey: studentPackageKeys.byClassroom(classroomId),
     queryFn: () => getClassroomStudentPackages(classroomId),
     enabled: Number.isFinite(classroomId),
+  })
+}
+
+export function useStudentPackagePeriod(studentPackageId: number, enabled = true) {
+  return useQuery({
+    queryKey: studentPackageKeys.period(studentPackageId),
+    queryFn: () => getStudentPackagePeriod(studentPackageId),
+    enabled: enabled && Number.isFinite(studentPackageId),
   })
 }
 
@@ -66,6 +82,38 @@ export function useChangePackage(studentPackageId?: number) {
       queryClient.invalidateQueries({ queryKey: paymentKeys.all })
       queryClient.invalidateQueries({ queryKey: dashboardKeys.all })
       queryClient.invalidateQueries({ queryKey: reportKeys.all })
+    },
+  })
+}
+
+export function useRecalculatePackageTimeline(enrollmentId?: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => {
+      if (!enrollmentId) {
+        throw new Error('Enrollment is required')
+      }
+      return recalculatePackageTimeline(enrollmentId)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: studentPackageKeys.all })
+      queryClient.invalidateQueries({ queryKey: invoiceKeys.all })
+    },
+  })
+}
+
+export function useAdjustPackagePeriodStart(studentPackageId?: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: AdjustPackagePeriodStartPayload) => {
+      if (!studentPackageId) {
+        throw new Error('Student package is required')
+      }
+      return adjustStudentPackagePeriodStart(studentPackageId, payload)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: studentPackageKeys.all })
+      queryClient.invalidateQueries({ queryKey: invoiceKeys.all })
     },
   })
 }

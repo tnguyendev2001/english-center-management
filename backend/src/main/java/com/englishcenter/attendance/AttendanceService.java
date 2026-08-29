@@ -24,6 +24,7 @@ import com.englishcenter.makeupcredit.MakeupCreditRepository;
 import com.englishcenter.makeupcredit.MakeupCreditStatus;
 import com.englishcenter.student.Student;
 import com.englishcenter.student.StudentRepository;
+import com.englishcenter.studentpackage.PackageTimelineService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -58,6 +59,7 @@ public class AttendanceService {
     private final MakeupCreditRepository makeupCreditRepository;
     private final EnrollmentSessionService enrollmentSessionService;
     private final AttendanceMapper attendanceMapper;
+    private final PackageTimelineService packageTimelineService;
 
     public AttendanceService(
             AttendanceRepository attendanceRepository,
@@ -67,7 +69,8 @@ public class AttendanceService {
             StudentRepository studentRepository,
             MakeupCreditRepository makeupCreditRepository,
             EnrollmentSessionService enrollmentSessionService,
-            AttendanceMapper attendanceMapper
+            AttendanceMapper attendanceMapper,
+            PackageTimelineService packageTimelineService
     ) {
         this.attendanceRepository = attendanceRepository;
         this.classSessionRepository = classSessionRepository;
@@ -77,6 +80,7 @@ public class AttendanceService {
         this.makeupCreditRepository = makeupCreditRepository;
         this.enrollmentSessionService = enrollmentSessionService;
         this.attendanceMapper = attendanceMapper;
+        this.packageTimelineService = packageTimelineService;
     }
 
     @Transactional
@@ -256,6 +260,13 @@ public class AttendanceService {
                 && Boolean.TRUE.equals(existingAttendance.getValid())
                 ? existingAttendance.getStatus()
                 : null;
+        boolean previouslyConsumed = enrollmentSessionService.consumesSession(
+                existingAttendance,
+                session,
+                enrollment
+        );
+        boolean nowConsumes = session.getStatus() != ClassSessionStatus.CANCELED
+                && enrollmentSessionService.consumesStatus(item.status());
 
         if (previousValidStatus == AttendanceStatus.EXCUSED
                 && (item.status() == AttendanceStatus.PRESENT || item.status() == AttendanceStatus.ABSENT)) {
@@ -288,6 +299,9 @@ public class AttendanceService {
 
         if (item.status() == AttendanceStatus.EXCUSED) {
             ensureLeaveRecord(session, student);
+        }
+        if (previouslyConsumed != nowConsumes) {
+            packageTimelineService.markNeedsRecalculation(enrollment.getId());
         }
 
         return saved;

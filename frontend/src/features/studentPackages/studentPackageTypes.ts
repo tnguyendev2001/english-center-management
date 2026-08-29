@@ -106,3 +106,24 @@ export interface ChangePackageResult {
   newStudentPackage: EnrollmentLearningProgress
   newInvoice?: Invoice | null
 }
+
+export interface StudentPackagePeriod {
+  studentPackageId: number
+  enrollmentId: number
+  cycleNo: number
+  packageName: string
+  packageSessionCount: number
+  calculatedPeriodStartDate?: string | null
+  calculatedPeriodEndDate?: string | null
+  manualPeriodStartDate?: string | null
+  effectivePeriodStartDate?: string | null
+  periodNeedsRecalculation: boolean
+  manualOverrideReason?: string | null
+  manualOverrideChangedAt?: string | null
+  manualOverrideChangedBy?: string | null
+}
+
+export interface AdjustPackagePeriodStartPayload {
+  periodStartDate: string
+  reason: string
+}

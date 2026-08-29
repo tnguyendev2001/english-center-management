@@ -1,11 +1,17 @@
 import { DownloadOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons'
-import { Button, Descriptions, Modal, Space, Tooltip } from 'antd'
+import { Alert, Button, Descriptions, Modal, Space, Tag, Tooltip, message } from 'antd'
+import { isAxiosError } from 'axios'
 import dayjs from 'dayjs'
 import { useState } from 'react'
 import { MoneyText } from '../../../components/common/MoneyText'
 import { StatusTag } from '../../../components/common/StatusTag'
 import { formatStudentLabel } from '../../../components/common/studentDisplay'
+import {
+  useRecalculatePackageTimeline,
+  useStudentPackagePeriod,
+} from '../../studentPackages/studentPackageQueries'
 import type { Invoice } from '../invoiceTypes'
+import { AdjustPackagePeriodStartModal } from './AdjustPackagePeriodStartModal'
 import { TuitionNoticeModal, type TuitionNoticeAction } from './TuitionNoticeModal'
 
 const invoiceStatusLabels = {
@@ -25,7 +31,14 @@ interface InvoiceDetailModalProps {
 export function InvoiceDetailModal({ open, invoice, onClose }: InvoiceDetailModalProps) {
   const [noticeOpen, setNoticeOpen] = useState(false)
   const [noticeAction, setNoticeAction] = useState<TuitionNoticeAction>()
+  const [adjustingPeriod, setAdjustingPeriod] = useState(false)
   const printingDisabled = invoice?.status === 'CANCELED'
+  const periodQuery = useStudentPackagePeriod(
+    invoice?.studentPackageId ?? Number.NaN,
+    open && Boolean(invoice),
+  )
+  const recalculateTimeline = useRecalculatePackageTimeline(invoice?.enrollmentId)
+  const period = periodQuery.data
 
   function openNotice(action?: TuitionNoticeAction) {
     setNoticeAction(action)
@@ -37,16 +50,66 @@ export function InvoiceDetailModal({ open, invoice, onClose }: InvoiceDetailModa
     setNoticeAction(undefined)
   }
 
+  function handleRecalculate() {
+    recalculateTimeline.mutate(undefined, {
+      onSuccess: () => message.success('Đã tính lại kỳ học phí theo điểm danh'),
+      onError: (error) => {
+        if (isAxiosError(error)) {
+          message.error(error.response?.data?.message ?? 'Không thể tính lại kỳ học phí')
+          return
+        }
+        message.error('Không thể tính lại kỳ học phí')
+      },
+    })
+  }
+
+  const overrideDetails = period?.manualPeriodStartDate ? (
+    <Space direction="vertical" size={0}>
+      <span>
+        Giá trị hệ thống:{' '}
+        {period.calculatedPeriodStartDate
+          ? dayjs(period.calculatedPeriodStartDate).format('DD/MM/YYYY')
+          : 'Chưa xác định'}
+      </span>
+      <span>
+        Giá trị đang dùng:{' '}
+        {period.effectivePeriodStartDate
+          ? dayjs(period.effectivePeriodStartDate).format('DD/MM/YYYY')
+          : 'Chưa xác định'}
+      </span>
+      <span>Lý do: {period.manualOverrideReason || '-'}</span>
+      <span>Người điều chỉnh: {period.manualOverrideChangedBy || '-'}</span>
+      <span>
+        Thời điểm:{' '}
+        {period.manualOverrideChangedAt
+          ? dayjs(period.manualOverrideChangedAt).format('DD/MM/YYYY HH:mm')
+          : '-'}
+      </span>
+    </Space>
+  ) : undefined
+
   return (
     <>
       <Modal
         title="Chi tiết học phí"
         open={open}
         onCancel={onClose}
-        width={560}
+        width={680}
         footer={
           invoice ? (
             <Space wrap>
+              <Button
+                disabled={!period}
+                onClick={() => setAdjustingPeriod(true)}
+              >
+                Điều chỉnh ngày bắt đầu
+              </Button>
+              <Button
+                loading={recalculateTimeline.isPending}
+                onClick={handleRecalculate}
+              >
+                Tính lại theo điểm danh
+              </Button>
               <Button icon={<EyeOutlined />} onClick={() => openNotice()}>
                 Xem thông báo
               </Button>
@@ -82,6 +145,29 @@ export function InvoiceDetailModal({ open, invoice, onClose }: InvoiceDetailModa
             <Descriptions.Item label="Lớp phát sinh">{invoice.classroomName}</Descriptions.Item>
             <Descriptions.Item label="Gói học phí">{invoice.packageNameSnapshot}</Descriptions.Item>
             <Descriptions.Item label="Số buổi">{invoice.totalSessionsSnapshot}</Descriptions.Item>
+            <Descriptions.Item label="Ngày bắt đầu kỳ">
+              <Space wrap>
+                <span>
+                  {periodQuery.isLoading
+                    ? 'Đang tải...'
+                    : period?.effectivePeriodStartDate
+                      ? dayjs(period.effectivePeriodStartDate).format('DD/MM/YYYY')
+                      : 'Chưa xác định'}
+                </span>
+                {period?.manualPeriodStartDate ? (
+                  <Tooltip title={overrideDetails}>
+                    <Tag color="gold">Đã điều chỉnh thủ công</Tag>
+                  </Tooltip>
+                ) : null}
+              </Space>
+            </Descriptions.Item>
+            <Descriptions.Item label="Ngày kết thúc kỳ">
+              {periodQuery.isLoading
+                ? 'Đang tải...'
+                : period?.calculatedPeriodEndDate
+                  ? dayjs(period.calculatedPeriodEndDate).format('DD/MM/YYYY')
+                  : 'Chưa xác định'}
+            </Descriptions.Item>
             <Descriptions.Item label="Phải đóng">
               <MoneyText value={invoice.finalAmount} />
             </Descriptions.Item>
@@ -103,6 +189,14 @@ export function InvoiceDetailModal({ open, invoice, onClose }: InvoiceDetailModa
             </Descriptions.Item>
           </Descriptions>
         ) : null}
+        {period?.periodNeedsRecalculation ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="Ngày học đã thay đổi. Kỳ học phí có thể cần tính lại."
+            style={{ marginTop: 16 }}
+          />
+        ) : null}
       </Modal>
 
       {invoice ? (
@@ -111,6 +205,13 @@ export function InvoiceDetailModal({ open, invoice, onClose }: InvoiceDetailModa
           invoiceId={invoice.id}
           initialAction={noticeAction}
           onClose={closeNotice}
+        />
+      ) : null}
+
+      {adjustingPeriod && period ? (
+        <AdjustPackagePeriodStartModal
+          period={period}
+          onClose={() => setAdjustingPeriod(false)}
         />
       ) : null}
     </>

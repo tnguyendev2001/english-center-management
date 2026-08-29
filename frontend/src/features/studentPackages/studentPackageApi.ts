@@ -5,7 +5,9 @@ import type {
   ChangePackagePreviewPayload,
   ChangePackagePreview,
   ChangePackageResult,
+  AdjustPackagePeriodStartPayload,
   EnrollmentLearningProgress,
+  StudentPackagePeriod,
 } from './studentPackageTypes'
 
 export async function getStudentPackages(studentId: number) {
@@ -42,5 +44,30 @@ export async function changePackage(studentPackageId: number, payload: ChangePac
     payload,
   )
 
+  return response.data.data
+}
+
+export async function getStudentPackagePeriod(studentPackageId: number) {
+  const response = await httpClient.get<ApiResponse<StudentPackagePeriod>>(
+    `/student-packages/${studentPackageId}/period`,
+  )
+  return response.data.data
+}
+
+export async function recalculatePackageTimeline(enrollmentId: number) {
+  const response = await httpClient.post<ApiResponse<StudentPackagePeriod[]>>(
+    `/enrollments/${enrollmentId}/package-timeline/recalculate`,
+  )
+  return response.data.data
+}
+
+export async function adjustStudentPackagePeriodStart(
+  studentPackageId: number,
+  payload: AdjustPackagePeriodStartPayload,
+) {
+  const response = await httpClient.patch<ApiResponse<StudentPackagePeriod>>(
+    `/student-packages/${studentPackageId}/period-start`,
+    payload,
+  )
   return response.data.data
 }

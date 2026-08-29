@@ -8,9 +8,13 @@ import com.englishcenter.packagechange.dto.ChangePackagePreviewRequest;
 import com.englishcenter.packagechange.dto.ChangePackagePreviewResponse;
 import com.englishcenter.packagechange.dto.ChangePackageRequest;
 import com.englishcenter.packagechange.dto.ChangePackageResponse;
+import com.englishcenter.studentpackage.dto.AdjustStudentPackagePeriodStartRequest;
+import com.englishcenter.studentpackage.dto.StudentPackagePeriodResponse;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,13 +24,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class StudentPackageController {
     private final EnrollmentProgressService enrollmentProgressService;
     private final PackageChangeService packageChangeService;
+    private final PackageTimelineService packageTimelineService;
 
     public StudentPackageController(
             EnrollmentProgressService enrollmentProgressService,
-            PackageChangeService packageChangeService
+            PackageChangeService packageChangeService,
+            PackageTimelineService packageTimelineService
     ) {
         this.enrollmentProgressService = enrollmentProgressService;
         this.packageChangeService = packageChangeService;
+        this.packageTimelineService = packageTimelineService;
     }
 
     @GetMapping("/api/students/{studentId}/packages")
@@ -57,5 +64,29 @@ public class StudentPackageController {
             @Valid @RequestBody ChangePackageRequest request
     ) {
         return ApiResponse.success(packageChangeService.changePackage(studentPackageId, request));
+    }
+
+    @GetMapping("/api/student-packages/{studentPackageId}/period")
+    public ApiResponse<StudentPackagePeriodResponse> getPeriod(@PathVariable Long studentPackageId) {
+        return ApiResponse.success(packageTimelineService.getPeriod(studentPackageId));
+    }
+
+    @PostMapping("/api/enrollments/{enrollmentId}/package-timeline/recalculate")
+    public ApiResponse<List<StudentPackagePeriodResponse>> recalculateTimeline(@PathVariable Long enrollmentId) {
+        return ApiResponse.success(packageTimelineService.recalculatePackageTimeline(enrollmentId));
+    }
+
+    @PatchMapping("/api/student-packages/{studentPackageId}/period-start")
+    public ApiResponse<StudentPackagePeriodResponse> adjustPeriodStart(
+            @PathVariable Long studentPackageId,
+            @Valid @RequestBody AdjustStudentPackagePeriodStartRequest request,
+            JwtAuthenticationToken authentication
+    ) {
+        return ApiResponse.success(packageTimelineService.adjustPeriodStart(
+                studentPackageId,
+                request.periodStartDate(),
+                request.reason(),
+                authentication.getName()
+        ));
     }
 }
